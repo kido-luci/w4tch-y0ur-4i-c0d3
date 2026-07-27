@@ -1,0 +1,7 @@
+/watch-your-ai-code
+# `make release` output: per-platform tar.gz uploaded to the GitHub release.
+/dist/
+frontend/node_modules/
+.DS_Store
+# `make dev` scratch: air's rebuilt binary + the dev server's own board/library.
+/.dev/

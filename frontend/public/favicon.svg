@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The .px-nav__mark brand glyph: a 2x2 pixel grid. The ink square (bottom
+       right) flips with the tab-bar theme so it never vanishes on dark chrome;
+       the two accent oranges read on either. -->
+  <style>
+    .ink { fill: #1a1a1a }
+    @media (prefers-color-scheme: dark) { .ink { fill: #f2ede3 } }
+  </style>
+  <rect x="2"  y="2"  width="13" height="13" rx="1.5" fill="#d96a2b"/>
+  <rect x="17" y="2"  width="13" height="13" rx="1.5" fill="#e89b63"/>
+  <rect x="2"  y="17" width="13" height="13" rx="1.5" fill="#e89b63"/>
+  <rect x="17" y="17" width="13" height="13" rx="1.5" class="ink"/>
+</svg>

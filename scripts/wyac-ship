@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# wyac-ship — run a command and drop a ship record for watch-your-ai-code.
+#
+#   usage: wyac-ship <project> <kind> <version|-> <cmd> [args...]
+#
+# Records land in ${WYAC_SHIPS_DIR:-$HOME/.wyac/ships}, one JSON per run:
+# exit code, duration, and the log tail — success or failure alike. The
+# viewer ingests them live (see ships.go); when it isn't running, the file
+# just waits. The record is written into the dir with a dot-name and mv'd
+# into place so the watcher only ever sees complete files.
+#
+# The recorded sha comes from HEAD of $WYAC_SHIP_REPO (default: cwd). Wrappers
+# that ship a DIFFERENT repo than the one they live in — one that runs from a
+# meta-repo but releases a submodule — must set it, or the record names the
+# wrong commit.
+#
+# Copy this script into any solo project and wrap its own check/release —
+# the record format is the contract, not this file.
+set -u
+project=$1
+kind=$2
+version=$3
+shift 3
+[ "$version" = "-" ] && version=""
+
+dir=${WYAC_SHIPS_DIR:-$HOME/.wyac/ships}
+mkdir -p "$dir"
+tmplog=$(mktemp)
+trap 'rm -f "$tmplog"' EXIT
+
+start=$(date +%s)
+"$@" 2>&1 | tee "$tmplog"
+code=${PIPESTATUS[0]}
+dur_ms=$(( ($(date +%s) - start) * 1000 ))
+
+name="$(date +%s)-$$-${project}-${kind}.json"
+tmpjson="$dir/.${name}"
+P="$project" K="$kind" V="$version" C="$code" D="$dur_ms" \
+	S="$(git -C "${WYAC_SHIP_REPO:-.}" rev-parse HEAD 2>/dev/null || echo '')" \
+	T="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+	python3 -c '
+import json, os, sys
+print(json.dumps({
+    "project": os.environ["P"], "kind": os.environ["K"],
+    "version": os.environ["V"], "sha": os.environ["S"],
+    "exit": int(os.environ["C"]), "durationMs": int(os.environ["D"]),
+    "ts": os.environ["T"], "log": sys.stdin.read(),
+}))' < <(tail -n 200 "$tmplog") > "$tmpjson" && mv "$tmpjson" "$dir/$name"
+
+exit "$code"

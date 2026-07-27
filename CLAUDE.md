@@ -1,0 +1,187 @@
+# w4tch-y0ur-4i-c0d3 — notes for Claude
+
+Single Go binary serving a Vite/TypeScript frontend on `127.0.0.1:4777` by
+default (read-only viewer over `~/.claude/projects`). Build/run details:
+`README.md`, `Makefile`. Design notes: `docs/spec.md`.
+
+## Three jobs, three ways to run it — don't collapse them
+
+Iterating, verifying, and delivering are separate. The trap is assuming the last
+two are the same thing: **verifying what ships does NOT mean running it on your
+everyday port.** That port is where you *deliver*.
+
+**`make dev` — iterating.** Vite serves the frontend on `127.0.0.1:5173` with HMR
+and proxies `/api` to a dev binary on `127.0.0.1:4778` that `air` rebuilds on
+every `.go` save. A `.ts`/`.css` edit shows up on save; **`make build` is NOT
+needed on this path** — it bypasses `go:embed` entirely. Needs `air` once:
+`go install github.com/air-verse/air@latest`.
+
+The dev binary reads the real `~/.claude/projects` (read-only, and an empty index
+shows nothing), but keeps its **own** board + design library under `.dev/config`
+via `-config-dir` (its own `data.db` + `index.db`). That isolation is the point:
+your everyday instance is writing the real `data.db`, and two binaries sharing
+one data store is how the old todos.json lost fields silently. Never point the
+dev proxy at the everyday port.
+
+**Stopping it: kill `air`, not the binary.** Ctrl+C on `make dev` stops
+everything (the Makefile traps and kills the process group). `pkill -f wyac-dev`
+does not: it kills the server, but air keeps watching, so the next `.go` save
+silently brings the server back. Measured — the binary stays down until a save,
+then returns under a new pid. From a script, kill `air` first:
+
+    pkill -f 'air -- -addr'; pkill -f 'make dev'; pkill -f wyac-dev
+
+The tell that you left one stack running and started a second is in air's output:
+
+    listen tcp 127.0.0.1:4778: bind: address already in use
+    Process Exit with Code: 1
+
+That is the newer stack losing the race for 4778 — not a broken build. The older
+one keeps serving, so requests still answer while your rebuilds go nowhere.
+
+**`make build` + a throwaway port — verifying what ships.** `main.go` embeds the
+built frontend via `//go:embed all:frontend/dist`, so on this path a
+`frontend/src` change stays invisible until BOTH are rebuilt, in that order:
+
+    make build   # npm run build (frontend) THEN go build -o watch-your-ai-code .
+
+Rebuilding only the Go binary — or editing `frontend/src` without `npm run build` —
+leaves stale assets embedded and served. `make dev` never exercises this path at
+all, which is why a release is verified here and not there.
+
+Run the built binary anywhere you like — nothing about verifying needs the
+everyday port:
+
+    ./watch-your-ai-code -addr 127.0.0.1:4779 -config-dir /tmp/wyac-verify
+
+That is the same binary you're about to ship, with its own throwaway board, so
+it can't touch the real one. It reads the real transcripts either way (read-only).
+Need the real board to test against? That's a *data* question, not a port
+question: copy `data.db` (with its `-wal`/`-shm` siblings) into the throwaway
+config dir.
+
+**Check the served bundle against the one on disk, not just against last time:**
+
+    curl -s http://127.0.0.1:4779/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js'
+    grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' frontend/dist/index.html
+
+They must match. A binary can be **new and stale at once**: this happened once —
+the binary answered on a brand-new endpoint (so the Go half was current) while
+serving the *previous* release's assets, with `frontend/dist` on disk timestamped
+17s after the binary that supposedly embedded it. The cause was never found: a
+port conflict was ruled out (a losing process logs its bind error and the winner
+keeps serving — checked), and `make build` under a running `make dev` wouldn't
+reproduce it. So this check stays, because it is what caught it. "New endpoint
+answers" is not evidence the frontend came along.
+
+**`make check` + `make release` — the gates.** `make check` runs npm ci +
+vite/tsc build, gofmt, go vet, go test, go build, and the served-vs-disk embed
+check above. `make release VERSION=vX.Y.Z` = fail-fast guards (VERSION set, clean
+tree, CHANGELOG entry) → full check → cross-compiles 4 platforms → tag push →
+`gh release create`. That cross-compile makes **CGO a red line**: it's why the
+SQLite index uses pure-Go `modernc.org/sqlite`, and a CGO dependency would take
+the whole release flow down with it.
+
+**The everyday instance — delivering.** Under the optional launchd agent
+(`launchd/watch-your-ai-code.plist`, `KeepAlive=true`), restart it AFTER
+`make build`:
+
+    launchctl kickstart -k gui/$(id -u)/watch-your-ai-code
+
+Don't `kill` the PID and relaunch by hand — KeepAlive respawns the old binary within
+seconds and grabs the port (`bind: address already in use`), and you keep serving
+stale assets. Confirm the served bundle changed:
+
+    curl -s http://127.0.0.1:4777/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js'
+
+The hash only moves when `frontend/dist` changed — a Go-only fix legitimately
+leaves it identical, so check the behaviour too, not just the hash.
+
+## Routing — real paths, and the scope lives in one of the segments
+
+Routes are real paths (History API), not `#/`: **`family/scope/tab[/detail]`** —
+`/project/<scope>/git/<repo>`, `/claude/<scope>/session/<id>` (`/` canonicalises
+to `/claude/<scope>/sessions`). `main.go` holds the SPA fallback that lets a deep
+path reload instead of 404; `scope.ts` owns `parseLocation` / `buildPath` /
+`navigate` / `syncScopeToURL`.
+
+The scope SEGMENT is the source of truth; localStorage is only the fallback that
+remembers your last one and seeds a bare path. Internal links deliberately stay
+scope-LESS (`href="/project/git"`) and `syncScopeToURL` splices the active scope
+in during `render()` — which is why adding a link never means threading the scope
+through it, and why a link's `href` and the address bar legitimately differ.
+
+Two rules that exist because breaking them shipped bugs:
+
+- **A scope change must DROP the detail segment.** Carry it over and you land on a
+  detail belonging to the scope you just left: a repo that isn't in that scope —
+  a dead "not in this scope" screen you can't reach by typing, only by switching
+  project while viewing one. It bit docs pages, drawings and board cards too, not
+  just git. Only a *replace* keeps the detail, because that path is the boot
+  default or a rename of the scope you're already in.
+- **Every navigate path must canonicalise, not only the ones that re-render.**
+  `navigate(_, replace)` fires no popstate on purpose (it would double-render), and
+  that also means `render()` — and with it `syncScopeToURL` — never runs. A
+  scope-less replace then leaves the URL without its scope until some unrelated
+  render happens to fix it; the docs view auto-opening its first page did exactly
+  that. A link copied in that window resolves against the READER's remembered
+  scope, not yours. So the replace branch canonicalises itself.
+
+## The git tab — read-only, and it borrows the code graph's repo resolution
+
+Two views over the scope's repos. Both are strictly **READ-ONLY**: the server
+shells `git log` / `status` / `branch` / `show` / `for-each-ref`, and `gh` for
+GitHub. Nothing here commits, pushes, merges, or checks anything out — don't add
+that without asking; it's a deliberate property, not an oversight.
+
+- **Overview** `/project/<scope>/git` — one compact status ROW per repo: name ·
+  branch · clean/dirty · ahead/behind · its latest commit. It's a dashboard you
+  scan. If you catch yourself adding a long list inside a row, it belongs in the
+  detail instead — an earlier version shipped 20 commits per card and had to undo
+  it, because six repos became six walls of log.
+- **Detail** `/project/<scope>/git/<folder>` — tabs, each lazy-loaded on first
+  open: commits (click one → its diff), changes (working tree), branches, pull
+  requests, issues & CI. (These are real paths, not `#/` — see the History-API
+  routing and the Go SPA fallback in `main.go`; a deep path that 404s means that
+  fallback broke.)
+
+**Repo resolution is shared with the code graph** — `git.go` calls `cgRepos`
+(codegraph.go), so both tabs always list the same repos, resolved through each
+folder's most recent session cwd. Every drill-down endpoint
+(`/api/git/{commit,diff,branches,commits,prs,activity}`) validates `?repo`
+against that resolved set; an arbitrary path is a 404. That guard is *why* these
+endpoints are safe to expose — keep it on anything new you add here.
+
+**Filters** ride all four lists in the shared `.filter-chip` idiom: overview
+(dirty/clean/ahead/behind) · branches (hide merged/local/remote/stale >90d) · pull
+requests (by state) · commits (hide merges/author/search). No chip on = nothing
+filtered, chips within a group are OR'd, and every filtered list prints how many
+rows it hid — a short list must never read as an empty repo.
+
+Two things about them that look like needless complexity but aren't:
+
+- **The commits filters run on the SERVER** (`git log --no-merges` / `--author=` /
+  `--grep=`), unlike the other three, which filter in the browser. That list is
+  **paged**, so filtering only the loaded rows would report "no results" whenever
+  the match simply sits further back. With no filter active the tab still shows the
+  snapshot's instant 20 and makes no request at all. Search passes
+  `--fixed-strings`, so `feat(web):` is a literal and not a regex, and each value
+  travels as ONE `--flag=value` token so a term starting with `-` stays a search
+  term instead of becoming another flag.
+- **The commits filter chrome renders ONCE**; only its list re-renders underneath.
+  Rebuild the whole tab body per keystroke and the search box loses focus mid-word.
+
+Traps, each of which cost a debugging cycle:
+
+- **`runGit`, not `gitCmd`** — `gitCmd` is already a regex const in parse.go.
+- **`gh` is found by ABSOLUTE path** (github.go): launchd's PATH has no
+  `/opt/homebrew/bin`, so a bare `exec.Command("gh", …)` works under `make dev`
+  and silently returns nothing under launchd. Auth itself is fine headless.
+- **Merge commits need `--first-parent`** or `git show` hands back an empty diff
+  while the file list is non-empty.
+- `refs/remotes/origin/HEAD` shortens to `origin`, so skip it by the FULL refname
+  — matching on the short name lets a phantom `origin` branch through.
+- Commits **page**: the snapshot carries 20, `/api/git/commits?skip&limit` fetches
+  more (one page capped at 100).
+- **Only GitHub is supported** for the remote sections (`gh`). A repo on any other
+  host shows an empty state *by design*.

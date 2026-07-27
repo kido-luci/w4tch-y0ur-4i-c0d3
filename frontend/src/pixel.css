@@ -1,0 +1,397 @@
+/* Pixel design language — the app's colour, type and structure source.
+   Ported from the "WYAC UI Makeup" doc (screens 2a / 3a / 3b / 3c).
+
+   style.css owns the components; this file owns what they're made of. Its
+   token names are aliased by style.css's own vocabulary (--bg, --card,
+   --border…), so editing a value here moves every screen at once. Colour
+   lives here and nowhere else: the dark block below is the only other
+   palette, and theme.ts flips between them with data-theme on <html>.
+
+   Only the nav is styled here directly — it's the one piece of chrome that
+   isn't a view. Everything else stayed in style.css.
+
+   Fonts are vendored (@fontsource, all OFL) so Vite bundles the woff2 into
+   dist/ and main.go embeds them. Never link fonts.googleapis.com here: the
+   app's no-network-egress rule is the whole point of the tool.
+   Latin + Vietnamese subsets only, and the @font-face blocks are written out
+   rather than @import-ed from the packages: those subset stylesheets carry no
+   unicode-range, so latin and vietnamese would collide on one family/weight
+   and render Vietnamese as tofu. Silkscreen and Pixelify Sans have no
+   Vietnamese glyphs at all — keep them off user-authored text. */
+
+@font-face {
+  font-family: "Silkscreen";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/silkscreen/files/silkscreen-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Pixelify Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/pixelify-sans/files/pixelify-sans-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-vietnamese-400-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-vietnamese-500-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-vietnamese-600-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-vietnamese-400-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-vietnamese-500-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-vietnamese-600-normal.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+:root {
+  /* --- ground & ink --- */
+  --px-ground: #faf7ef;
+  --px-grid: #f0ebe1;
+  --px-surface: #ffffff;
+  --px-ink: #1a1a1a;
+  /* Structural ink, deliberately NOT --px-ink. Text needs ~17:1 against the
+     ground to read; a frame does not, and drawing frames at text contrast is
+     what made the language shout. Keep them separate — pointing --px-line at
+     --px-ink is the bug this token exists to prevent. */
+  --px-line: #a8a296;
+  --px-muted: #8a857c;
+  --px-rule-soft: #efece6;
+
+  /* --- accent --- */
+  --px-accent: #d96a2b;
+  --px-accent-deep: #c9601f;
+  --px-accent-soft: #e89b63;
+
+  /* --- semantic --- */
+  --px-green: #1f7a4d;
+  --px-red: #a33b3b;
+  /* Merged-PR violet (git tab). Its own hue rather than green/red/accent
+     because "merged" is neither success, danger, nor the app's own action. */
+  --px-purple: #8b7fe0;
+
+  /* --- structure ---
+     Hard edges are the whole language: 2px ink borders, 0 radius, and an
+     offset solid shadow instead of a blur. 1px stays the secondary weight
+     for chips and rules, so they read below the surfaces they sit on.
+
+     Depth is what keeps that from becoming noise. The doc gets away with
+     full-strength ink on everything because each screen is one layer of
+     boxes on the ground; this app nests three deep, and ink inside ink
+     inside ink reads as contrast for its own sake. So:
+
+       --px-edge        a surface sitting on the ground. Ink + hard shadow.
+       --px-edge-inner  anything nested INSIDE such a surface. Hairline,
+                        no shadow — the parent already did the framing.
+
+     Controls are the exception and keep --px-edge wherever they sit: the
+     doc draws buttons and inputs as hard boxes, and they need to read as
+     pressable rather than as structure. */
+  --px-edge: 2px solid var(--px-line);
+  --px-edge-inner: 1px solid var(--px-rule-soft);
+  /* The shadow follows the frame, not the text — a black offset under a grey
+     border reads as a mistake. Dark overrides both to pure black instead: see
+     the note there, an offset lighter than the ground would glow. */
+  --px-shadow: 4px 4px 0 var(--px-line);
+  --px-shadow-sm: 2px 2px 0 var(--px-line);
+  /* Straight down, for a surface that spans the full width: the diagonal
+     offset above only reads as depth on a box you can see the corner of. */
+  --px-shadow-down: 0 4px 0 var(--px-line);
+
+  /* --- type ---
+     Silkscreen: chrome labels only (all-caps, latin). Pixelify Sans: numerals
+     only. IBM Plex Sans: prose. IBM Plex Mono: data. */
+  --px-pixel: "Silkscreen", monospace;
+  --px-numeral: "Pixelify Sans", monospace;
+  --px-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --px-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Scale is ~1.3x the mockup: it was drawn on a fixed 1080px canvas, and the
+     app runs fluid at 1400px+, where the literal px values are unreadable.
+     Silkscreen is drawn on an 8px em, so only 8 and 16 are pixel-crisp and
+     --px-label's 10px interpolates slightly soft. That was chosen knowingly:
+     8px is crisp but too small to read at this width. */
+  --px-label-xs: 9px;
+  --px-label: 10px;
+  --px-word: 13px;
+  --px-sans-sm: 14px;
+}
+
+/* Dark is NOT in the makeup doc — it lists "pixel nhưng dark" as an untried
+   idea. This is a derived inversion, kept to the same ink-on-ground logic:
+   a warm near-black ground (not the old blue-grey), a slightly lifted card,
+   and the text ink flipped to bone. Semantic hues are lifted so they hold
+   contrast against the dark ground.
+
+   Two things do NOT mirror the light block:
+   - Shadows stay pure black rather than following --px-line. Light can tie
+     the shadow to the frame because a grey offset is still darker than
+     cream; here that would be lighter than the ground, i.e. a glow, which
+     is the one thing this language must never do.
+   - --px-line is a muted bone, not the text ink. Same reason as light: a
+     frame drawn at text contrast shouts.
+
+   Only colour is redefined here. Structure, type and scale are theme-agnostic
+   and stay in the block above. Chart and model colours are NOT here — they
+   live in format.ts as fixed data hues that read on either ground. */
+:root[data-theme="dark"] {
+  --px-ground: #14120e;
+  --px-grid: #211e17;
+  --px-surface: #1e1b15;
+  --px-ink: #f2ede3;
+  --px-line: #6b6357;
+  --px-muted: #9a9184;
+  --px-rule-soft: #2b2720;
+
+  --px-accent: #e8823f;
+  --px-accent-deep: #d96a2b;
+  --px-accent-soft: #8a5330;
+
+  --px-green: #4fbe80;
+  --px-red: #e07070;
+  --px-purple: #a99bf0;
+
+  --px-shadow: 4px 4px 0 #000000;
+  --px-shadow-sm: 2px 2px 0 #000000;
+  --px-shadow-down: 0 4px 0 #000000;
+}
+
+/* ------------------------------------------------------------------- nav */
+
+/* Both nav rows ride in here so one sticky rule pins the pair. It needs its
+   own background: sticky leaves it painting over scrolled content, and the
+   rows' own --px-ground stops at their boxes. z-index clears everything the
+   app stacks (30, .filter-panel, is the previous high-water mark).
+
+   --chrome-h is this element's measured height, republished by main.ts on
+   every resize; the value here is only the desktop default that holds until
+   the first ResizeObserver callback lands. */
+:root {
+  --chrome-h: 86px;
+}
+
+/* Everything that stays put is one raised layer: this bar and the project
+   rail both sit on --px-surface, while the page scrolls past on the dotted
+   --px-ground beneath. Painting the chrome in the ground colour — as it was —
+   left the 2px bottom border doing the whole job of separating a pinned bar
+   from the content sliding under it, which is not enough at a glance. The
+   rows below no longer carry their own background; this wrapper paints for
+   both, and their old --px-ground would have covered it. */
+.px-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--px-surface);
+  box-shadow: var(--px-shadow-down);
+}
+
+.px-nav {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  /* Wrap as whole rows when the hoisted controls + scope select outgrow one
+     line (≤1280px) — the bar grows downward instead of clipping inside a
+     fixed row. */
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  min-height: 56px;
+  padding: 0 20px;
+  border-bottom: var(--px-edge);
+}
+
+.px-nav__mark {
+  display: grid;
+  grid-template-columns: 8px 8px;
+  grid-template-rows: 8px 8px;
+  gap: 2px;
+}
+
+.px-nav__mark i:nth-child(1) {
+  background: var(--px-accent);
+}
+.px-nav__mark i:nth-child(2),
+.px-nav__mark i:nth-child(3) {
+  background: var(--px-accent-soft);
+}
+.px-nav__mark i:nth-child(4) {
+  background: var(--px-ink);
+}
+
+.px-nav__word {
+  font: 400 var(--px-word) var(--px-pixel);
+  color: var(--px-ink);
+}
+
+.px-nav__links {
+  display: flex;
+  gap: 8px;
+}
+
+.px-nav-link {
+  padding: 6px 10px;
+  border: 2px solid transparent;
+  font: 400 var(--px-label) var(--px-pixel);
+  color: var(--px-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.px-nav-link:hover {
+  color: var(--px-ink);
+}
+
+.px-nav-link--active {
+  background: var(--px-ink);
+  color: var(--px-surface);
+  box-shadow: 2px 2px 0 var(--px-accent-deep);
+}
+
+/* :hover (class+pseudo) outranks --active (one class) — without this, an
+   active link under the cursor turns ink-on-ink and reads as an empty box. */
+.px-nav-link--active:hover {
+  color: var(--px-surface);
+}
+
+.px-nav__end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Second nav level: the active family's views (claude → sessions/insights/
+   search · project → board/design/docs/ships/web). Same pixel language as the
+   top bar, one size down; the active tab is an accent underline rather than
+   the top bar's ink box, so the two levels read as levels. */
+.px-subnav {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  border-bottom: var(--px-edge);
+}
+
+.px-subnav-link {
+  padding: 7px 10px 5px;
+  border-bottom: 2px solid transparent;
+  font: 400 var(--px-label) var(--px-pixel);
+  font-size: 11px;
+  color: var(--px-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.px-subnav-link:hover {
+  color: var(--px-ink);
+}
+
+.px-subnav-link--active {
+  color: var(--px-ink);
+  border-bottom-color: var(--px-accent);
+}
+
+/* The hidden attribute must beat the anchor's inline display. */
+.px-subnav-link[hidden] {
+  display: none;
+}
+
