@@ -2,7 +2,7 @@
 // panel. State is persisted to localStorage so it survives reloads and the
 // detail rail can honor the chosen status.
 
-import { escapeHtml } from "./format";
+import { chipAttrs, escapeHtml } from "./format";
 
 export type StatusFilter = "active" | "archived" | "all";
 export type GroupBy = "none" | "project";
@@ -100,7 +100,7 @@ function chipRow(kind: string, opts: Opt[], current: string | number): string {
   return `<div class="filter-row">${opts
     .map(
       (o) =>
-        `<button type="button" class="filter-chip${o.v === current ? " filter-chip-on" : ""}" ` +
+        `<button type="button" ${chipAttrs(o.v === current)} ` +
         `data-kind="${kind}" data-val="${escapeHtml(String(o.v))}">${escapeHtml(o.label)}</button>`,
     )
     .join("")}</div>`;

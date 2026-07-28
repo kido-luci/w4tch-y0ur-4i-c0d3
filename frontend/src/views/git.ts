@@ -7,7 +7,8 @@
 
 import { getGit } from "../api";
 import type { GitRepo } from "../api";
-import { escapeHtml, formatRelativeTime } from "../format";
+import { chipAttrs, escapeHtml, formatRelativeTime } from "../format";
+import { showError } from "../live";
 import { getScopeParam } from "../scope";
 
 /** Renders the git view into `container`; returns a cleanup callback. */
@@ -51,7 +52,7 @@ export function renderGitView(container: HTMLElement): () => void {
   function renderChips(): void {
     chipsEl.innerHTML = FILTERS.map(
       (f) =>
-        `<button type="button" class="filter-chip${on.has(f.key) ? " filter-chip-on" : ""}" data-f="${f.key}">${f.label}</button>`,
+        `<button type="button" ${chipAttrs(on.has(f.key))} data-f="${f.key}">${f.label}</button>`,
     ).join("");
   }
 
@@ -102,9 +103,17 @@ export function renderGitView(container: HTMLElement): () => void {
         }">${escapeHtml(r.branch)}</span>`
       : "";
     const { body: commit, when } = latestCommit(r);
-    const inner = `<span class="git-row-name">${escapeHtml(r.folder || r.root)}</span>${branch}${stateBadge(r)}${trackBits(
-      r,
-    )}${commit}${when}`;
+    // Every cell is emitted even when empty. The row is a grid, and a grid only
+    // lines up if each row fills the same tracks — drop the absent ones and a
+    // repo with no upstream shifts its commit under the next repo's branch,
+    // which is the ragged column this layout exists to fix.
+    const inner =
+      `<span class="git-row-name" title="${escapeHtml(r.folder || r.root)}">${escapeHtml(r.folder || r.root)}</span>` +
+      `<span class="git-cell">${branch}</span>` +
+      `<span class="git-cell">${stateBadge(r)}</span>` +
+      `<span class="git-cell git-cell--track">${trackBits(r)}</span>` +
+      commit +
+      `<span class="git-cell git-cell--when">${when}</span>`;
     // The whole row is the entry point into the detail view; a resolved-but-not-a
     // -repo root isn't clickable (there's nothing to drill into).
     return r.isRepo && r.folder
@@ -120,6 +129,13 @@ export function renderGitView(container: HTMLElement): () => void {
     metaEl.textContent = hidden
       ? `${shown.length} / ${repos.length} repos — ${hidden} filtered out`
       : `${repos.length} repo${repos.length === 1 ? "" : "s"}`;
+    // The count reads like "this is what the scope contains"; it isn't. The
+    // server resolves repos from the cwds your sessions actually ran in
+    // (cgRepos), so a configured project you've never opened Claude in never
+    // appears — a scope with ten game projects can legitimately show one. The
+    // empty state already says this; the count needs it more, because a
+    // plausible number invites no questions.
+    metaEl.title = "repos are resolved from the working trees your Claude sessions ran in, so a project with no session history won't be listed";
     listEl.innerHTML = shown.length
       ? shown.map(rowHtml).join("")
       : `<div class="empty-state">no repos match the filters — drop a chip to see them again.</div>`;
@@ -141,7 +157,7 @@ export function renderGitView(container: HTMLElement): () => void {
     } catch (err) {
       if (dead) return;
       metaEl.textContent = "";
-      listEl.innerHTML = `<div class="empty-state">failed to load git status</div>`;
+      showError(listEl, "failed to load git status", () => void load());
       console.error("git load failed", err);
     }
   }

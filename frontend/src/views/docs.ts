@@ -20,6 +20,7 @@ import {
 } from "../api";
 import type { Doc, Todo } from "../api";
 import { escapeHtml, truncate } from "../format";
+import { announce } from "../live";
 import { renderMarkdown } from "../markdown";
 import { getKnownGroupNames, getScope, getScopeSet, navigate } from "../scope";
 
@@ -480,6 +481,7 @@ export function renderDocsView(container: HTMLElement, initialId?: string): () =
   function renderMain(): void {
     if (docsLoadFailed) {
       mainEl.innerHTML = `<div class="empty-state">failed to load pages.</div>`;
+      announce("failed to load pages.");
       clearToc();
       return;
     }
@@ -499,6 +501,7 @@ export function renderDocsView(container: HTMLElement, initialId?: string): () =
     const meta = docs.find((d) => d.id === id);
     if (!meta || bodyLoadFailed) {
       mainEl.innerHTML = `<div class="empty-state">failed to load this page.</div>`;
+      announce("failed to load this page.");
       clearToc();
       return;
     }

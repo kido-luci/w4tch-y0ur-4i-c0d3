@@ -27,6 +27,7 @@ import {
 } from "../api";
 import type { Drawing, Todo } from "../api";
 import { escapeHtml, formatRelativeTime, truncate } from "../format";
+import { announce, showError } from "../live";
 import { getScope, getScopeSet, navigate } from "../scope";
 import { getTheme } from "../theme";
 import type { ExcalidrawIsland } from "../excalidrawIsland";
@@ -344,14 +345,19 @@ export function renderDesignView(container: HTMLElement): () => void {
     }
   });
 
-  getDrawings()
-    .then((list) => {
-      drawings = list;
-      render();
-    })
-    .catch(() => {
-      gridEl.innerHTML = `<div class="empty-state">failed to load drawings.</div>`;
-    });
+  // Named so the error state has something to re-run — it was an anonymous
+  // then/catch, which is why its failure could only be cleared by a reload.
+  function loadDrawings(): void {
+    getDrawings()
+      .then((list) => {
+        drawings = list;
+        render();
+      })
+      .catch(() => {
+        showError(gridEl, "failed to load drawings.", loadDrawings);
+      });
+  }
+  loadDrawings();
 
   // Project names feed the move/create group datalist; a failure just leaves
   // the datalist to the groups already in use.
@@ -519,6 +525,7 @@ export function renderDesignEditorView(container: HTMLElement, id: string): () =
       console.error("editor load failed", err);
       if (!disposed) {
         hostEl.innerHTML = `<div class="empty-state">failed to load this drawing.</div>`;
+        announce("failed to load this drawing.");
       }
     }
   })();

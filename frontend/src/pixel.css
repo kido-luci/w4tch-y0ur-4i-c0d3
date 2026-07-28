@@ -156,11 +156,18 @@
      what made the language shout. Keep them separate — pointing --px-line at
      --px-ink is the bug this token exists to prevent. */
   --px-line: #a8a296;
-  --px-muted: #8a857c;
+  --px-muted: #757169;
   --px-rule-soft: #efece6;
 
-  /* --- accent --- */
+  /* --- accent ---
+     Two accents, because a fill and a letterform are not held to the same
+     bar: a border or a block of colour needs 3:1 to be seen, text needs 4.5:1
+     to be read. --px-accent is the identity hue and lands at 3.24:1 on the
+     ground, which is right for frames and wrong for words. So anything that
+     COLOURS TEXT uses --px-accent-text (4.54:1) and the hue stays put
+     everywhere else. Dark needs no such split: its accent already reads. */
   --px-accent: #d96a2b;
+  --px-accent-text: #b5561c;
   --px-accent-deep: #c9601f;
   --px-accent-soft: #e89b63;
 
@@ -169,7 +176,7 @@
   --px-red: #a33b3b;
   /* Merged-PR violet (git tab). Its own hue rather than green/red/accent
      because "merged" is neither success, danger, nor the app's own action. */
-  --px-purple: #8b7fe0;
+  --px-purple: #7167b5;
 
   /* --- structure ---
      Hard edges are the whole language: 2px ink borders, 0 radius, and an
@@ -245,6 +252,9 @@
   --px-rule-soft: #2b2720;
 
   --px-accent: #e8823f;
+  /* Dark's accent clears 4.5:1 on its own ground, so text and fill share one
+     hue here — the light block's split exists only because cream is bright. */
+  --px-accent-text: #e8823f;
   --px-accent-deep: #d96a2b;
   --px-accent-soft: #8a5330;
 
@@ -366,6 +376,10 @@
    the top bar's ink box, so the two levels read as levels. */
 .px-subnav {
   display: flex;
+  /* Same reason .px-nav wraps: seven tabs do not fit a phone. Wrapping to a
+     second row beats scrolling here — every tab stays visible, and there is no
+     hidden-affordance problem to solve. */
+  flex-wrap: wrap;
   gap: 4px;
   padding: 0 20px;
   border-bottom: var(--px-edge);
@@ -379,6 +393,9 @@
   color: var(--px-muted);
   text-decoration: none;
   cursor: pointer;
+  /* "code graph" must break between tabs, never inside one — a two-line tab
+     reads as two tabs. */
+  white-space: nowrap;
 }
 
 .px-subnav-link:hover {

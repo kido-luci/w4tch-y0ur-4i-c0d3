@@ -14,6 +14,7 @@ import {
   modelColor,
   truncate,
 } from "../format";
+import { showError } from "../live";
 import { labelForFolder } from "../scope";
 import { renderModelDistribution } from "../distribution";
 import { renderSessionFlow } from "../flow";
@@ -86,13 +87,59 @@ export function renderSessionDetailView(container: HTMLElement, id: string): () 
   // Show the panels for the current tab; re-applied after every renderDetail so
   // an SSE update mid-session doesn't snap the view back to the first tab.
   function applyActiveTab(): void {
-    content
-      .querySelectorAll<HTMLElement>("[data-tab]")
-      .forEach((b) => b.classList.toggle("detail-tab-active", b.dataset["tab"] === activeTab));
+    content.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => {
+      const on = b.dataset["tab"] === activeTab;
+      b.classList.toggle("detail-tab-active", on);
+      // The markup already claimed role="tab"/"tablist" but never said which
+      // one was selected, so the underline was the only signal and a screen
+      // reader got none. Roving tabindex goes with it: inside a tablist, Tab
+      // enters the group once and the arrows move within it, so the three
+      // inactive tabs must leave the tab order.
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
+    });
     content
       .querySelectorAll<HTMLElement>("[data-tab-panel]")
       .forEach((p) => p.classList.toggle("tab-panel-active", p.dataset["tabPanel"] === activeTab));
   }
+
+  /** Move selection within the tablist and put focus on the newly selected tab —
+      arrow keys are how a tablist is navigated, and without them the roving
+      tabindex above would trap you on whichever tab happened to be active. */
+  function moveTab(delta: number): void {
+    const tabs = [...content.querySelectorAll<HTMLElement>(".detail-tab")];
+    const at = tabs.findIndex((t) => t.dataset["tab"] === activeTab);
+    if (at < 0) return;
+    // Wraps, per the WAI-ARIA tabs pattern.
+    const next = tabs[(at + delta + tabs.length) % tabs.length];
+    const name = next?.dataset["tab"];
+    if (!name) return;
+    activeTab = name;
+    applyActiveTab();
+    next.focus();
+  }
+
+  content.addEventListener("keydown", (evt) => {
+    const tab = (evt.target as HTMLElement).closest<HTMLElement>(".detail-tab");
+    if (!tab) return;
+    const keys: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    const delta = keys[evt.key];
+    if (delta !== undefined) {
+      evt.preventDefault();
+      moveTab(delta);
+      return;
+    }
+    if (evt.key === "Home" || evt.key === "End") {
+      evt.preventDefault();
+      const tabs = [...content.querySelectorAll<HTMLElement>(".detail-tab")];
+      const target = evt.key === "Home" ? tabs[0] : tabs[tabs.length - 1];
+      const name = target?.dataset["tab"];
+      if (!name) return;
+      activeTab = name;
+      applyActiveTab();
+      target?.focus();
+    }
+  });
 
   content.addEventListener("click", (evt) => {
     // Tab switch is a pure show/hide — no re-render, so scroll and inspector
@@ -205,7 +252,7 @@ export function renderSessionDetailView(container: HTMLElement, id: string): () 
         });
       }
     } catch (err) {
-      content.innerHTML = `<div class="empty-state">failed to load session</div>`;
+      showError(content, "failed to load session", () => void load());
       console.error("failed to load session", err);
     }
   }
@@ -274,13 +321,13 @@ function renderDetail(el: HTMLElement, session: SessionDetail): void {
     </div>
 
     <div class="detail-tabs" role="tablist">
-      <button type="button" class="detail-tab" role="tab" data-tab="overview">overview</button>
-      <button type="button" class="detail-tab" role="tab" data-tab="agents">agents</button>
-      <button type="button" class="detail-tab" role="tab" data-tab="cost">cost</button>
-      <button type="button" class="detail-tab" role="tab" data-tab="activity">activity</button>
+      <button type="button" class="detail-tab" role="tab" id="tab-overview" aria-controls="tabpanel-overview" data-tab="overview">overview</button>
+      <button type="button" class="detail-tab" role="tab" id="tab-agents" aria-controls="tabpanel-agents" data-tab="agents">agents</button>
+      <button type="button" class="detail-tab" role="tab" id="tab-cost" aria-controls="tabpanel-cost" data-tab="cost">cost</button>
+      <button type="button" class="detail-tab" role="tab" id="tab-activity" aria-controls="tabpanel-activity" data-tab="activity">activity</button>
     </div>
 
-    <div class="tab-panel" data-tab-panel="overview">
+    <div class="tab-panel" data-tab-panel="overview" id="tabpanel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
       <section class="card">
         <h2 class="section-heading">milestones</h2>
         <div id="milestones-slot"></div>
@@ -291,7 +338,7 @@ function renderDetail(el: HTMLElement, session: SessionDetail): void {
       </section>
     </div>
 
-    <div class="tab-panel" data-tab-panel="agents">
+    <div class="tab-panel" data-tab-panel="agents" id="tabpanel-agents" role="tabpanel" aria-labelledby="tab-agents" tabindex="0">
       <section class="card graph-card">
         <h2 class="section-heading">agent graph</h2>
         <div id="graph-slot"></div>
@@ -302,7 +349,7 @@ function renderDetail(el: HTMLElement, session: SessionDetail): void {
       </section>
     </div>
 
-    <div class="tab-panel" data-tab-panel="cost">
+    <div class="tab-panel" data-tab-panel="cost" id="tabpanel-cost" role="tabpanel" aria-labelledby="tab-cost" tabindex="0">
       <section class="card">
         <h2 class="section-heading">model distribution</h2>
         <div id="dist-slot"></div>
@@ -313,7 +360,7 @@ function renderDetail(el: HTMLElement, session: SessionDetail): void {
       </section>
     </div>
 
-    <div class="tab-panel" data-tab-panel="activity">
+    <div class="tab-panel" data-tab-panel="activity" id="tabpanel-activity" role="tabpanel" aria-labelledby="tab-activity" tabindex="0">
       <section class="card">
         <h2 class="section-heading">timeline</h2>
         <div id="timeline-slot"></div>
@@ -439,21 +486,23 @@ function renderAgentsTable(session: SessionDetail): string {
     .join("");
 
   return `
-    <table class="sessions-table agents-table">
-      <thead>
-        <tr>
-          <th>type</th>
-          <th>model</th>
-          <th>description</th>
-          <th>tokens</th>
-          <th>duration</th>
-          <th>tools</th>
-          <th>files</th>
-          <th>lines</th>
-          <th>status</th>
-        </tr>
-      </thead>
-      <tbody>${mainRow}${rows}</tbody>
-    </table>
+    <div class="table-scroll">
+      <table class="sessions-table agents-table">
+        <thead>
+          <tr>
+            <th>type</th>
+            <th>model</th>
+            <th>description</th>
+            <th>tokens</th>
+            <th>duration</th>
+            <th>tools</th>
+            <th>files</th>
+            <th>lines</th>
+            <th>status</th>
+          </tr>
+        </thead>
+        <tbody>${mainRow}${rows}</tbody>
+      </table>
+    </div>
   `;
 }

@@ -6,8 +6,9 @@
 
 import { getShips, subscribeRawEvents } from "../api";
 import type { ShipRecord } from "../api";
-import { escapeHtml, formatDuration, formatRelativeTime, truncate } from "../format";
-import { getScope, getScopeSet, labelForFolder } from "../scope";
+import { chipAttrs, escapeHtml, formatDuration, formatRelativeTime, truncate } from "../format";
+import { showError } from "../live";
+import { getScope, getScopeSet, labelForFolder, scopeChipHtml } from "../scope";
 
 const DAY_OPTS: { v: number; label: string }[] = [
   { v: 7, label: "7d" },
@@ -45,6 +46,7 @@ export function renderShipsView(container: HTMLElement): () => void {
     <div class="page">
       <header class="topbar">
         <div class="topbar-controls">
+          ${scopeChipHtml()}
           <div class="filter-row" id="sh-days"></div>
           <div class="filter-row" id="sh-gates"></div>
           <div class="filter-row" id="sh-kind"></div>
@@ -64,7 +66,7 @@ export function renderShipsView(container: HTMLElement): () => void {
   function renderDays(): void {
     daysEl.innerHTML = DAY_OPTS.map(
       (o) =>
-        `<button type="button" class="filter-chip${o.v === days ? " filter-chip-on" : ""}" ` +
+        `<button type="button" ${chipAttrs(o.v === days)} ` +
         `data-days="${o.v}">${escapeHtml(o.label)}</button>`,
     ).join("");
   }
@@ -76,7 +78,7 @@ export function renderShipsView(container: HTMLElement): () => void {
   // the needle you'd otherwise scroll for.
   function renderChips(): void {
     const chip = (attr: string, key: string, label: string, on: boolean): string =>
-      `<button type="button" class="filter-chip${on ? " filter-chip-on" : ""}" ${attr}="${key}">${label}</button>`;
+      `<button type="button" ${chipAttrs(on)} ${attr}="${key}">${label}</button>`;
     gatesEl.innerHTML =
       chip("data-gate", "green", "green", gatesOn.has("green")) +
       chip("data-gate", "failed", "failed", gatesOn.has("failed"));
@@ -105,7 +107,7 @@ export function renderShipsView(container: HTMLElement): () => void {
       total = res.total;
       renderList();
     } catch (err) {
-      listEl.innerHTML = `<div class="empty-state">failed to load ship history</div>`;
+      showError(listEl, "failed to load ship history", () => void load());
       console.error("ships load failed", err);
     }
   }
@@ -166,10 +168,12 @@ export function renderShipsView(container: HTMLElement): () => void {
     }
     listEl.innerHTML = `
       <div class="ships-meta">${windowNote}${filterNote}</div>
-      <table class="sessions-table ships-table">
-        <thead><tr><th>when</th><th>project</th><th>kind</th><th>version</th><th>gates</th><th>took</th><th>session</th></tr></thead>
-        <tbody>${rows.map(rowHtml).join("")}</tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="sessions-table ships-table">
+          <thead><tr><th>when</th><th>project</th><th>kind</th><th>version</th><th>gates</th><th>took</th><th>session</th></tr></thead>
+          <tbody>${rows.map(rowHtml).join("")}</tbody>
+        </table>
+      </div>
     `;
   }
 
