@@ -411,6 +411,12 @@ export function deleteTodo(id: string): Promise<void> {
   return sendJSON<void>(`/api/todos/${encodeURIComponent(id)}`, "DELETE");
 }
 
+/** label -> the project names whose cards that scope covers, resolved by the
+ *  server. The client used to compute this itself; see /api/scopes. */
+export function getScopeIndex(): Promise<Record<string, string[]>> {
+  return getJSON<Record<string, string[]>>("/api/scopes");
+}
+
 // --- workflow columns -------------------------------------------------------
 
 /** `repo` narrows to what one scope sees: the shared columns plus its own. */

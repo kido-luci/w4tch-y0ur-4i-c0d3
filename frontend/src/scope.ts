@@ -25,6 +25,7 @@ import {
   deleteProjectLogo,
   getGroups,
   getProjectRegistry,
+  getScopeIndex,
   getUnmappedFolders,
   projectLogoURL,
   putGroup,
@@ -136,29 +137,41 @@ export function getScope(): string {
   }
 }
 
+/** label -> the project names that scope covers, as RESOLVED BY THE SERVER
+    (/api/scopes). Empty until the boot fetch lands, exactly like knownProjects. */
+let scopeIndex: Record<string, string[]> = {};
+
 /** The set of user-project NAMES the active scope covers, or null when
-    unscoped: a plain project covers itself; a group covers its name plus its
-    members (the name too, so items labelled with the group match). This is the
-    client-side label filter for the board / design / docs / ships. */
+    unscoped. This is the client-side label filter for the board / design /
+    docs / ships / cycles.
+
+    It is a LOOKUP, not a computation. Expanding a group into its members and
+    walking the rail's parent tree used to happen here as well as in the Go
+    resolver — one rule, two implementations, in two languages, agreeing only
+    by inspection. They did not agree: the server's copy compared labels
+    instead of expanding them, and a workflow column created under a group
+    vanished when the rail narrowed to a member. One rule, one place.
+
+    The fallback before the index loads is the label alone, which is what the
+    old code also returned while knownGroups/knownProjects were still empty —
+    a degenerate answer, not a second copy of the rule. The boot fetch
+    re-renders the views when it lands. */
 export function getScopeSet(): Set<string> | null {
   const scope = getScope();
   if (!scope) return null;
-  const set = new Set([scope]);
-  const g = knownGroups.find((k) => k.name === scope);
-  if (g) for (const p of g.projects) set.add(p);
-  // Expand to the whole rail subtree: clicking a parent project (or a group)
-  // scopes to every project nested under it, transitively.
-  for (;;) {
-    let grew = false;
-    for (const p of knownProjects) {
-      if (p.parent && set.has(p.parent) && !set.has(p.name)) {
-        set.add(p.name);
-        grew = true;
-      }
-    }
-    if (!grew) break;
-  }
-  return set;
+  return new Set(scopeIndex[scope] ?? [scope]);
+}
+
+/** Reload the resolved index. Called at boot and whenever the groups or the
+    project registry change, since either can change what a label covers. */
+export function loadScopeIndex(): Promise<void> {
+  return getScopeIndex()
+    .then((idx) => {
+      scopeIndex = idx ?? {};
+    })
+    .catch(() => {
+      /* keep the last good index; the label-alone fallback covers a cold start */
+    });
 }
 
 /** The active scope as an API `project` param for the SESSION-derived endpoints
@@ -760,6 +773,9 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       const before = getScopeParam();
       knownGroups = (data as ProjectGroup[] | null) ?? [];
       renderRows();
+      // Group membership changed, so what a label covers did too — the server
+      // owns that rule, so refetch rather than recompute.
+      void loadScopeIndex().then(onChange);
       if (!groupPanel.hidden && !groupPanel.querySelector(".scope-panel-form")) renderGroupPanel();
       const after = getScopeParam();
       if (scope && before !== after) onChange();
@@ -769,6 +785,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       const before = getScopeParam();
       knownProjects = (data as Project[] | null) ?? [];
       renderRows();
+      void loadScopeIndex().then(onChange); // the parent tree moved; see above
       if (!projPanel.hidden && !projPanel.querySelector(".scope-panel-form")) renderProjectPanel();
       refreshUnmapped(); // ownership changed → the unmapped set did too
       const after = getScopeParam();
@@ -796,7 +813,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   renderRows();
   const hadScope = getScope();
   const beforeParam = getScopeParam(); // pre-load: labels resolve as their own folder
-  Promise.all([getProjectRegistry(), getGroups()])
+  Promise.all([getProjectRegistry(), getGroups(), loadScopeIndex()])
     .then(([projects, groups]) => {
       knownProjects = projects;
       knownGroups = groups;
