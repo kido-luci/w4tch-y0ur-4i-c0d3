@@ -774,7 +774,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     // part of the story even when no session was ever attached.
     const historyPromise = getTodoEvents(t.id)
       .then((evs) =>
-        evs
+        (evs ?? [])
           .map((e) => {
             const body = describeEvent(e, eventNames);
             return body ? { ts: Date.parse(e.ts), html: journeyRow(e.ts, body) } : null;

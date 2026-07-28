@@ -251,7 +251,9 @@ export function renderCyclesView(container: HTMLElement): () => void {
       }
       ${detailHtml()}
       ${activityHtml()}
-      <div class="cy-pool">${pool.length} open card${pool.length === 1 ? "" : "s"} in this scope are in no cycle${
+      <div class="cy-pool">${pool.length} open card${
+        pool.length === 1 ? " is" : "s are"
+      } in this scope with no cycle${
         pool.length ? ` — set one from a card's panel on the board` : ""
       }</div>
     `;
@@ -362,7 +364,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
       rows = v;
       todos = t;
       states = st;
-      events = ev;
+      events = ev ?? []; // nil Go slice arrives as null — the api.ts convention
       // A cycle deleted elsewhere must not leave a dead selection behind.
       if (selectedId && !rows.some((r) => r.cycle.id === selectedId)) {
         selectedId = null;

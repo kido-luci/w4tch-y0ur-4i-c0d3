@@ -87,7 +87,11 @@ func (es *EventStore) trim(todoID string) {
 
 func (es *EventStore) scan(rows *sql.Rows) []TodoEvent {
 	defer rows.Close()
-	var out []TodoEvent
+	// NON-NIL on purpose. A nil slice marshals as JSON `null`, and a caller
+	// doing `events.map(...)` on null throws — which is exactly what happened
+	// on a board whose log was still empty. Every other store here returns a
+	// made slice for the same reason.
+	out := make([]TodoEvent, 0, 16)
 	for rows.Next() {
 		var e TodoEvent
 		var ts int64
