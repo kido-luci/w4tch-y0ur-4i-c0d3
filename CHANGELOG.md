@@ -18,9 +18,11 @@ All notable changes to this project are documented here. Versions follow
     progress and points. Deleting a parent promotes its children rather than
     deleting them.
   - **Cycles, estimates and priority.** Plan cards into a named sprint, size
-    them in story points, and rank them 0–4. A **burndown** chart per cycle
-    and a **velocity** table across cycles, both computed from a new
-    append-only event log rather than stored totals.
+    them in story points, and rank them 0–4. A **cycles tab** creates and
+    closes sprints and draws a **burndown** chart per cycle plus a
+    committed-vs-landed line per sprint, all computed from a new append-only
+    event log rather than stored totals. Cards with no estimate are counted
+    and named rather than silently omitted from the chart.
   - **Table and timeline views**, plus a filter bar (text, kind, cycle,
     unestimated) you can save as a named view per scope. The table view drags
     rows to reorder or to nest one card under another.

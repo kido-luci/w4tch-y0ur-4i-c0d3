@@ -5501,3 +5501,230 @@ a.flow-node {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- cycles view (/project/<scope>/cycles) --------------------------------
+   Sprint list + burndown. The chart is hand-rolled SVG like the app's others. */
+
+.cy-toolbar {
+  margin: 10px 0 12px;
+}
+
+.cy-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cy-form input[type="text"],
+.cy-form input:not([type]),
+.cy-f-name,
+.cy-f-goal {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 7px;
+  min-width: 180px;
+}
+
+.cy-form label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cy-form input[type="date"] {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 5px;
+}
+
+.cy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cy-row {
+  background: var(--card);
+  border: 2px solid var(--border);
+  padding: 10px;
+  cursor: pointer;
+  box-shadow: var(--px-shadow);
+}
+
+.cy-row:hover {
+  border-color: var(--border-hover);
+}
+
+.cy-row.selected {
+  border-color: var(--accent);
+}
+
+.cy-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cy-name {
+  font-family: var(--px-pixel);
+  font-size: var(--px-label);
+  text-transform: uppercase;
+}
+
+.cy-badge {
+  border: var(--px-edge-inner);
+  padding: 0 5px;
+  font-family: var(--mono);
+  font-size: var(--px-label-xs);
+  color: var(--text-muted);
+}
+
+.cy-badge-late {
+  color: #d98a2b;
+  border-color: #d98a2b;
+}
+
+.cy-dates {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cy-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+  opacity: 0;
+}
+
+.cy-row:hover .cy-actions,
+.cy-row.selected .cy-actions {
+  opacity: 1;
+}
+
+.cy-goal {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cy-stats {
+  display: flex;
+  gap: 14px;
+  margin-top: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cy-stats b {
+  color: var(--text);
+}
+
+.cy-warn {
+  color: #d98a2b;
+}
+
+.cy-bar {
+  margin-top: 7px;
+  height: 4px;
+  background: var(--border);
+}
+
+.cy-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.cy-detail {
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.cy-chart {
+  width: 100%;
+  height: 160px;
+  margin-top: 8px;
+  overflow: visible;
+}
+
+/* vector-effect keeps the stroke 1px wide despite the non-uniform viewBox
+   stretch — without it a wide card draws a fat line and a tall one a hairline. */
+.cy-chart path {
+  fill: none;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.cy-remaining {
+  stroke: var(--accent);
+}
+
+.cy-ideal {
+  stroke: var(--text-muted);
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+
+.cy-dot {
+  fill: var(--accent);
+  vector-effect: non-scaling-stroke;
+}
+
+.cy-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.cy-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.cy-key::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.cy-key-remaining::before {
+  background: var(--accent);
+}
+
+.cy-key-ideal::before {
+  background: var(--text-muted);
+}
+
+.cy-pool {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}

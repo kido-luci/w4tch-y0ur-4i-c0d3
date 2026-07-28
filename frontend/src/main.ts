@@ -5,6 +5,7 @@ import { buildPath, mountScopeRail, navigate, parseLocation, syncScopeToURL } fr
 import { initTheme, mountThemeToggle } from "./theme";
 import { renderBoardView } from "./views/board";
 import { renderCodegraphView } from "./views/codegraph";
+import { renderCyclesView } from "./views/cycles";
 import { renderDesignEditorView, renderDesignView } from "./views/design";
 import { renderSessionDetailView } from "./views/detail";
 import { renderDocsView } from "./views/docs";
@@ -34,7 +35,8 @@ type Route =
   | { view: "ships" }
   | { view: "codegraph" }
   | { view: "git" }
-  | { view: "gitRepo"; folder: string };
+  | { view: "gitRepo"; folder: string }
+  | { view: "cycles" };
 
 // Routes are real paths, shaped family/scope/tab[/detail] (see scope.ts). The
 // scope segment is orthogonal to the view, so it's parsed out here and the view
@@ -53,6 +55,8 @@ function parseRoute(pathname: string): Route {
     switch (loc.tab) {
       case "board":
         return loc.detail ? { view: "board", cardId: loc.detail } : { view: "board" };
+      case "cycles":
+        return { view: "cycles" };
       case "design":
         return loc.detail ? { view: "designEditor", id: loc.detail } : { view: "design" };
       case "docs":
@@ -136,6 +140,7 @@ app.innerHTML = `
     <a class="px-subnav-link" href="/claude/insights" data-nav="insights" data-fam="claude">insights</a>
     <a class="px-subnav-link" href="/claude/search" data-nav="search" data-fam="claude">search</a>
     <a class="px-subnav-link" href="/project/board" data-nav="board" data-fam="project">board</a>
+    <a class="px-subnav-link" href="/project/cycles" data-nav="cycles" data-fam="project">cycles</a>
     <a class="px-subnav-link" href="/project/design" data-nav="design" data-fam="project">design</a>
     <a class="px-subnav-link" href="/project/docs" data-nav="docs" data-fam="project">docs</a>
     <a class="px-subnav-link" href="/project/ships" data-nav="ships" data-fam="project">ships</a>
@@ -193,6 +198,8 @@ function render(): void {
   const active =
     route.view === "board"
       ? "board"
+      : route.view === "cycles"
+        ? "cycles"
       : route.view === "design" || route.view === "designEditor"
         ? "design"
         : route.view === "docs"
@@ -237,6 +244,8 @@ function render(): void {
       ? renderSessionDetailView(view, route.id)
       : route.view === "board"
         ? renderBoardView(view, route.cardId)
+        : route.view === "cycles"
+          ? renderCyclesView(view)
         : route.view === "design"
           ? renderDesignView(view)
           : route.view === "designEditor"

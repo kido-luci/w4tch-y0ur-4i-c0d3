@@ -59,6 +59,21 @@ export function formatRelativeTime(iso: string): string {
 }
 
 /** Absolute local time formatting: "Jul 14, 15:42". */
+/**
+ * A timestamp's calendar day in the VIEWER's zone, YYYY-MM-DD.
+ *
+ * Not `iso.slice(0, 10)`: that reads the day off the UTC string, so a cycle
+ * starting at local midnight east of Greenwich renders as the day before the
+ * one the user picked. Only correct by accident for instants already stored at
+ * UTC midnight.
+ */
+export function formatDay(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export function formatAbsoluteTime(iso: string): string {
   const d = new Date(iso);
   const month = d.toLocaleString("en-US", { month: "short" });
