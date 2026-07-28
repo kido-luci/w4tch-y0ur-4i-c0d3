@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-const dataSchemaVersion = 11
+const dataSchemaVersion = 12
 
 // openDataDB opens (creating if needed) <cfgDir>/data.db and migrates its
 // schema forward. Unlike the index cache, an error here is fatal to the
@@ -323,7 +323,107 @@ PRAGMA user_version = 7;`); err != nil {
 			return err
 		}
 	}
+	if v < 12 {
+		// Board depth (`#/board`): custom workflow columns, card hierarchy,
+		// cycles, an append-only event log and saved views. Four new tables plus
+		// five guarded ADD COLUMNs on todos.
+		//
+		// todo_states is SEEDED with the three ids the old enum used, so `status`
+		// becomes a reference into this table without migrating a single card:
+		// every existing row, REST body and MCP call keeps its exact string. The
+		// seed is INSERT OR IGNORE so a re-entered migration (crash between the
+		// CREATE and the version bump) neither fails nor resurrects a column the
+		// user renamed.
+		//
+		// todo_events is the only history the board has: current state alone
+		// cannot draw a burndown, because it never says WHEN a card crossed into
+		// done. It is append-only and never updated, which is also what makes it
+		// safe to replay.
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS todo_states(
+	id TEXT PRIMARY KEY,
+	name TEXT NOT NULL,
+	category TEXT NOT NULL,
+	ord REAL NOT NULL,
+	wip_limit INTEGER NOT NULL DEFAULT 0,
+	repo TEXT NOT NULL DEFAULT ''
+);
+INSERT OR IGNORE INTO todo_states(id,name,category,ord) VALUES
+	('backlog','Backlog','todo',0),
+	('doing','Doing','started',1),
+	('done','Done','done',2);
+CREATE TABLE IF NOT EXISTS cycles(
+	id TEXT PRIMARY KEY,
+	name TEXT NOT NULL,
+	repo TEXT NOT NULL DEFAULT '',
+	goal TEXT NOT NULL DEFAULT '',
+	starts_at INTEGER NOT NULL,
+	ends_at INTEGER NOT NULL,
+	closed_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS todo_events(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	todo_id TEXT NOT NULL,
+	ts INTEGER NOT NULL,
+	kind TEXT NOT NULL,
+	from_val TEXT NOT NULL DEFAULT '',
+	to_val TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS todo_events_todo ON todo_events(todo_id);
+CREATE INDEX IF NOT EXISTS todo_events_ts ON todo_events(ts);
+CREATE TABLE IF NOT EXISTS board_views(
+	id TEXT PRIMARY KEY,
+	name TEXT NOT NULL,
+	repo TEXT NOT NULL DEFAULT '',
+	kind TEXT NOT NULL,
+	query TEXT NOT NULL DEFAULT '{}',
+	ord REAL NOT NULL
+);`); err != nil {
+			return err
+		}
+		// The ALTERs are skipped outright when todos is absent. A step must not
+		// assume a table an earlier step created: a db repaired by hand, or a
+		// fixture that only ever held drawings, still has to migrate forward
+		// rather than failing every boot on a table it never had.
+		hasTodos, err := tableExists(db, "todos")
+		if err != nil {
+			return err
+		}
+		if hasTodos {
+			for _, col := range []struct{ name, ddl string }{
+				{"parent_id", `ALTER TABLE todos ADD COLUMN parent_id TEXT NOT NULL DEFAULT ''`},
+				{"kind", `ALTER TABLE todos ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'`},
+				{"priority", `ALTER TABLE todos ADD COLUMN priority INTEGER NOT NULL DEFAULT 0`},
+				{"estimate", `ALTER TABLE todos ADD COLUMN estimate REAL NOT NULL DEFAULT 0`},
+				{"cycle_id", `ALTER TABLE todos ADD COLUMN cycle_id TEXT NOT NULL DEFAULT ''`},
+			} {
+				has, err := columnExists(db, "todos", col.name)
+				if err != nil {
+					return err
+				}
+				if !has {
+					if _, err := db.Exec(col.ddl); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		if _, err := db.Exec(`PRAGMA user_version = 12`); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// tableExists reports whether the named table is present, so a migration step
+// can skip an ALTER rather than fail on a db that never had the table.
+func tableExists(db *sql.DB, table string) (bool, error) {
+	var n int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // columnExists reports whether table has a column named col — used to keep an
