@@ -26,11 +26,18 @@ All notable changes to this project are documented here. Versions follow
   - **Table and timeline views**, plus a filter bar (text, kind, cycle,
     unestimated) you can save as a named view per scope. The table view drags
     rows to reorder or to nest one card under another.
+  - **History you can read.** Every column move, estimate, cycle, priority and
+    re-parent is folded into a card's journey stream in its panel, and the
+    cycles tab carries a board-wide *recent activity* feed. Both render from
+    the same event log the burndown replays.
   - **MCP**: `list_board_states` and `list_cycles`, and `create_todo` /
     `update_todo` take the new fields — a session can file a sized epic with
     children in one pass.
 
 ### Changed
+- Adding and renaming a workflow **column**, and saving, renaming or updating a
+  **view**, all use inline forms instead of `prompt()` dialogs — and a saved
+  view can now be renamed and overwritten, not only created and deleted.
 - `data.db` migrates to schema v12. The three original columns are seeded as
   rows rather than migrated, so every existing card, REST body and MCP call
   keeps working unchanged; boards with no custom columns look and behave

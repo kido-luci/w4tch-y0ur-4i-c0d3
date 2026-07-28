@@ -25,8 +25,10 @@ import {
   getSession,
   getSessions,
   getShips,
+  getTodoEvents,
   getTodos,
   patchBoardState,
+  patchBoardView,
   patchTodo,
   subscribeRawEvents,
 } from "../api";
@@ -44,6 +46,7 @@ import type {
   ViewKind,
 } from "../api";
 import { mountBoardTable } from "../boardTableIsland";
+import { describeEvent } from "../boardEvents";
 import { matchesQuery, renderTimeline } from "../boardQuery";
 import {
   escapeHtml,
@@ -123,6 +126,12 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
   let query: BoardQuery = {};
   let activeViewId: string | null = null;
   let unmountTable: (() => void) | null = null;
+  // Inline editors, replacing what used to be prompt() dialogs. Only one is
+  // ever open, and each holds the id (or "" for "the new-column form").
+  let addingColumn = false;
+  let renamingColumn: string | null = null;
+  let savingView = false;
+  let renamingView = false;
   // The rail's global project scope; a change re-renders the whole view, so
   // reading it once per mount is enough. The label feeds new cards, the set
   // filters (a group scope covers its name plus its member projects).
@@ -408,11 +417,24 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
           <option value="">saved views…</option>
           ${viewOpts}
         </select>
-        <button type="button" class="todo-btn board-view-save" title="save the current filter as a view">save view</button>
         ${
-          activeViewId
-            ? `<button type="button" class="todo-btn todo-btn-danger board-view-delete" title="delete this saved view">✕</button>`
-            : ""
+          savingView || renamingView
+            ? `<form class="view-form">
+                 <input class="view-f-name" placeholder="${
+                   renamingView ? "rename this view" : "name this view"
+                 }" value="${escapeHtml(renamingView ? (savedViews.find((v) => v.id === activeViewId)?.name ?? "") : "")}"
+                   autocomplete="off" required>
+                 <button type="submit" class="todo-btn">${renamingView ? "rename" : "save"}</button>
+                 <button type="button" class="todo-btn view-f-cancel">cancel</button>
+               </form>`
+            : `<button type="button" class="todo-btn board-view-save" title="save the current filter as a view">save view</button>
+               ${
+                 activeViewId
+                   ? `<button type="button" class="todo-btn board-view-rename" title="rename this saved view">rename</button>
+                      <button type="button" class="todo-btn board-view-update" title="overwrite this view with the current filter">update</button>
+                      <button type="button" class="todo-btn todo-btn-danger board-view-delete" title="delete this saved view">✕</button>`
+                   : ""
+               }`
         }
       </div>
       ${
@@ -432,9 +454,13 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     const sum = s.category === "done" ? doneSumHtml(cards) : "";
     return `
       <div class="board-col-head" data-status="${escapeHtml(s.id)}">
-        <span class="board-col-name" title="${escapeHtml(s.category)} column — double-click to rename">${escapeHtml(
-          s.name,
-        )}</span>
+        ${
+          renamingColumn === s.id
+            ? `<input class="board-col-rename" value="${escapeHtml(s.name)}" autocomplete="off">`
+            : `<span class="board-col-name" title="${escapeHtml(
+                s.category,
+              )} column — double-click to rename">${escapeHtml(s.name)}</span>`
+        }
         <span class="board-count">${cards.length}</span>${wip}
         ${sum}
         ${
@@ -458,9 +484,25 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         </div>`;
         })
         .join("") +
-      `<div class="board-col board-col-add">
-         <button type="button" class="board-add-col" title="add a workflow column">+ column</button>
-       </div>`;
+      (addingColumn
+        ? `<div class="board-col board-col-add">
+             <form class="col-form">
+               <input class="col-f-name" placeholder="column name" autocomplete="off" required>
+               <select class="col-f-cat" title="what this column means to the board">
+                 <option value="todo">todo — not started</option>
+                 <option value="started" selected>started — in progress</option>
+                 <option value="done">done — freezes the cost snapshot</option>
+               </select>
+               <input class="col-f-wip" type="number" min="0" step="1" placeholder="WIP limit (optional)">
+               <div class="col-form-row">
+                 <button type="submit" class="todo-btn">add</button>
+                 <button type="button" class="todo-btn col-f-cancel">cancel</button>
+               </div>
+             </form>
+           </div>`
+        : `<div class="board-col board-col-add">
+             <button type="button" class="board-add-col" title="add a workflow column">+ column</button>
+           </div>`);
     wireBoard();
   }
 
@@ -665,9 +707,12 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
    *  created → sessions (PR riding its session) → check/release runs → done.
    *  fillJourney builds the rows; the shell only decides the hint. */
   function panelJourneyHtml(t: Todo): string {
+    // A card with no linked session still has a journey now — every column
+    // move, estimate and cycle change is in the event log — so the hint only
+    // speaks to what linking would ADD.
     const hint = (t.linkedSessionIds ?? []).length
       ? ""
-      : `<div class="panel-sess-empty">link a session to grow the journey</div>`;
+      : `<div class="panel-sess-empty">link a session to add its cost and runs to the journey</div>`;
     return `
       <div class="panel-field">
         <div class="panel-label">journey</div>
@@ -684,6 +729,16 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         ${body}
       </div>`;
   }
+
+  /** Name tables for the shared event renderer (boardEvents.ts). */
+  const eventNames = {
+    state: (id: string): string => stateById(id)?.name ?? id ?? "—",
+    cycle: (id: string): string => (id ? (cycleById(id)?.name ?? id) : "no cycle"),
+    card: (id: string): string => {
+      const c = todos.find((x) => x.id === id);
+      return c ? `#${c.seq}` : "a card";
+    },
+  };
 
   // A run's record can land moments after a session's last transcript line —
   // widen the match window past both ends so it isn't missed.
@@ -715,10 +770,28 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         ),
       });
     }
+    // Board history is fetched for EVERY card, linked or not: a column move is
+    // part of the story even when no session was ever attached.
+    const historyPromise = getTodoEvents(t.id)
+      .then((evs) =>
+        evs
+          .map((e) => {
+            const body = describeEvent(e, eventNames);
+            return body ? { ts: Date.parse(e.ts), html: journeyRow(e.ts, body) } : null;
+          })
+          .filter((r): r is { ts: number; html: string } => r !== null),
+      )
+      .catch((): { ts: number; html: string }[] => []); // history is an extra, never the section
+
     const finish = (extra: { ts: number; html: string }[], footer = ""): void => {
       if (!listEl.isConnected) return;
-      const all = [...events, ...extra].sort((a, b) => a.ts - b.ts);
-      listEl.innerHTML = all.map((e) => e.html).join("") + footer;
+      void historyPromise.then((hist) => {
+        if (!listEl.isConnected) return;
+        const all = [...events, ...hist, ...extra].sort((a, b) => a.ts - b.ts);
+        listEl.innerHTML = all.length
+          ? all.map((e) => e.html).join("") + footer
+          : `<div class="panel-sess-empty">nothing has happened to this card yet</div>`;
+      });
     };
     if (!linked.length) {
       finish([]);
@@ -1242,14 +1315,54 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       render();
     });
     toolbarEl.querySelector<HTMLButtonElement>(".board-view-save")?.addEventListener("click", () => {
-      const name = prompt("Name this view")?.trim();
+      savingView = true;
+      renamingView = false;
+      render();
+      toolbarEl.querySelector<HTMLInputElement>(".view-f-name")?.focus();
+    });
+    toolbarEl.querySelector<HTMLButtonElement>(".board-view-rename")?.addEventListener("click", () => {
+      renamingView = true;
+      savingView = false;
+      render();
+      const el = toolbarEl.querySelector<HTMLInputElement>(".view-f-name");
+      el?.focus();
+      el?.select();
+    });
+    // "update" rewrites the active view's filter to whatever is on screen —
+    // the reason a saved view was previously a write-once thing.
+    toolbarEl.querySelector<HTMLButtonElement>(".board-view-update")?.addEventListener("click", () => {
+      if (!activeViewId) return;
+      patchBoardView(activeViewId, { kind: viewKind, query })
+        .then(loadViews)
+        .catch((err: unknown) => alert(err instanceof Error ? err.message : "could not update the view"));
+    });
+    toolbarEl.querySelector<HTMLButtonElement>(".view-f-cancel")?.addEventListener("click", () => {
+      savingView = false;
+      renamingView = false;
+      render();
+    });
+    toolbarEl.querySelector<HTMLFormElement>(".view-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = toolbarEl.querySelector<HTMLInputElement>(".view-f-name")!.value.trim();
       if (!name) return;
+      const done = (): Promise<void> => {
+        savingView = false;
+        renamingView = false;
+        return loadViews();
+      };
+      const fail = (err: unknown): void => {
+        alert(err instanceof Error ? err.message : "could not save the view");
+      };
+      if (renamingView && activeViewId) {
+        patchBoardView(activeViewId, { name }).then(done).catch(fail);
+        return;
+      }
       createBoardView({ name, repo: scope || undefined, kind: viewKind, query })
         .then((v) => {
           activeViewId = v.id;
-          return loadViews();
+          return done();
         })
-        .catch((err: unknown) => alert(err instanceof Error ? err.message : "could not save the view"));
+        .catch(fail);
     });
     toolbarEl.querySelector<HTMLButtonElement>(".board-view-delete")?.addEventListener("click", () => {
       if (!activeViewId) return;
@@ -1301,31 +1414,85 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
 
   function wireBoard(): void {
     boardEl.querySelector<HTMLButtonElement>(".board-add-col")?.addEventListener("click", () => {
-      const name = prompt("Column name (e.g. In review)")?.trim();
+      addingColumn = true;
+      renderBody();
+      boardEl.querySelector<HTMLInputElement>(".col-f-name")?.focus();
+    });
+    boardEl.querySelector<HTMLButtonElement>(".col-f-cancel")?.addEventListener("click", () => {
+      addingColumn = false;
+      renderBody();
+    });
+    boardEl.querySelector<HTMLFormElement>(".col-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = boardEl.querySelector<HTMLInputElement>(".col-f-name")!.value.trim();
       if (!name) return;
-      const cat =
-        prompt("Category — todo, started or done. This is what decides whether landing here freezes a card's cost snapshot.", "started")?.trim() ||
-        "started";
+      const wipRaw = boardEl.querySelector<HTMLInputElement>(".col-f-wip")!.value.trim();
+      const wip = wipRaw === "" ? 0 : Number(wipRaw);
+      if (Number.isNaN(wip) || wip < 0) return;
       createBoardState({
         name,
-        category: cat as "todo" | "started" | "done",
+        category: boardEl.querySelector<HTMLSelectElement>(".col-f-cat")!.value as
+          | "todo"
+          | "started"
+          | "done",
         repo: scope || undefined,
+        wipLimit: wip,
       })
-        .then(loadStates)
+        .then(() => {
+          addingColumn = false;
+          return loadStates();
+        })
         .catch((err: unknown) => alert(err instanceof Error ? err.message : "could not add the column"));
     });
 
     boardEl.querySelectorAll<HTMLElement>(".board-col-name").forEach((el) => {
       el.addEventListener("dblclick", () => {
-        const id = el.closest<HTMLElement>(".board-col-head")!.dataset["status"]!;
-        const cur = stateById(id);
-        const name = prompt("Rename column", cur?.name ?? "")?.trim();
-        if (!name || name === cur?.name) return;
-        patchBoardState(id, { name })
-          .then(loadStates)
-          .catch((err: unknown) => alert(err instanceof Error ? err.message : "rename failed"));
+        renamingColumn = el.closest<HTMLElement>(".board-col-head")!.dataset["status"]!;
+        renderBody();
+        const input = boardEl.querySelector<HTMLInputElement>(".board-col-rename");
+        input?.focus();
+        input?.select();
       });
     });
+
+    // Enter commits, Escape and blur-without-change abandon — the same shape
+    // the card note's inline editor uses.
+    const rename = boardEl.querySelector<HTMLInputElement>(".board-col-rename");
+    if (rename && renamingColumn) {
+      const id = renamingColumn;
+      const before = stateById(id)?.name ?? "";
+      const close = (): void => {
+        renamingColumn = null;
+        renderBody();
+      };
+      const commit = (): void => {
+        const name = rename.value.trim();
+        if (!name || name === before) {
+          close();
+          return;
+        }
+        renamingColumn = null;
+        patchBoardState(id, { name })
+          .then(loadStates)
+          .catch((err: unknown) => {
+            alert(err instanceof Error ? err.message : "rename failed");
+            void loadStates();
+          });
+      };
+      rename.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          close();
+        }
+      });
+      rename.addEventListener("blur", () => {
+        // A re-render can replace the input mid-flight; that stale blur must
+        // not fight the fresh one.
+        if (rename.isConnected && renamingColumn === id) commit();
+      });
+    }
 
     boardEl.querySelectorAll<HTMLButtonElement>(".board-col-delete").forEach((btn) => {
       btn.addEventListener("click", () => {
