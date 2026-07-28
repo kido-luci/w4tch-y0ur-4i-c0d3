@@ -364,6 +364,13 @@ export function createTokensOverTime(): TokensOverTime {
       <div class="tot-head-titles">
         <h2 class="section-heading tot-title">tokens over time</h2>
         <div class="tot-sub">daily token usage by model</div>
+        <!-- This card is fed by its own unfiltered fetch (see the getSessions(0)
+             in sessions.ts) so it stays a global baseline to read the filtered
+             panels against. That is deliberate, but it put "opus 100%" in the
+             distribution card one scroll under "opus 66%" here, and 722.4k
+             tokens in a stat card against 18.9B in this one, with nothing
+             saying why. Say it. -->
+        <div class="panel-scope">all projects · all time — not affected by the scope or the filters</div>
       </div>
       <div class="tot-legend"></div>
     </div>

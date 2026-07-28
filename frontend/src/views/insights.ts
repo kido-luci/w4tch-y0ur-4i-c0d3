@@ -31,7 +31,7 @@ import {
   truncate,
 } from "../format";
 import { announce } from "../live";
-import { getScopeParam, labelForFolder } from "../scope";
+import { getScopeParam, labelForFolder, scopeChipHtml } from "../scope";
 
 interface InsightsFilters {
   days: number;
@@ -88,6 +88,7 @@ export function renderInsightsView(container: HTMLElement): () => void {
     <div class="page">
       <header class="topbar">
         <div class="topbar-controls">
+          ${scopeChipHtml()}
           <div class="filter-row" id="ins-days"></div>
         </div>
       </header>

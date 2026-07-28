@@ -19,7 +19,7 @@ import { createTokensOverTime } from "../tokensOverTime";
 import { loadFilters, renderFilterBar, saveFilters } from "../filters";
 import type { FilterState, StatusFilter } from "../filters";
 import { isNotifyOn, notifySupported, toggleNotify } from "../notify";
-import { getScopeParam, getScopeSet, labelForFolder, navigate } from "../scope";
+import { getScopeParam, getScopeSet, labelForFolder, navigate, scopeChipHtml } from "../scope";
 
 // The heatmap uses its own fixed window, independent of the day filter.
 const HEATMAP_WEEKS = 26;
@@ -43,6 +43,7 @@ export function renderSessionsView(container: HTMLElement): () => void {
     <div class="page">
       <header class="topbar">
         <div class="topbar-controls">
+          ${scopeChipHtml()}
           <button type="button" class="notify-btn" id="notify-btn" aria-label="toggle notifications">🔔</button>
           <div id="filter-slot"></div>
         </div>
@@ -51,11 +52,13 @@ export function renderSessionsView(container: HTMLElement): () => void {
       <section class="stat-cards" id="stat-cards"></section>
       <section class="card heatmap-card">
         <h2 class="section-heading">activity · last ${HEATMAP_WEEKS} weeks</h2>
+        <p class="panel-scope">this scope · fixed ${HEATMAP_WEEKS}-week window, ignores the day filter</p>
         <div id="heatmap-slot"></div>
       </section>
       <section class="card tot-card" id="tot-card"></section>
       <section class="card">
         <h2 class="section-heading">model distribution</h2>
+        <p class="panel-scope">this scope · follows every filter above</p>
         <div id="dist-slot"></div>
       </section>
       <section class="live-strip hidden" id="live-strip"></section>

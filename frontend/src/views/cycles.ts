@@ -27,7 +27,7 @@ import type { Burndown, CycleReport, Todo, TodoEvent, TodoState } from "../api";
 import { describeEventOrCreated } from "../boardEvents";
 import { escapeHtml, formatDay, formatRelativeTime } from "../format";
 import { announce } from "../live";
-import { getScope, getScopeSet } from "../scope";
+import { getScope, getScopeSet, scopeChipHtml } from "../scope";
 
 function points(v: number): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
@@ -92,6 +92,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
 
   container.innerHTML = `
     <div class="page">
+      <header class="topbar"><div class="topbar-controls">${scopeChipHtml()}</div></header>
       <div class="section-heading">cycles</div>
       <div class="section-desc">
         Sprints the board's cards are planned into. A cycle's burndown reads the

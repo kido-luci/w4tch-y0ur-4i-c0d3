@@ -8,7 +8,7 @@ import { getShips, subscribeRawEvents } from "../api";
 import type { ShipRecord } from "../api";
 import { chipAttrs, escapeHtml, formatDuration, formatRelativeTime, truncate } from "../format";
 import { announce } from "../live";
-import { getScope, getScopeSet, labelForFolder } from "../scope";
+import { getScope, getScopeSet, labelForFolder, scopeChipHtml } from "../scope";
 
 const DAY_OPTS: { v: number; label: string }[] = [
   { v: 7, label: "7d" },
@@ -46,6 +46,7 @@ export function renderShipsView(container: HTMLElement): () => void {
     <div class="page">
       <header class="topbar">
         <div class="topbar-controls">
+          ${scopeChipHtml()}
           <div class="filter-row" id="sh-days"></div>
           <div class="filter-row" id="sh-gates"></div>
           <div class="filter-row" id="sh-kind"></div>

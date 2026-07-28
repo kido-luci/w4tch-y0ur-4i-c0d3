@@ -770,6 +770,44 @@ a {
 
 /* ---------- tables ---------- */
 
+/* What a panel's numbers actually cover. The sessions page runs three different
+   scopings at once — stat cards on every filter, the heatmap on scope alone,
+   the token chart on nothing at all — and every one of them was correct and
+   unlabelled, which is how "opus 100%" and "opus 66%" ended up one scroll
+   apart. Sits under the heading, quieter than the body. */
+.panel-scope {
+  margin: -2px 0 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* "You are looking at X" for the five views that filter by scope without
+   carrying the rail. Reads as a label, not a control — the scope is not changed
+   here — so it stays quiet next to the filter chips it sits beside. */
+.scope-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.scope-chip:hover {
+  border-color: var(--border-hover);
+}
+
+.scope-chip-key {
+  font-family: var(--px-pixel);
+  font-size: var(--px-label);
+  color: var(--text-muted);
+}
+
 /* A wide table has to scroll inside its own box, or it scrolls the page — and a
    page that scrolls sideways takes the fixed header off the left edge with it.
    This is the chrome-less half of .sessions-table-wrap below, for the tables

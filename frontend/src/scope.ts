@@ -191,6 +191,28 @@ export function getScopeParam(): string | undefined {
   return folders.size ? [...folders].join(",") : undefined;
 }
 
+/** A compact "you are looking at X" chip, for the views that filter by scope
+    but do NOT carry the rail (sessions / insights / search / cycles / ships —
+    see the allowlist in main.ts). Those five read getScopeParam() like everyone
+    else, so their numbers are scoped, and until this existed nothing on the
+    screen said to what: you could not tell which project's cost you were
+    reading, and the only way to change it was to leave for a tab that has the
+    rail. Cycles even printed "0 open cards are in this scope with no cycle"
+    while refusing to name the scope.
+
+    It links to the board because that is where the switcher lives. Deliberately
+    scope-LESS href, per the routing rule — syncScopeToURL splices the active
+    scope in at render. */
+export function scopeChipHtml(): string {
+  const scope = getScope();
+  const label = scope || "all projects";
+  return (
+    `<a class="scope-chip" href="/project/board" ` +
+    `title="the views with the project rail — board, design, docs, code graph, git — are where the scope is changed">` +
+    `<span class="scope-chip-key">scope</span>${escapeHtml(label)}</a>`
+  );
+}
+
 /** Known group names — extra labels the docs group input can offer. */
 export function getKnownGroupNames(): string[] {
   return knownGroups.map((g) => g.name);
