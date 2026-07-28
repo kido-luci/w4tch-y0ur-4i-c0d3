@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## v2.0.0 — 2026-07-28
 
 ### Added
 - **Board depth** — the board tracks work the way a tracker does, not the way
@@ -35,6 +35,12 @@ All notable changes to this project are documented here. Versions follow
     children in one pass.
 
 ### Fixed
+- **Three badges were invisible.** A card's estimate, its cycle and its parent
+  link were drawn with the nested-hairline border and no fill behind it, which
+  is a 1.18:1 frame and nothing else — in both themes. They now carry the same
+  fill as every other tag, and the muted text on that fill was given its own
+  value so it still clears 4.5:1 where the plain muted would have fallen to
+  4.12:1 in light.
 - **One definition of scope, server-side.** The rail's scope label can name a
   project, a group standing for several, or a parent with children nested under
   it — and the client has always expanded it into a set. Three stores added with
@@ -57,6 +63,19 @@ All notable changes to this project are documented here. Versions follow
   scope reports as absent.
 
 ### Changed
+- **The pixel language is enforced instead of restated.** Every font size now
+  comes from a named ramp and every padding, gap and margin from a spacing
+  scale, replacing 231 and 454 hand-written literals that had drifted across
+  eleven and twenty-one distinct values. Most of it is invisible by design —
+  the tokens hold the values the rules already had — but spacing now lands on
+  a rhythm rather than wherever it happened to fall, and the depth tokens the
+  design system already defined are finally the thing components use.
+- **Meta tags read as fills rather than frames.** A card's id, points, cycle
+  and repo labels sat in a framed card inside a framed column: three levels of
+  the same ink, which is exactly what the design system's nested-border note
+  warns against. They now take a soft fill and drop their border, losing a
+  contrast level without losing their shape. The git tab's branch labels and
+  the search hit roles get the same treatment.
 - Adding and renaming a workflow **column**, and saving, renaming or updating a
   **view**, all use inline forms instead of `prompt()` dialogs — and a saved
   view can now be renamed and overwritten, not only created and deleted.
