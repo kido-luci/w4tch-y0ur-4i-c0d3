@@ -157,6 +157,14 @@
      --px-ink is the bug this token exists to prevent. */
   --px-line: #a8a296;
   --px-muted: #757169;
+  /* Muted text that sits on a --px-rule-soft FILL rather than on the surface.
+     Same split as --px-accent / --px-accent-text, and for the same reason: the
+     tint costs contrast, and a letterform is held to 4.5:1. Measured on the
+     built binary — --px-muted on the fill is 4.12:1 in light, which fails; on
+     the surface it was 4.86:1. This lands at 4.77:1. Dark needs no split, its
+     muted already clears the bar on the fill (4.78:1), so the override below
+     just points this back at --px-muted. */
+  --px-muted-on-fill: #6b6760;
   --px-rule-soft: #efece6;
 
   /* --- accent ---
@@ -300,6 +308,7 @@
   --px-ink: #f2ede3;
   --px-line: #6b6357;
   --px-muted: #9a9184;
+  --px-muted-on-fill: var(--px-muted);
   --px-rule-soft: #2b2720;
 
   --px-accent: #e8823f;

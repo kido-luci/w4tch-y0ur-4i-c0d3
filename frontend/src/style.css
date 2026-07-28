@@ -897,17 +897,23 @@ a {
   color: var(--text-muted);
 }
 
+/* Fill, not frame. This sits inside a card that sits inside a surface, and a
+   frame at --px-line made it the third level of the same ink. --px-edge-inner
+   is not the answer for a tag with no background — at 1.18:1 it would erase
+   the box rather than soften it — so the fill takes over the shape work and
+   the border goes. Padding absorbs the 1px the border used to occupy, which
+   keeps the outer size identical. */
 .arch-tag {
   display: inline-block;
   margin-left: 7px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
+  padding: 2px 6px;
+  background: var(--px-rule-soft);
   border-radius: 0;
   font-family: var(--mono);
   font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--px-muted-on-fill);
   vertical-align: middle;
 }
 
@@ -2870,10 +2876,10 @@ a.flow-node {
 .todo-repo {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  color: var(--px-muted-on-fill);
+  background: var(--px-rule-soft);
   border-radius: 0;
-  padding: 0 7px;
+  padding: 1px 8px;
 }
 
 .todo-seq {
@@ -4012,11 +4018,11 @@ a.flow-node {
 }
 
 .search-hit-role {
-  padding: 1px 5px;
-  border: 1px solid var(--border);
+  padding: 2px 6px;
+  background: var(--px-rule-soft);
   font-family: var(--mono);
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--px-muted-on-fill);
 }
 
 /* Your own words, marked — you scan for those first. */
@@ -4279,9 +4285,9 @@ a.flow-node {
 .git-branch {
   font-family: var(--mono);
   font-size: 11px;
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  padding: 2px 9px;
+  background: var(--px-rule-soft);
+  color: var(--px-muted-on-fill);
 }
 
 .git-branch--detached {
@@ -4673,9 +4679,9 @@ a.flow-node {
 .git-btag {
   font-family: var(--mono);
   font-size: 10px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  padding: 1px 7px;
+  background: var(--px-rule-soft);
+  color: var(--px-muted-on-fill);
   white-space: nowrap;
 }
 .git-btag--cur {
@@ -5510,13 +5516,17 @@ a.flow-node {
   background: var(--danger, #e5534b);
 }
 
+/* Was --px-edge-inner with no background, i.e. a 1.18:1 frame and nothing
+   else — these three badges were effectively invisible. Same fix as the other
+   tags: the fill carries the shape, and the text moves to the on-fill muted so
+   it still clears 4.5:1. */
 .todo-est,
 .todo-cycle,
 .todo-parent {
-  border: var(--px-edge-inner);
-  padding: 0 5px;
+  background: var(--px-rule-soft);
+  padding: 1px 6px;
   font-size: var(--px-label-xs);
-  color: var(--text-muted);
+  color: var(--px-muted-on-fill);
 }
 
 .todo-child {
@@ -5707,9 +5717,9 @@ a.flow-node {
   font-family: var(--mono);
   font-size: 10px;
   text-transform: none;
-  color: var(--text-muted);
-  border: var(--px-edge-inner);
-  padding: 0 4px;
+  color: var(--px-muted-on-fill);
+  background: var(--px-rule-soft);
+  padding: 1px 5px;
 }
 
 .tl-dates {
@@ -5879,11 +5889,11 @@ a.flow-node {
 }
 
 .cy-badge {
-  border: var(--px-edge-inner);
-  padding: 0 5px;
+  background: var(--px-rule-soft);
+  padding: 1px 6px;
   font-family: var(--mono);
   font-size: var(--px-label-xs);
-  color: var(--text-muted);
+  color: var(--px-muted-on-fill);
 }
 
 .cy-badge-late {
