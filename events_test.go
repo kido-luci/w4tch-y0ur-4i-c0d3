@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
 
 // The cap is a backstop against a runaway writer, not a retention policy — so
 // what matters is that it bounds growth WITHOUT taking anything the burndown
@@ -52,4 +56,40 @@ func TestEventsTrimIsANoOpBelowTheCap(t *testing.T) {
 	if len(got) != 5 {
 		t.Fatalf("want all 5 rows kept, got %d", len(got))
 	}
+}
+
+// An empty log must serialise as `[]`, not `null`. A nil slice marshals as null,
+// and a client doing `events.map(...)` on it throws — which is how the cycles
+// tab broke on a board whose log had no rows yet, while every seeded test
+// instance worked fine.
+func TestEventsEmptyListMarshalsAsArray(t *testing.T) {
+	db := newTestDataDB(t)
+	es := NewEventStore(db)
+
+	for name, got := range map[string][]TodoEvent{
+		"ForTodo": mustEvents(t, func() ([]TodoEvent, error) { return es.ForTodo("nobody") }),
+		"Since":   mustEvents(t, func() ([]TodoEvent, error) { return es.Since(time.Now()) }),
+		"Recent":  mustEvents(t, func() ([]TodoEvent, error) { return es.Recent(10) }),
+	} {
+		if got == nil {
+			t.Errorf("%s returned a nil slice; it marshals as null", name)
+			continue
+		}
+		b, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(b) != "[]" {
+			t.Errorf("%s marshalled as %s, want []", name, b)
+		}
+	}
+}
+
+func mustEvents(t *testing.T, fn func() ([]TodoEvent, error)) []TodoEvent {
+	t.Helper()
+	got, err := fn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
 }
