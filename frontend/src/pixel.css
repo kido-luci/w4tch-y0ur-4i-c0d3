@@ -263,26 +263,31 @@
      spread across 21 distinct values, including 3px, 5px, 7px, 9px, 11px and
      34px. Nothing lined up because nothing was asked to.
 
-     The rhythm is 4px, and it is not arbitrary — body paints a 16px dot grid,
-     so quarter/half/full of that cell is what the eye is already being given.
-     Silkscreen's 8px em agrees.
+     The shape is fine at the bottom and coarse at the top, which is what a
+     dense UI needs: 2/4/6/8, then 12/16, then 24/32/48. Above 8px the steps
+     land on the 16px dot grid body paints, so layout spacing keeps that
+     rhythm; below it the steps stay 2px apart, because that is the range
+     where a chip's inner padding actually lives and where a 4px jump is
+     visible.
 
-     --px-sp-1 (2px) is deliberately OFF that rhythm and exists only for
-     inline nudges inside a control — the gap between a chip's icon and its
-     label, where 4px is visibly too much. Reach for it there and nowhere
-     else; layout spacing starts at --px-sp-2.
+     6px earns its step on usage, not symmetry — it is the third most common
+     spacing value in style.css (71 occurrences, split evenly between padding
+     and gap). An earlier draft of this scale was a clean 4px ladder with no
+     6, designed before counting; it would have moved all 71 for the sake of
+     the pattern rather than for anything you could see.
 
-     Off-grid values resolve by whether they are inline or layout: 6 -> 4 or 8,
-     10 -> 8 or 12, 14 -> 12 or 16. That call is per-site and belongs to the
-     sweep, not here. */
+     1px is deliberately NOT on the scale and is left alone where it appears:
+     it is a sub-scale hairline, most often padding compensating for a border
+     that was removed. */
   --px-sp-1: 2px;
   --px-sp-2: 4px;
-  --px-sp-3: 8px;
-  --px-sp-4: 12px;
-  --px-sp-5: 16px;
-  --px-sp-6: 24px;
-  --px-sp-7: 32px;
-  --px-sp-8: 48px;
+  --px-sp-3: 6px;
+  --px-sp-4: 8px;
+  --px-sp-5: 12px;
+  --px-sp-6: 16px;
+  --px-sp-7: 24px;
+  --px-sp-8: 32px;
+  --px-sp-9: 48px;
 }
 
 /* Dark is NOT in the makeup doc — it lists "pixel nhưng dark" as an untried

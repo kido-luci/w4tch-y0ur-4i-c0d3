@@ -68,7 +68,7 @@ a {
 .page {
   max-width: 1600px;
   margin: 0 auto;
-  padding: 16px 20px 48px;
+  padding: var(--px-sp-6) var(--px-sp-7) var(--px-sp-9);
 }
 
 /* Visually gone, still announced. Not display:none and not visibility:hidden —
@@ -95,7 +95,7 @@ a {
   left: 8px;
   top: -60px;
   z-index: 100;
-  padding: 8px 14px;
+  padding: var(--px-sp-4) var(--px-sp-6);
   background: var(--card);
   border: 2px solid var(--accent);
   box-shadow: var(--px-shadow-sm);
@@ -207,7 +207,7 @@ a {
   height: calc(100vh - var(--chrome-h));
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 14px 10px 24px;
+  padding: var(--px-sp-6) var(--px-sp-5) var(--px-sp-7);
   /* Same raised layer as .px-chrome — the two are the app's only pinned
      chrome, so they read as one. Without a background of its own the rail
      showed the body's dot grid straight through, which is the scrolling
@@ -227,11 +227,11 @@ a {
 .proj-rail .rail-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--px-sp-1);
 }
 
 .rail-heading {
-  margin: 10px 4px 2px;
+  margin: var(--px-sp-4) var(--px-sp-2) var(--px-sp-1);
   font-size: var(--px-label);
   color: var(--text-muted);
 }
@@ -245,7 +245,7 @@ a {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 3px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -261,7 +261,7 @@ a {
 .rail-tree-spacer {
   display: inline-block;
   width: 12px;
-  margin-right: 4px;
+  margin-right: var(--px-sp-2);
   text-align: center;
   color: var(--text-muted);
   user-select: none;
@@ -280,7 +280,7 @@ a {
   height: 16px;
   object-fit: contain;
   vertical-align: -3px;
-  margin-right: 6px;
+  margin-right: var(--px-sp-3);
   border-radius: 2px;
 }
 
@@ -292,7 +292,7 @@ a {
 }
 
 .rail-manage {
-  margin-top: 10px;
+  margin-top: var(--px-sp-4);
   color: var(--text-muted);
 }
 
@@ -306,9 +306,9 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--px-sp-5);
   flex-wrap: wrap;
-  padding: 6px 0 14px;
+  padding: var(--px-sp-3) 0 var(--px-sp-6);
 }
 
 .brand {
@@ -321,7 +321,7 @@ a {
 .topbar-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--px-sp-4);
   flex-wrap: wrap;
 }
 
@@ -332,7 +332,7 @@ a {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 5px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   max-width: 220px;
   box-shadow: var(--px-shadow-sm);
 }
@@ -354,14 +354,14 @@ a {
 
 /* Group-manager panel, in flow under the rail's "+ groups…" entry. */
 .scope-panel {
-  margin-top: 8px;
+  margin-top: var(--px-sp-4);
   max-height: 70vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-5);
   background: var(--card);
   border: var(--px-edge);
   box-shadow: var(--px-shadow-sm);
@@ -373,7 +373,7 @@ a {
 .scope-panel-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
   width: 100%;
 }
 
@@ -382,7 +382,7 @@ a {
   text-align: left;
   background: none;
   border: none;
-  padding: 2px 0;
+  padding: var(--px-sp-1) 0;
   color: var(--text);
   font-family: var(--mono);
   font-size: var(--px-body);
@@ -407,7 +407,7 @@ a {
 /* Sub-heading inside the project form (e.g. "folders"). */
 .scope-panel-sub {
   font-size: var(--px-label);
-  margin-top: 2px;
+  margin-top: var(--px-sp-1);
 }
 
 /* A locked name (renaming in place would orphan the items that carry it). */
@@ -420,13 +420,13 @@ a {
 .scope-panel-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--px-sp-4);
 }
 
 .scope-panel-logo-box {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .scope-panel-logo-img {
@@ -464,10 +464,10 @@ a {
 .scope-panel-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--px-sp-4);
   width: 100%;
   border-top: 1px solid var(--border);
-  padding-top: 8px;
+  padding-top: var(--px-sp-4);
 }
 
 .scope-panel-input {
@@ -477,7 +477,7 @@ a {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 5px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
 }
 
 .scope-panel-input:focus {
@@ -488,7 +488,7 @@ a {
 .scope-panel-checks {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--px-sp-2);
   max-height: 40vh;
   overflow-y: auto;
 }
@@ -496,18 +496,18 @@ a {
 .scope-panel-check {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   cursor: pointer;
 }
 
 .scope-panel-btns {
   display: flex;
-  gap: 10px;
+  gap: var(--px-sp-4);
 }
 
 .chip-group {
   display: flex;
-  gap: 4px;
+  gap: var(--px-sp-2);
 }
 
 .chip {
@@ -517,7 +517,7 @@ a {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 4px 10px;
+  padding: var(--px-sp-2) var(--px-sp-5);
   cursor: pointer;
 }
 
@@ -541,14 +541,14 @@ a {
 .filter-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--px-sp-3);
   background: var(--card);
   color: var(--text);
   border: var(--px-edge);
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 5px 10px;
+  padding: var(--px-sp-3) var(--px-sp-5);
   cursor: pointer;
   max-width: 320px;
   box-shadow: var(--px-shadow-sm);
@@ -559,7 +559,7 @@ a {
 }
 
 .filter-btn-compact {
-  padding: 5px 7px;
+  padding: var(--px-sp-3) var(--px-sp-4);
 }
 
 .filter-btn-icon {
@@ -581,7 +581,7 @@ a {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 12px 14px;
+  padding: var(--px-sp-5) var(--px-sp-6);
   box-shadow: var(--shadow);
 }
 
@@ -592,20 +592,20 @@ a {
 }
 
 .filter-section {
-  margin-bottom: 10px;
+  margin-bottom: var(--px-sp-4);
 }
 
 .filter-label {
   font-family: var(--px-pixel);
   font-size: var(--px-label-xs);
   color: var(--text-muted);
-  margin-bottom: 5px;
+  margin-bottom: var(--px-sp-2);
 }
 
 .filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--px-sp-2);
 }
 
 .filter-chip {
@@ -615,7 +615,7 @@ a {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 3px 9px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
 }
 
@@ -633,7 +633,7 @@ a {
 .filter-div {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 10px 0;
+  margin: var(--px-sp-4) 0;
 }
 
 .filter-clear {
@@ -642,7 +642,7 @@ a {
   border: none;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 2px 0;
+  padding: var(--px-sp-1) 0;
   cursor: pointer;
 }
 
@@ -655,8 +655,8 @@ a {
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: var(--px-sp-4);
+  margin-bottom: var(--px-sp-5);
 }
 
 @media (max-width: 720px) {
@@ -669,7 +669,7 @@ a {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 10px 12px;
+  padding: var(--px-sp-5) var(--px-sp-5);
   box-shadow: var(--px-shadow);
 }
 
@@ -687,27 +687,27 @@ a {
   font-family: var(--px-numeral);
   font-size: var(--px-display);
   font-weight: 600;
-  margin-top: 2px;
+  margin-top: var(--px-sp-1);
 }
 
 /* ---------- live strip ---------- */
 
 .live-strip {
   display: flex;
-  gap: 10px;
+  gap: var(--px-sp-4);
   overflow-x: auto;
-  margin-bottom: 14px;
-  padding-bottom: 2px;
+  margin-bottom: var(--px-sp-5);
+  padding-bottom: var(--px-sp-1);
 }
 
 .live-card {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--px-sp-4);
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 8px 12px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   text-decoration: none;
   flex: 0 0 auto;
   animation: live-card-pulse 2.4s ease-in-out infinite;
@@ -752,7 +752,7 @@ a {
 
 .live-dot-inline {
   display: inline-block;
-  margin-right: 7px;
+  margin-right: var(--px-sp-3);
   vertical-align: baseline;
 }
 
@@ -771,8 +771,8 @@ a {
 /* ---------- tables ---------- */
 
 .retry-btn {
-  margin-left: 6px;
-  padding: 3px 10px;
+  margin-left: var(--px-sp-3);
+  padding: var(--px-sp-2) var(--px-sp-5);
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text);
@@ -791,7 +791,7 @@ a {
    unlabelled, which is how "opus 100%" and "opus 66%" ended up one scroll
    apart. Sits under the heading, quieter than the body. */
 .panel-scope {
-  margin: -2px 0 10px;
+  margin: -var(--px-sp-1) 0 var(--px-sp-4);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -803,8 +803,8 @@ a {
 .scope-chip {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 3px 9px;
+  gap: var(--px-sp-3);
+  padding: var(--px-sp-2) var(--px-sp-4);
   border: 1px solid var(--border);
   font-family: var(--mono);
   font-size: var(--px-body);
@@ -851,13 +851,13 @@ a {
   font-family: var(--px-pixel);
   font-size: var(--px-label);
   font-weight: 500;
-  padding: 8px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .sessions-table td {
-  padding: 7px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   font-family: var(--mono);
@@ -905,8 +905,8 @@ a {
    keeps the outer size identical. */
 .arch-tag {
   display: inline-block;
-  margin-left: 7px;
-  padding: 2px 6px;
+  margin-left: var(--px-sp-3);
+  padding: var(--px-sp-1) var(--px-sp-3);
   background: var(--px-rule-soft);
   border-radius: 0;
   font-family: var(--mono);
@@ -919,7 +919,7 @@ a {
 
 /* Group-by header rows. */
 .sessions-table tbody tr.group-row td {
-  padding: 12px 10px 5px;
+  padding: var(--px-sp-5) var(--px-sp-5) var(--px-sp-3);
   border-bottom: 1px solid var(--border);
 }
 
@@ -939,7 +939,7 @@ a {
 }
 
 .group-count {
-  margin-left: 8px;
+  margin-left: var(--px-sp-4);
   color: var(--border-hover);
 }
 
@@ -955,7 +955,7 @@ a {
 
 .cell-models {
   display: flex;
-  gap: 4px;
+  gap: var(--px-sp-2);
   align-items: center;
 }
 
@@ -964,14 +964,14 @@ a {
 .model-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--px-sp-2);
   font-family: var(--mono);
   font-size: var(--px-meta);
   line-height: 1;
   color: var(--model-color, #9ca3af);
   background: color-mix(in srgb, var(--model-color, #9ca3af) 15%, transparent);
   border-radius: 0;
-  padding: 3px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   white-space: nowrap;
 }
 
@@ -1004,7 +1004,7 @@ a {
   font-family: var(--mono);
   font-size: var(--px-body);
   text-align: center;
-  padding: 32px 16px;
+  padding: var(--px-sp-8) var(--px-sp-6);
 }
 
 /* ---------- detail view ---------- */
@@ -1013,8 +1013,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--px-sp-5);
+  margin-bottom: var(--px-sp-5);
 }
 
 .back-link {
@@ -1023,7 +1023,7 @@ a {
   font-family: var(--mono);
   font-size: var(--px-body);
   text-decoration: none;
-  margin-bottom: 12px;
+  margin-bottom: var(--px-sp-5);
 }
 
 .detail-topbar .back-link {
@@ -1038,8 +1038,8 @@ a {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: var(--px-sp-6) var(--px-sp-6);
+  margin-bottom: var(--px-sp-5);
   box-shadow: var(--px-shadow);
 }
 
@@ -1048,13 +1048,13 @@ a {
 .detail-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: var(--px-sp-1);
   border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
+  margin-bottom: var(--px-sp-5);
 }
 
 .detail-tab {
-  padding: 8px 14px;
+  padding: var(--px-sp-4) var(--px-sp-6);
   margin-bottom: -1px;
   background: transparent;
   border: none;
@@ -1086,7 +1086,7 @@ a {
 .detail-title {
   font-size: var(--px-display);
   font-weight: 650;
-  margin: 0 0 6px;
+  margin: 0 0 var(--px-sp-3);
   line-height: 1.3;
 }
 
@@ -1100,7 +1100,7 @@ a {
 }
 
 .detail-meta .dot-sep {
-  margin: 0 7px;
+  margin: 0 var(--px-sp-3);
   color: var(--border-hover);
 }
 
@@ -1136,7 +1136,7 @@ a {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 1px 4px;
+  padding: 1px var(--px-sp-2);
 }
 
 /* card-links-slot manages its own leading separator; an empty slot is invisible */
@@ -1147,9 +1147,9 @@ a {
 .totals-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
+  gap: var(--px-sp-4);
+  margin-top: var(--px-sp-5);
+  padding-top: var(--px-sp-5);
   border-top: 1px solid var(--border);
 }
 
@@ -1176,11 +1176,11 @@ a {
   font-size: var(--px-label);
   font-weight: 600;
   color: var(--text-muted);
-  margin: 0 0 10px;
+  margin: 0 0 var(--px-sp-4);
 }
 
 .graph-card {
-  padding-bottom: 8px;
+  padding-bottom: var(--px-sp-4);
 }
 
 /* ---------- agent graph (SVG) ---------- */
@@ -1505,7 +1505,7 @@ a {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 2px 8px;
+  padding: var(--px-sp-1) var(--px-sp-4);
   cursor: pointer;
 }
 
@@ -1523,9 +1523,9 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--px-sp-5);
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: var(--px-sp-4);
 }
 
 .timeline-caption {
@@ -1537,7 +1537,7 @@ a {
 .timeline-legend {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--px-sp-2);
   font-family: var(--mono);
   font-size: var(--px-label);
   color: var(--text-muted);
@@ -1558,16 +1558,16 @@ a {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 4px;
-  padding: 4px 2px 6px;
+  gap: var(--px-sp-3) var(--px-sp-2);
+  padding: var(--px-sp-2) var(--px-sp-1) var(--px-sp-3);
 }
 
 .flow-node {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   white-space: nowrap;
-  padding: 6px 10px;
+  padding: var(--px-sp-3) var(--px-sp-5);
   border-radius: 0;
   border: 1px solid color-mix(in srgb, var(--flow-color, #9ca3af) 45%, transparent);
   background: color-mix(in srgb, var(--flow-color, #9ca3af) 12%, transparent);
@@ -1590,7 +1590,7 @@ a {
 .flow-node-count {
   min-width: 16px;
   height: 16px;
-  padding: 0 5px;
+  padding: 0 var(--px-sp-3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1632,9 +1632,9 @@ a.flow-node {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--px-sp-5);
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: var(--px-sp-4);
 }
 
 .flow-caption {
@@ -1646,7 +1646,7 @@ a.flow-node {
 .flow-legend {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--px-sp-4);
   font-family: var(--mono);
   font-size: var(--px-label);
   color: var(--text-muted);
@@ -1655,7 +1655,7 @@ a.flow-node {
 .flow-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--px-sp-2);
 }
 
 .flow-swatch {
@@ -1671,7 +1671,7 @@ a.flow-node {
    width:max-content + margin:auto keeps the whole tree centered. */
 .ms-graph-scroll {
   overflow-x: auto;
-  padding: 4px 2px 6px;
+  padding: var(--px-sp-2) var(--px-sp-1) var(--px-sp-3);
 }
 
 .ms-graph {
@@ -1690,7 +1690,7 @@ a.flow-node {
   position: relative;
   display: flex;
   align-items: flex-start;
-  margin-top: 16px;
+  margin-top: var(--px-sp-6);
 }
 
 .ms-branches::before {
@@ -1709,7 +1709,7 @@ a.flow-node {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 9px 0;
+  padding: var(--px-sp-6) var(--px-sp-4) 0;
 }
 
 .ms-branch::before,
@@ -1760,7 +1760,7 @@ a.flow-node {
   border: var(--px-edge-inner);
   border-top: 2px solid var(--ms-accent, var(--border));
   border-radius: 0;
-  padding: 9px 11px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   color: var(--text);
   font-family: var(--mono);
 }
@@ -1777,7 +1777,7 @@ a.flow-node {
 .ms-gcard-top {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--px-sp-3);
   min-width: 0;
 }
 
@@ -1804,7 +1804,7 @@ a.flow-node {
 
 .ms-gcard-meta {
   display: block;
-  margin-top: 4px;
+  margin-top: var(--px-sp-2);
   font-size: var(--px-label);
   color: var(--text-muted);
 }
@@ -1813,7 +1813,7 @@ a.flow-node {
    prose, not code, so sans distinguishes it from the mono chrome. */
 .ms-group-summary {
   display: block;
-  margin-top: 6px;
+  margin-top: var(--px-sp-3);
   font-family: var(--sans);
   font-size: var(--px-body);
   line-height: 1.45;
@@ -1862,7 +1862,7 @@ a.flow-node {
   z-index: 1;
   min-width: 18px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 var(--px-sp-3);
   border-radius: 0;
   background: var(--accent);
   color: #fff;
@@ -1878,13 +1878,13 @@ a.flow-node {
 .ms-mcard {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--px-sp-4);
   min-width: 0;
   width: 212px;
   background: var(--card);
   border: var(--px-edge-inner);
   border-radius: 0;
-  padding: 7px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   color: var(--text);
   text-decoration: none;
 }
@@ -1915,7 +1915,7 @@ a.flow-node {
 .ms-mcard-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--px-sp-1);
   min-width: 0;
 }
 
@@ -1946,14 +1946,14 @@ a.flow-node {
 .ms-sum-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   background: var(--card);
   color: var(--text);
   border: var(--px-edge);
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-label);
-  padding: 4px 9px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
   box-shadow: var(--px-shadow-sm);
 }
@@ -1979,7 +1979,7 @@ a.flow-node {
 .page-detail {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--px-sp-6);
   max-width: 1680px;
 }
 
@@ -2001,7 +2001,7 @@ a.flow-node {
 .rail-head {
   display: flex;
   justify-content: flex-end;
-  padding-bottom: 8px;
+  padding-bottom: var(--px-sp-4);
   flex-shrink: 0;
 }
 
@@ -2012,20 +2012,20 @@ a.flow-node {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--px-sp-2);
 }
 
 /* Project group headers (when Group by = Project); click to collapse. */
 .rail-group-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   width: 100%;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px 10px 4px;
-  margin-top: 4px;
+  padding: var(--px-sp-4) var(--px-sp-5) var(--px-sp-2);
+  margin-top: var(--px-sp-2);
   text-align: left;
   font-family: var(--mono);
   font-size: var(--px-label);
@@ -2066,7 +2066,7 @@ a.flow-node {
   display: block;
   text-decoration: none;
   color: var(--text);
-  padding: 8px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   border-radius: 0;
   border: 1px solid transparent;
 }
@@ -2098,7 +2098,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-label);
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--px-sp-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2108,7 +2108,7 @@ a.flow-node {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 8px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
 }
 
 .inspector-panel {
@@ -2120,7 +2120,7 @@ a.flow-node {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 16px 18px;
+  padding: var(--px-sp-6) var(--px-sp-6);
   box-shadow: var(--px-shadow);
 }
 
@@ -2148,23 +2148,23 @@ a.flow-node {
 .insp-title {
   font-size: var(--px-title);
   font-weight: 650;
-  margin: 4px 0 8px;
+  margin: var(--px-sp-2) 0 var(--px-sp-4);
   line-height: 1.25;
-  padding-right: 20px;
+  padding-right: var(--px-sp-7);
   word-break: break-word;
 }
 
 .insp-sub {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   flex-wrap: wrap;
 }
 
 .insp-pill {
   font-family: var(--mono);
   font-size: var(--px-label);
-  padding: 2px 8px;
+  padding: var(--px-sp-1) var(--px-sp-4);
   border-radius: 0;
 }
 
@@ -2173,7 +2173,7 @@ a.flow-node {
   background: rgba(74, 222, 128, 0.12);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--px-sp-2);
 }
 
 .insp-pill-idle {
@@ -2192,19 +2192,19 @@ a.flow-node {
 .insp-desc {
   color: var(--text);
   font-size: var(--px-word);
-  margin-top: 12px;
+  margin-top: var(--px-sp-5);
   line-height: 1.45;
 }
 
 .insp-section {
-  margin-top: 16px;
+  margin-top: var(--px-sp-6);
 }
 
 .insp-section-title {
   font-family: var(--px-pixel);
   font-size: var(--px-label-xs);
   color: var(--text-muted);
-  margin-bottom: 8px;
+  margin-bottom: var(--px-sp-4);
 }
 
 .insp-track {
@@ -2226,15 +2226,15 @@ a.flow-node {
 .insp-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--px-sp-4);
+  margin-top: var(--px-sp-6);
 }
 
 .insp-tile {
   background: var(--bg);
   border: var(--px-edge-inner);
   border-radius: 0;
-  padding: 8px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
 }
 
 .insp-tile-label {
@@ -2247,7 +2247,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-sans-sm);
   font-weight: 600;
-  margin-top: 2px;
+  margin-top: var(--px-sp-1);
   word-break: break-word;
 }
 
@@ -2255,7 +2255,7 @@ a.flow-node {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 4px 0;
+  padding: var(--px-sp-2) 0;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
   font-size: var(--px-body);
@@ -2288,17 +2288,17 @@ a.flow-node {
 }
 
 .dist-legend {
-  margin-top: 12px;
+  margin-top: var(--px-sp-5);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .dist-legend-row {
   display: grid;
   grid-template-columns: 12px 72px 1fr auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
   font-family: var(--mono);
   font-size: var(--px-body);
 }
@@ -2327,14 +2327,14 @@ a.flow-node {
 .cost-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
+  gap: var(--px-sp-4);
 }
 
 .cost-card {
   background: var(--bg);
   border: var(--px-edge-inner);
   border-radius: 0;
-  padding: 10px 12px;
+  padding: var(--px-sp-5) var(--px-sp-5);
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -2354,8 +2354,8 @@ a.flow-node {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: var(--px-sp-3);
+  margin-bottom: var(--px-sp-4);
 }
 
 .cost-card-type {
@@ -2377,11 +2377,11 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--px-sp-1);
 }
 
 .cost-card-bar {
-  margin-top: 8px;
+  margin-top: var(--px-sp-4);
   height: 4px;
   border-radius: 0;
   background: var(--bg-dot);
@@ -2398,14 +2398,14 @@ a.flow-node {
 .tool-usage {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--px-sp-3);
 }
 
 .tool-row {
   display: grid;
   grid-template-columns: 130px 1fr 44px;
   align-items: center;
-  gap: 10px;
+  gap: var(--px-sp-4);
 }
 
 .tool-name {
@@ -2463,7 +2463,7 @@ a.flow-node {
   border-radius: 0;
   font-size: var(--px-word);
   line-height: 1;
-  padding: 4px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
   opacity: 0.45;
   filter: grayscale(1);
@@ -2493,7 +2493,7 @@ a.flow-node {
   border-radius: 0;
   font-size: var(--px-word);
   line-height: 1;
-  padding: 4px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
   /* Same 24px floor as .notify-btn above. */
   min-width: 26px;
@@ -2510,7 +2510,7 @@ a.flow-node {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--px-sp-6);
   flex-wrap: wrap;
 }
 
@@ -2519,7 +2519,7 @@ a.flow-node {
 }
 
 .tot-sub {
-  margin-top: 5px;
+  margin-top: var(--px-sp-2);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
@@ -2528,14 +2528,14 @@ a.flow-node {
 .tot-legend {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--px-sp-5);
   flex-wrap: wrap;
 }
 
 .tot-leg-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--px-sp-2);
 }
 
 .tot-leg-sw {
@@ -2560,9 +2560,9 @@ a.flow-node {
 .tot-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--px-sp-4);
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: var(--px-sp-5);
 }
 
 .tot-toggle {
@@ -2572,7 +2572,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 3px 10px;
+  padding: var(--px-sp-2) var(--px-sp-5);
   cursor: pointer;
   user-select: none;
 }
@@ -2591,7 +2591,7 @@ a.flow-node {
 .tot-range {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -2611,8 +2611,8 @@ a.flow-node {
 .tot-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+  gap: var(--px-sp-4);
+  margin-top: var(--px-sp-5);
 }
 
 @media (max-width: 720px) {
@@ -2628,7 +2628,7 @@ a.flow-node {
   background: var(--bg);
   border: var(--px-edge-inner);
   border-radius: 0;
-  padding: 10px 12px;
+  padding: var(--px-sp-5) var(--px-sp-5);
 }
 
 .tot-kpi-label {
@@ -2641,7 +2641,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-display);
   font-weight: 600;
-  margin-top: 3px;
+  margin-top: var(--px-sp-2);
   line-height: 1.1;
 }
 
@@ -2656,11 +2656,11 @@ a.flow-node {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-label);
-  margin-top: 4px;
+  margin-top: var(--px-sp-2);
 }
 
 .tot-chart {
-  margin-top: 16px;
+  margin-top: var(--px-sp-6);
 }
 
 .tot-svg {
@@ -2681,8 +2681,8 @@ a.flow-node {
 .tot-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--px-sp-4);
+  margin-top: var(--px-sp-4);
   min-height: 14px;
 }
 
@@ -2709,7 +2709,7 @@ a.flow-node {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 5px 10px;
+  padding: var(--px-sp-3) var(--px-sp-5);
 }
 
 .nav-link:hover {
@@ -2719,7 +2719,7 @@ a.flow-node {
 
 .board-layout {
   display: flex;
-  gap: 14px;
+  gap: var(--px-sp-5);
   align-items: flex-start;
 }
 
@@ -2733,10 +2733,10 @@ a.flow-node {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(230px, 1fr);
-  gap: 14px;
+  gap: var(--px-sp-5);
   align-items: start;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: var(--px-sp-2);
 }
 
 /* The table and timeline are one wide block, not a column track. */
@@ -2766,10 +2766,10 @@ a.flow-node {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 10px;
+  padding: var(--px-sp-5);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--px-sp-4);
   min-height: 180px;
   box-shadow: var(--px-shadow);
 }
@@ -2779,8 +2779,8 @@ a.flow-node {
 .board-col-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 4px;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-1) var(--px-sp-2);
   font-family: var(--px-pixel);
   font-size: var(--px-label);
   text-transform: uppercase;
@@ -2791,7 +2791,7 @@ a.flow-node {
   background: transparent;
   border: var(--px-edge-inner);
   border-radius: 0;
-  padding: 1px 6px;
+  padding: 1px var(--px-sp-3);
   font-size: var(--px-label-xs);
   color: var(--text);
 }
@@ -2809,7 +2809,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 5px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   width: 150px;
   box-shadow: var(--px-shadow-sm);
 }
@@ -2822,7 +2822,7 @@ a.flow-node {
 .board-cards {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--px-sp-4);
   min-height: 40px; /* empty columns stay droppable */
   flex: 1;
 }
@@ -2831,7 +2831,7 @@ a.flow-node {
   background: var(--bg);
   border: var(--px-edge-inner);
   border-radius: 0;
-  padding: 8px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   cursor: grab;
   transition: border-color 0.15s ease, transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -2868,8 +2868,8 @@ a.flow-node {
 .todo-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+  gap: var(--px-sp-3);
+  margin-top: var(--px-sp-3);
   min-height: 18px;
 }
 
@@ -2879,7 +2879,7 @@ a.flow-node {
   color: var(--px-muted-on-fill);
   background: var(--px-rule-soft);
   border-radius: 0;
-  padding: 1px 8px;
+  padding: 1px var(--px-sp-4);
 }
 
 .todo-seq {
@@ -2898,18 +2898,18 @@ a.flow-node {
 .todo-labels {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 5px;
+  gap: var(--px-sp-2);
+  margin-bottom: var(--px-sp-2);
 }
 
 .todo-label {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--px-sp-2);
   font-family: var(--mono);
   font-size: var(--px-label);
   border-radius: 0;
-  padding: 0 7px;
+  padding: 0 var(--px-sp-4);
   line-height: 16px;
   color: var(--lc);
   background: color-mix(in srgb, var(--lc) 14%, transparent);
@@ -2939,7 +2939,7 @@ a.flow-node {
 
 .todo-actions {
   display: flex;
-  gap: 2px;
+  gap: var(--px-sp-1);
   margin-left: auto;
   opacity: 0;
 }
@@ -2954,7 +2954,7 @@ a.flow-node {
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--px-body);
-  padding: 2px 5px;
+  padding: var(--px-sp-1) var(--px-sp-3);
   border-radius: 0;
 }
 
@@ -2971,7 +2971,7 @@ a.flow-node {
   background: none;
   border: 1px dashed var(--border);
   border-radius: 0;
-  padding: 7px;
+  padding: var(--px-sp-4);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-body);
@@ -2993,7 +2993,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--sans);
   font-size: var(--px-body);
-  padding: 8px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
 }
 
 /* docked right panel — the selected card's editor */
@@ -3006,17 +3006,17 @@ a.flow-node {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 12px;
+  padding: var(--px-sp-5);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--px-sp-4);
   box-shadow: var(--px-shadow);
 }
 
 .panel-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
 }
 
 .panel-status {
@@ -3026,7 +3026,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 4px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
 }
 
 .panel-close {
@@ -3041,8 +3041,8 @@ a.flow-node {
   font-family: var(--sans);
   font-size: var(--px-sans-sm);
   font-weight: 600;
-  padding: 5px 8px;
-  margin: 0 -8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
+  margin: 0 -var(--px-sp-4);
 }
 
 .panel-title:hover {
@@ -3058,7 +3058,7 @@ a.flow-node {
 .panel-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--px-sp-2);
 }
 
 .panel-label {
@@ -3070,7 +3070,7 @@ a.flow-node {
 .panel-labels {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--px-sp-2);
   align-items: center;
 }
 
@@ -3080,7 +3080,7 @@ a.flow-node {
   border: none;
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 2px 4px;
+  padding: var(--px-sp-1) var(--px-sp-2);
   min-width: 90px;
   flex: 1;
 }
@@ -3101,7 +3101,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--sans);
   font-size: var(--px-body);
-  padding: 6px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   resize: vertical;
 }
 
@@ -3123,7 +3123,7 @@ a.flow-node {
   border: 1px solid transparent;
   border-radius: 0;
   font-size: var(--px-body);
-  padding: 6px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   cursor: text;
   overflow-wrap: break-word;
   line-height: 1.5;
@@ -3140,7 +3140,7 @@ a.flow-node {
 /* markdown content (rendered by renderMarkdown / renderInlineMarkdown) */
 
 .md p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--px-sp-4);
 }
 
 .md > :last-child {
@@ -3150,7 +3150,7 @@ a.flow-node {
 .md h1,
 .md h2,
 .md h3 {
-  margin: 10px 0 6px;
+  margin: var(--px-sp-4) 0 var(--px-sp-3);
   line-height: 1.3;
 }
 
@@ -3179,16 +3179,16 @@ a.flow-node {
   background: var(--row-hover);
   border: 1px solid var(--border);
   border-radius: 0;
-  padding: 0 4px;
+  padding: 0 var(--px-sp-2);
 }
 
 .md pre {
   background: var(--bg);
   border: var(--px-edge-inner);
   border-radius: 0;
-  padding: 8px;
+  padding: var(--px-sp-4);
   overflow-x: auto;
-  margin: 8px 0;
+  margin: var(--px-sp-4) 0;
 }
 
 .md pre code {
@@ -3201,25 +3201,25 @@ a.flow-node {
 
 .md blockquote {
   border-left: 3px solid var(--border-hover);
-  margin: 8px 0;
-  padding: 2px 10px;
+  margin: var(--px-sp-4) 0;
+  padding: var(--px-sp-1) var(--px-sp-5);
   color: var(--text-muted);
 }
 
 .md ul,
 .md ol {
-  margin: 6px 0;
-  padding-left: 22px;
+  margin: var(--px-sp-3) 0;
+  padding-left: var(--px-sp-7);
 }
 
 /* a nested list hugs its parent item instead of adding the full block gap */
 .md li ul,
 .md li ol {
-  margin: 2px 0;
+  margin: var(--px-sp-1) 0;
 }
 
 .md li {
-  margin: 2px 0;
+  margin: var(--px-sp-1) 0;
 }
 
 /* Block content inside a list item (loose-item paragraphs, code, quotes) hugs
@@ -3227,7 +3227,7 @@ a.flow-node {
    applies to a blockquote's own paragraphs. */
 .md li > p,
 .md blockquote > p {
-  margin: 4px 0;
+  margin: var(--px-sp-2) 0;
 }
 
 .md li > p:first-child,
@@ -3243,26 +3243,26 @@ a.flow-node {
 .md li > pre,
 .md li > blockquote,
 .md li > .md-table {
-  margin: 6px 0;
+  margin: var(--px-sp-3) 0;
 }
 
 .md hr {
   border: none;
   border-top: var(--px-edge);
-  margin: 14px 0;
+  margin: var(--px-sp-5) 0;
 }
 
 .md dl {
-  margin: 6px 0;
+  margin: var(--px-sp-3) 0;
 }
 
 .md dt {
   font-weight: 600;
-  margin-top: 6px;
+  margin-top: var(--px-sp-3);
 }
 
 .md dd {
-  margin: 0 0 4px 18px;
+  margin: 0 0 var(--px-sp-2) var(--px-sp-6);
   color: var(--text-muted);
 }
 
@@ -3278,7 +3278,7 @@ a.flow-node {
 
 .md .md-table {
   overflow-x: auto;
-  margin: 8px 0;
+  margin: var(--px-sp-4) 0;
 }
 
 .md table {
@@ -3289,7 +3289,7 @@ a.flow-node {
 .md th,
 .md td {
   border: 1px solid var(--border);
-  padding: 3px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   text-align: left;
 }
 
@@ -3301,7 +3301,7 @@ a.flow-node {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 2px;
+  margin-top: var(--px-sp-1);
 }
 
 .panel-created {
@@ -3317,7 +3317,7 @@ a.flow-node {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 4px 10px;
+  padding: var(--px-sp-2) var(--px-sp-5);
   cursor: pointer;
 }
 
@@ -3331,8 +3331,8 @@ a.flow-node {
 .todo-sess {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 3px;
+  gap: var(--px-sp-3);
+  margin-top: var(--px-sp-2);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -3342,12 +3342,12 @@ a.flow-node {
 .panel-sess-cand {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   flex-wrap: wrap;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 0;
-  padding: 6px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   text-decoration: none;
   text-align: left;
   color: var(--text);
@@ -3365,7 +3365,7 @@ a.flow-node {
 .panel-sess-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--px-sp-2);
   max-height: 220px;
   overflow-y: auto;
 }
@@ -3384,7 +3384,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
-  padding: 4px 0;
+  padding: var(--px-sp-2) 0;
 }
 
 .todo-sess-frozen {
@@ -3400,7 +3400,7 @@ a.flow-node {
 .panel-sess-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .panel-sess-unlink {
@@ -3422,8 +3422,8 @@ a.flow-node {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 3px;
+  gap: var(--px-sp-2);
+  margin-top: var(--px-sp-2);
 }
 
 .todo-pr,
@@ -3432,7 +3432,7 @@ a.flow-node {
   font-size: var(--px-meta);
   color: var(--accent-text);
   border: 1px solid var(--accent);
-  padding: 0 4px;
+  padding: 0 var(--px-sp-2);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -3463,7 +3463,7 @@ a.flow-node {
 .panel-doc-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .panel-draw,
@@ -3503,7 +3503,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 4px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   max-width: 100%;
 }
 
@@ -3530,12 +3530,12 @@ a.flow-node {
 .panel-journey-row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--px-sp-3);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
   position: relative;
-  padding: 0 0 5px 12px;
+  padding: 0 0 var(--px-sp-3) var(--px-sp-5);
   border-left: 1px solid var(--border);
 }
 
@@ -3575,7 +3575,7 @@ a.flow-node {
 
 .panel-ships-more {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--px-sp-1);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -3594,17 +3594,17 @@ a.flow-node {
 .design-sections {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: var(--px-sp-7);
 }
 
 .design-topic-head {
-  margin: 0 0 8px;
+  margin: 0 0 var(--px-sp-4);
   font: 400 11px var(--mono);
   color: var(--text-muted);
 }
 
 .design-topic-count {
-  margin-left: 8px;
+  margin-left: var(--px-sp-4);
   color: var(--text-muted);
   opacity: 0.7;
 }
@@ -3612,7 +3612,7 @@ a.flow-node {
 .design-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  gap: var(--px-sp-6);
   align-items: start;
 }
 
@@ -3624,7 +3624,7 @@ a.flow-node {
   background: var(--card);
   border: var(--px-edge);
   border-radius: 0;
-  padding: 12px;
+  padding: var(--px-sp-5);
   box-shadow: var(--px-shadow);
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.15s ease,
@@ -3638,7 +3638,7 @@ a.flow-node {
 
 .design-card-thumb {
   height: 130px;
-  margin: -12px -12px 10px;
+  margin: -var(--px-sp-5) -var(--px-sp-5) var(--px-sp-4);
   border-bottom: var(--px-edge);
   /* Deliberately #fff in both themes, not a token: the thumbnail PNG is
      exported on the scene's viewBackgroundColor (white by default, see
@@ -3673,16 +3673,16 @@ a.flow-node {
 }
 
 .design-card-meta {
-  margin-top: 4px;
+  margin-top: var(--px-sp-2);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
 }
 
 .design-card-actions {
-  margin-top: 10px;
+  margin-top: var(--px-sp-4);
   display: flex;
-  gap: 8px;
+  gap: var(--px-sp-4);
 }
 
 .design-act {
@@ -3707,7 +3707,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-word);
-  padding: 2px 4px;
+  padding: var(--px-sp-1) var(--px-sp-2);
   width: 100%;
 }
 
@@ -3722,14 +3722,14 @@ a.flow-node {
 /* The editor wants the viewport, not the reading column. */
 .design-editor-page {
   max-width: none;
-  padding-bottom: 20px;
+  padding-bottom: var(--px-sp-7);
 }
 
 .design-editor-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 0 12px;
+  gap: var(--px-sp-5);
+  padding: 0 0 var(--px-sp-5);
 }
 
 .design-editor-name {
@@ -3779,7 +3779,7 @@ a.flow-node {
 .section-desc {
   color: var(--text-muted);
   font-size: var(--px-word);
-  margin: -4px 0 12px;
+  margin: -var(--px-sp-2) 0 var(--px-sp-5);
   line-height: 1.45;
   /* These run the full shell width — measured at 191 characters per line on
      the cycles page, roughly 2.5x the readable maximum, because the eye loses
@@ -3848,23 +3848,23 @@ a.flow-node {
 }
 
 .churn-detail-row td {
-  padding: 0 10px 10px 34px;
+  padding: 0 var(--px-sp-5) var(--px-sp-5) var(--px-sp-8);
   border-bottom: 1px solid var(--border);
 }
 
 .churn-refs {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 4px;
+  gap: var(--px-sp-3);
+  padding-top: var(--px-sp-2);
 }
 
 .churn-ref {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-3) var(--px-sp-4);
   border: 1px solid var(--border);
   text-decoration: none;
   color: var(--text);
@@ -3894,7 +3894,7 @@ a.flow-node {
 }
 
 .table-caption {
-  padding: 8px 10px 2px;
+  padding: var(--px-sp-4) var(--px-sp-5) var(--px-sp-1);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
@@ -3902,7 +3902,7 @@ a.flow-node {
 
 .friction-totals,
 .sizing-medians {
-  margin: -4px 0 10px;
+  margin: -var(--px-sp-2) 0 var(--px-sp-4);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
@@ -3930,7 +3930,7 @@ a.flow-node {
 .ledger-total td {
   border-top: 1px solid var(--border);
   border-bottom: none;
-  padding-top: 10px;
+  padding-top: var(--px-sp-5);
 }
 
 .ledger-total .cell-title {
@@ -3959,7 +3959,7 @@ a.flow-node {
 /* Footnote scale on purpose — 16 denials in a whole corpus is a remark, not a
    ranking, so it never grows past one muted line. */
 .friction-denials {
-  padding: 2px 10px 0;
+  padding: var(--px-sp-1) var(--px-sp-5) 0;
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
@@ -3969,8 +3969,8 @@ a.flow-node {
 
 .search-input {
   width: 100%;
-  padding: 10px 12px;
-  margin-bottom: 12px;
+  padding: var(--px-sp-5) var(--px-sp-5);
+  margin-bottom: var(--px-sp-5);
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
@@ -3984,7 +3984,7 @@ a.flow-node {
 }
 
 .search-meta {
-  padding: 0 2px 8px;
+  padding: 0 var(--px-sp-1) var(--px-sp-4);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
@@ -3993,12 +3993,12 @@ a.flow-node {
 .search-hits {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .search-hit {
   display: block;
-  padding: 8px 10px;
+  padding: var(--px-sp-4) var(--px-sp-5);
   border: 1px solid var(--border);
   text-decoration: none;
   color: var(--text);
@@ -4013,12 +4013,12 @@ a.flow-node {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: var(--px-sp-4);
+  margin-bottom: var(--px-sp-2);
 }
 
 .search-hit-role {
-  padding: 2px 6px;
+  padding: var(--px-sp-1) var(--px-sp-3);
   background: var(--px-rule-soft);
   font-family: var(--mono);
   font-size: var(--px-label);
@@ -4089,13 +4089,13 @@ a.flow-node {
    badges, everything else through the aliased vocabulary. */
 
 .ships-card {
-  padding: 16px;
+  padding: var(--px-sp-6);
 }
 
 .ships-meta {
   font-size: var(--px-body);
   color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: var(--px-sp-4);
 }
 
 .ship-row {
@@ -4120,7 +4120,7 @@ a.flow-node {
 
 .ship-exit {
   display: inline-block;
-  padding: 1px 8px;
+  padding: 1px var(--px-sp-4);
   border: 1px solid;
   font-size: var(--px-meta);
   font-weight: 600;
@@ -4144,7 +4144,7 @@ a.flow-node {
 
 .ship-log pre {
   margin: 0;
-  padding: 12px 14px;
+  padding: var(--px-sp-5) var(--px-sp-6);
   max-height: 320px;
   overflow: auto;
   font-size: var(--px-meta);
@@ -4169,7 +4169,7 @@ a.flow-node {
 .git-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 /* One compact status row per repo — the whole row links into the detail view.
@@ -4188,8 +4188,8 @@ a.flow-node {
     minmax(0, 1fr)       /* latest commit — takes the slack */
     5.5rem;              /* when */
   align-items: baseline;
-  gap: 10px;
-  padding: 7px 14px;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-4) var(--px-sp-6);
   border: var(--px-edge);
   background: var(--card);
   color: inherit;
@@ -4261,7 +4261,7 @@ a.flow-node {
   min-width: 0;
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--px-sp-4);
   overflow: hidden;
 }
 .git-row-commit .git-subject {
@@ -4285,7 +4285,7 @@ a.flow-node {
 .git-branch {
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 2px 9px;
+  padding: var(--px-sp-1) var(--px-sp-4);
   background: var(--px-rule-soft);
   color: var(--px-muted-on-fill);
 }
@@ -4299,7 +4299,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-meta);
   font-weight: 600;
-  padding: 1px 8px;
+  padding: 1px var(--px-sp-4);
   border: 1px solid;
 }
 
@@ -4341,11 +4341,11 @@ a.flow-node {
 .git-commits {
   list-style: none;
   margin: 0;
-  padding: 4px 0;
+  padding: var(--px-sp-2) 0;
 }
 
 .git-commits-empty {
-  padding: 12px 14px;
+  padding: var(--px-sp-5) var(--px-sp-6);
   font-family: var(--mono);
   font-size: var(--px-body);
   color: var(--text-muted);
@@ -4355,8 +4355,8 @@ a.flow-node {
   display: grid;
   grid-template-columns: 68px 1fr auto auto;
   align-items: baseline;
-  gap: 12px;
-  padding: 3px 14px;
+  gap: var(--px-sp-5);
+  padding: var(--px-sp-2) var(--px-sp-6);
   font-size: var(--px-body);
 }
 
@@ -4399,7 +4399,7 @@ a.flow-node {
 .git-detail {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--px-sp-5);
 }
 
 .git-back {
@@ -4416,15 +4416,15 @@ a.flow-node {
 .git-detail-head {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-bottom: 8px;
+  gap: var(--px-sp-2);
+  padding-bottom: var(--px-sp-4);
   border-bottom: var(--px-edge);
 }
 .git-detail-title {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--px-sp-4);
 }
 .git-detail-title .git-repo-name {
   font-size: var(--px-title);
@@ -4438,12 +4438,12 @@ a.flow-node {
 .git-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--px-sp-2);
 }
 .git-tab {
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 3px 12px;
+  padding: var(--px-sp-2) var(--px-sp-5);
   border: var(--px-edge);
   background: transparent;
   color: var(--text-muted);
@@ -4463,7 +4463,7 @@ a.flow-node {
   border: var(--px-edge);
   background: var(--card);
   box-shadow: var(--shadow);
-  padding: 4px 0;
+  padding: var(--px-sp-2) 0;
   overflow-x: auto;
 }
 
@@ -4473,7 +4473,7 @@ a.flow-node {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  padding: 10px 14px 4px;
+  padding: var(--px-sp-5) var(--px-sp-6) var(--px-sp-2);
 }
 
 /* commits → expandable */
@@ -4481,8 +4481,8 @@ a.flow-node {
   display: grid;
   grid-template-columns: 68px 1fr auto auto;
   align-items: baseline;
-  gap: 12px;
-  padding: 4px 14px;
+  gap: var(--px-sp-5);
+  padding: var(--px-sp-2) var(--px-sp-6);
   cursor: pointer;
 }
 .git-commits--rich .git-commit--click:hover {
@@ -4494,15 +4494,15 @@ a.flow-node {
 /* Filter chrome inside a detail tab: a chip row, and for commits a chip row plus
    the author picker and search box on one line. */
 .git-filters {
-  padding: 10px 14px 6px;
+  padding: var(--px-sp-5) var(--px-sp-6) var(--px-sp-3);
 }
 
 .git-cfilter {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 14px 6px;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-5) var(--px-sp-6) var(--px-sp-3);
   border-bottom: 1px dashed var(--border);
 }
 .git-cfilter .git-filters {
@@ -4518,19 +4518,19 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
-  padding: 0 14px 4px;
+  padding: 0 var(--px-sp-6) var(--px-sp-2);
 }
 
 /* "load more" footer under the commits list. */
 .git-more-wrap {
   display: flex;
   justify-content: center;
-  padding: 8px 14px 12px;
+  padding: var(--px-sp-4) var(--px-sp-6) var(--px-sp-5);
 }
 .git-more {
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 3px 14px;
+  padding: var(--px-sp-2) var(--px-sp-6);
   border: var(--px-edge);
   background: transparent;
   color: var(--text-muted);
@@ -4551,7 +4551,7 @@ a.flow-node {
 }
 
 .git-commit-detail {
-  padding: 8px 14px 12px;
+  padding: var(--px-sp-4) var(--px-sp-6) var(--px-sp-5);
   border-top: 1px dashed var(--border);
   border-bottom: 1px dashed var(--border);
 }
@@ -4561,19 +4561,19 @@ a.flow-node {
   color: var(--text-muted);
   white-space: pre-wrap;
   word-break: break-word;
-  margin-bottom: 8px;
+  margin-bottom: var(--px-sp-4);
 }
 
 /* changed-file list */
 .git-files {
   list-style: none;
   margin: 0;
-  padding: 0 14px 8px;
+  padding: 0 var(--px-sp-6) var(--px-sp-4);
 }
 .git-file {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--px-sp-5);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: 1px 0;
@@ -4599,8 +4599,8 @@ a.flow-node {
 
 /* diff viewer */
 .git-diff {
-  margin: 4px 14px 8px;
-  padding: 8px 10px;
+  margin: var(--px-sp-2) var(--px-sp-5) var(--px-sp-4);
+  padding: var(--px-sp-4) var(--px-sp-5);
   background: var(--bg);
   border: var(--px-edge-inner);
   font-family: var(--mono);
@@ -4631,7 +4631,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
-  padding: 0 14px 8px;
+  padding: 0 var(--px-sp-6) var(--px-sp-4);
 }
 
 /* branches */
@@ -4641,7 +4641,7 @@ a.flow-node {
 .git-run-list {
   list-style: none;
   margin: 0;
-  padding: 4px 0;
+  padding: var(--px-sp-2) 0;
 }
 .git-branch-row,
 .git-pr-row,
@@ -4649,8 +4649,8 @@ a.flow-node {
 .git-run-row {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 4px 14px;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-2) var(--px-sp-6);
   font-size: var(--px-body);
 }
 .git-branch-row:hover,
@@ -4679,7 +4679,7 @@ a.flow-node {
 .git-btag {
   font-family: var(--mono);
   font-size: var(--px-label);
-  padding: 1px 7px;
+  padding: 1px var(--px-sp-4);
   background: var(--px-rule-soft);
   color: var(--px-muted-on-fill);
   white-space: nowrap;
@@ -4722,7 +4722,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-label);
   font-weight: 600;
-  padding: 0 6px;
+  padding: 0 var(--px-sp-3);
   border: 1px solid;
   text-transform: uppercase;
   white-space: nowrap;
@@ -4782,7 +4782,7 @@ a.flow-node {
 .doc-layout {
   display: grid;
   grid-template-columns: 220px 1fr;
-  gap: 14px;
+  gap: var(--px-sp-5);
   align-items: start;
 }
 
@@ -4824,14 +4824,14 @@ a.flow-node {
   background: var(--card);
   border: var(--px-edge);
   box-shadow: var(--px-shadow);
-  padding: 8px;
+  padding: var(--px-sp-4);
   position: sticky;
   top: calc(var(--chrome-h) + 16px);
   max-height: calc(100vh - var(--chrome-h) - 100px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--px-sp-1);
 }
 
 .doc-index-item {
@@ -4846,7 +4846,7 @@ a.flow-node {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 4px 8px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
   /* Wrap to a second line instead of ellipsing. These titles share long
      prefixes — "luci-studio.com — Blog…", "api.luci-studio.com — B…",
@@ -4870,7 +4870,7 @@ a.flow-node {
 }
 
 .doc-index-empty {
-  padding: 6px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -4885,7 +4885,7 @@ a.flow-node {
 }
 
 .doc-toc {
-  padding: 10px;
+  padding: var(--px-sp-5);
   position: sticky;
   top: calc(var(--chrome-h) + 16px);
   max-height: calc(100vh - var(--chrome-h) - 100px);
@@ -4893,7 +4893,7 @@ a.flow-node {
 }
 
 .doc-main {
-  padding: 18px 24px 24px;
+  padding: var(--px-sp-6) var(--px-sp-7) var(--px-sp-7);
   min-height: 300px;
 }
 
@@ -4903,7 +4903,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
-  margin-bottom: 8px;
+  margin-bottom: var(--px-sp-4);
 }
 
 .doc-crumb {
@@ -4920,7 +4920,7 @@ a.flow-node {
 }
 
 .doc-crumb-sep {
-  margin: 0 6px;
+  margin: 0 var(--px-sp-3);
   color: var(--border-hover);
 }
 
@@ -4928,8 +4928,8 @@ a.flow-node {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--px-sp-5);
+  margin-bottom: var(--px-sp-4);
 }
 
 .doc-title {
@@ -4942,9 +4942,9 @@ a.flow-node {
 
 .doc-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--px-sp-4);
   flex-shrink: 0;
-  padding-top: 3px;
+  padding-top: var(--px-sp-2);
 }
 
 /* -- edit mode: title / parent / split editor -- */
@@ -4952,9 +4952,9 @@ a.flow-node {
 .doc-edit-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--px-sp-4);
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: var(--px-sp-4);
 }
 
 .doc-title-input {
@@ -4967,8 +4967,8 @@ a.flow-node {
   font-family: var(--sans);
   font-size: var(--px-display);
   font-weight: 650;
-  padding: 5px 8px;
-  margin: 0 -8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
+  margin: 0 -var(--px-sp-4);
 }
 
 .doc-title-input:hover {
@@ -4989,7 +4989,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 5px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   max-width: 160px;
   box-shadow: var(--px-shadow-sm);
 }
@@ -5003,7 +5003,7 @@ a.flow-node {
 .doc-editor {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: var(--px-sp-5);
   align-items: start;
 }
 
@@ -5024,7 +5024,7 @@ a.flow-node {
   font-family: var(--sans);
   font-size: var(--px-word);
   line-height: 1.5;
-  padding: 10px 12px;
+  padding: var(--px-sp-5) var(--px-sp-5);
   resize: vertical;
 }
 
@@ -5038,7 +5038,7 @@ a.flow-node {
   min-height: 320px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  padding: 10px 12px;
+  padding: var(--px-sp-5) var(--px-sp-5);
 }
 
 /* -- table of contents (read mode only) -- */
@@ -5048,7 +5048,7 @@ a.flow-node {
   font-size: var(--px-label-xs);
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: var(--px-sp-3);
 }
 
 .doc-toc-link {
@@ -5060,7 +5060,7 @@ a.flow-node {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 3px 0;
+  padding: var(--px-sp-2) 0;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5072,11 +5072,11 @@ a.flow-node {
 }
 
 .doc-toc-link--h2 {
-  padding-left: 10px;
+  padding-left: var(--px-sp-5);
 }
 
 .doc-toc-link--h3 {
-  padding-left: 20px;
+  padding-left: var(--px-sp-7);
 }
 
 /* --- code graph (#/codegraph) ---------------------------------------------- */
@@ -5107,7 +5107,7 @@ a.flow-node {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0 24px;
+  padding: 0 var(--px-sp-7);
 }
 
 /* The class sets display:flex, which outranks the [hidden] attribute's
@@ -5135,7 +5135,7 @@ a.flow-node {
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   align-items: center;
-  column-gap: 8px;
+  column-gap: var(--px-sp-4);
   row-gap: 1px;
   width: 200px;
   height: 46px;
@@ -5143,7 +5143,7 @@ a.flow-node {
   background: var(--card);
   border: 0.5px solid var(--border);
   border-radius: 12px;
-  padding: 5px 10px;
+  padding: var(--px-sp-3) var(--px-sp-5);
   font-family: var(--sans);
 }
 
@@ -5155,7 +5155,7 @@ a.flow-node {
 .cgn--sel {
   border-color: var(--accent);
   border-width: 2px;
-  padding: 4px 9px;
+  padding: var(--px-sp-2) var(--px-sp-4);
 }
 
 .cgn--dim {
@@ -5186,7 +5186,7 @@ a.flow-node {
   font-size: var(--px-meta);
   font-weight: 500;
   line-height: 1.4;
-  padding: 0 6px;
+  padding: 0 var(--px-sp-3);
   border-radius: 5px;
   white-space: nowrap;
 }
@@ -5215,7 +5215,7 @@ a.flow-node {
   grid-column: 2 / 4;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--px-sp-2);
   font-size: var(--px-label);
   color: var(--text-muted);
   font-family: var(--mono);
@@ -5243,7 +5243,7 @@ a.flow-node {
 .cg-search {
   width: 220px;
   margin-bottom: 0;
-  padding: 6px 10px;
+  padding: var(--px-sp-3) var(--px-sp-5);
 }
 
 .cg-tip {
@@ -5251,7 +5251,7 @@ a.flow-node {
   pointer-events: none;
   background: var(--card);
   border: 1px solid var(--border);
-  padding: 6px 10px;
+  padding: var(--px-sp-3) var(--px-sp-5);
   font-size: var(--px-body);
   color: var(--text);
   max-width: 280px;
@@ -5270,13 +5270,13 @@ a.flow-node {
   flex-shrink: 0;
   border-left: 1px solid var(--border);
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: var(--px-sp-5) var(--px-sp-5);
 }
 
 .cg-side-head {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--px-sp-3);
 }
 
 .cg-side-head .cg-side-close {
@@ -5285,7 +5285,7 @@ a.flow-node {
 
 .cg-side-title {
   font-size: var(--px-word);
-  margin-bottom: 8px;
+  margin-bottom: var(--px-sp-4);
   word-break: break-all;
 }
 
@@ -5293,7 +5293,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
-  margin: 8px 0 4px;
+  margin: var(--px-sp-4) 0 var(--px-sp-2);
   word-break: break-all;
 }
 
@@ -5305,7 +5305,7 @@ a.flow-node {
 .cg-side-empty {
   font-size: var(--px-body);
   color: var(--text-muted);
-  padding: 4px 0;
+  padding: var(--px-sp-2) 0;
 }
 
 .cg-sig {
@@ -5313,8 +5313,8 @@ a.flow-node {
   font-size: var(--px-meta);
   color: var(--text);
   background: var(--row-hover);
-  padding: 6px 8px;
-  margin: 0 0 4px;
+  padding: var(--px-sp-3) var(--px-sp-4);
+  margin: 0 0 var(--px-sp-2);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -5322,9 +5322,9 @@ a.flow-node {
 .cg-sym {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--px-sp-3);
   width: 100%;
-  padding: 4px 2px;
+  padding: var(--px-sp-2) var(--px-sp-1);
   background: none;
   border: none;
   border-bottom: 1px solid var(--border);
@@ -5363,7 +5363,7 @@ a.flow-node {
 .cg-crumb {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
   min-width: 0;
 }
 
@@ -5382,18 +5382,18 @@ a.flow-node {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 5px;
+  margin-right: var(--px-sp-2);
   vertical-align: 1px;
 }
 
 .cg-sub-n {
-  margin-left: 5px;
+  margin-left: var(--px-sp-2);
   opacity: 0.55;
 }
 
 .cg-sub-sep {
   align-self: center;
-  margin: 0 6px 0 2px;
+  margin: 0 var(--px-sp-3) 0 var(--px-sp-1);
   font-family: var(--mono);
   font-size: var(--px-label);
   letter-spacing: 0.08em;
@@ -5406,13 +5406,13 @@ a.flow-node {
    Added with data.db v12 (custom columns, hierarchy, cycles, saved views). */
 
 .board-toolbar {
-  margin-bottom: 12px;
+  margin-bottom: var(--px-sp-5);
 }
 
 .board-toolbar-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
   flex-wrap: wrap;
 }
 
@@ -5421,13 +5421,13 @@ a.flow-node {
 }
 
 .board-filter-note {
-  margin-top: 6px;
+  margin-top: var(--px-sp-3);
   font-size: var(--px-meta);
   font-family: var(--mono);
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
 }
 
 .board-cycle-filter,
@@ -5438,7 +5438,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 3px 6px;
+  padding: var(--px-sp-2) var(--px-sp-3);
 }
 
 .board-col-name {
@@ -5476,7 +5476,7 @@ a.flow-node {
   border: 0;
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 6px;
+  padding: var(--px-sp-3);
   cursor: pointer;
 }
 
@@ -5487,7 +5487,7 @@ a.flow-node {
 /* --- card fields --- */
 
 .todo-kind {
-  margin-right: 5px;
+  margin-right: var(--px-sp-2);
   color: var(--text-muted);
 }
 
@@ -5503,7 +5503,7 @@ a.flow-node {
   display: inline-block;
   width: 6px;
   height: 6px;
-  margin-right: 5px;
+  margin-right: var(--px-sp-2);
   vertical-align: middle;
   background: var(--text-muted);
 }
@@ -5524,21 +5524,21 @@ a.flow-node {
 .todo-cycle,
 .todo-parent {
   background: var(--px-rule-soft);
-  padding: 1px 6px;
+  padding: 1px var(--px-sp-3);
   font-size: var(--px-label-xs);
   color: var(--px-muted-on-fill);
 }
 
 .todo-child {
-  margin-left: 12px;
+  margin-left: var(--px-sp-5);
   border-left-width: 4px;
 }
 
 .todo-rollup {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 4px 0 2px;
+  gap: var(--px-sp-3);
+  margin: var(--px-sp-2) 0 var(--px-sp-1);
 }
 
 .todo-rollup-bar {
@@ -5564,7 +5564,7 @@ a.flow-node {
 .panel-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--px-sp-4);
 }
 
 .panel-kind,
@@ -5579,7 +5579,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 4px 6px;
+  padding: var(--px-sp-2) var(--px-sp-3);
 }
 
 .panel-hint {
@@ -5590,18 +5590,18 @@ a.flow-node {
 .panel-children {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
+  gap: var(--px-sp-2);
+  margin-top: var(--px-sp-3);
 }
 
 .panel-child {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 0;
-  padding: 4px 6px;
+  padding: var(--px-sp-2) var(--px-sp-3);
   cursor: pointer;
   text-align: left;
   color: var(--text);
@@ -5629,12 +5629,12 @@ a.flow-node {
   font-size: var(--px-label-xs);
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: 6px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   border-bottom: var(--px-edge);
 }
 
 .board-table td {
-  padding: 6px 8px;
+  padding: var(--px-sp-3) var(--px-sp-4);
   border-bottom: 1px solid var(--border);
 }
 
@@ -5669,7 +5669,7 @@ a.flow-node {
 }
 
 .bt-rollup {
-  margin-left: 8px;
+  margin-left: var(--px-sp-4);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -5690,17 +5690,17 @@ a.flow-node {
 .timeline {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--px-sp-4);
 }
 
 .tl-row {
   display: grid;
   grid-template-columns: 200px 1fr;
-  gap: 12px;
+  gap: var(--px-sp-5);
   align-items: start;
   border: var(--px-edge);
   background: var(--card);
-  padding: 10px;
+  padding: var(--px-sp-5);
   box-shadow: var(--px-shadow);
 }
 
@@ -5710,7 +5710,7 @@ a.flow-node {
   text-transform: uppercase;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .tl-closed {
@@ -5719,18 +5719,18 @@ a.flow-node {
   text-transform: none;
   color: var(--px-muted-on-fill);
   background: var(--px-rule-soft);
-  padding: 1px 5px;
+  padding: 1px var(--px-sp-3);
 }
 
 .tl-dates {
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: var(--px-sp-2);
 }
 
 .tl-progress {
-  margin-top: 6px;
+  margin-top: var(--px-sp-3);
   height: 4px;
   background: var(--border);
 }
@@ -5758,18 +5758,18 @@ a.flow-node {
 .tl-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .tl-card {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--px-sp-3);
   max-width: 260px;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 0;
-  padding: 3px 7px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   font-size: var(--px-meta);
   color: var(--text);
   cursor: pointer;
@@ -5810,14 +5810,14 @@ a.flow-node {
    Sprint list + burndown. The chart is hand-rolled SVG like the app's others. */
 
 .cy-toolbar {
-  margin: 10px 0 12px;
+  margin: var(--px-sp-4) 0 var(--px-sp-5);
 }
 
 .cy-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
 }
 
 .cy-form input[type="text"],
@@ -5830,7 +5830,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 4px 7px;
+  padding: var(--px-sp-2) var(--px-sp-4);
   min-width: 180px;
 }
 
@@ -5840,7 +5840,7 @@ a.flow-node {
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--px-sp-2);
 }
 
 .cy-form input[type="date"] {
@@ -5850,19 +5850,19 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-meta);
-  padding: 3px 5px;
+  padding: var(--px-sp-2) var(--px-sp-3);
 }
 
 .cy-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--px-sp-4);
 }
 
 .cy-row {
   background: var(--card);
   border: var(--px-edge);
-  padding: 10px;
+  padding: var(--px-sp-5);
   cursor: pointer;
   box-shadow: var(--px-shadow);
 }
@@ -5878,7 +5878,7 @@ a.flow-node {
 .cy-row-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--px-sp-4);
   flex-wrap: wrap;
 }
 
@@ -5890,7 +5890,7 @@ a.flow-node {
 
 .cy-badge {
   background: var(--px-rule-soft);
-  padding: 1px 6px;
+  padding: 1px var(--px-sp-3);
   font-family: var(--mono);
   font-size: var(--px-label-xs);
   color: var(--px-muted-on-fill);
@@ -5910,7 +5910,7 @@ a.flow-node {
 .cy-actions {
   margin-left: auto;
   display: inline-flex;
-  gap: 6px;
+  gap: var(--px-sp-3);
   opacity: 0;
 }
 
@@ -5920,15 +5920,15 @@ a.flow-node {
 }
 
 .cy-goal {
-  margin-top: 5px;
+  margin-top: var(--px-sp-2);
   font-size: var(--px-body);
   color: var(--text-muted);
 }
 
 .cy-stats {
   display: flex;
-  gap: 14px;
-  margin-top: 7px;
+  gap: var(--px-sp-5);
+  margin-top: var(--px-sp-3);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -5943,7 +5943,7 @@ a.flow-node {
 }
 
 .cy-bar {
-  margin-top: 7px;
+  margin-top: var(--px-sp-3);
   height: 4px;
   background: var(--border);
 }
@@ -5955,14 +5955,14 @@ a.flow-node {
 }
 
 .cy-detail {
-  margin-top: 14px;
-  padding: 12px;
+  margin-top: var(--px-sp-5);
+  padding: var(--px-sp-5);
 }
 
 .cy-chart {
   width: 100%;
   height: 160px;
-  margin-top: 8px;
+  margin-top: var(--px-sp-4);
   overflow: visible;
 }
 
@@ -5992,7 +5992,7 @@ a.flow-node {
 .cy-axis {
   display: flex;
   justify-content: space-between;
-  margin-top: 4px;
+  margin-top: var(--px-sp-2);
   font-family: var(--mono);
   font-size: var(--px-label);
   color: var(--text-muted);
@@ -6001,8 +6001,8 @@ a.flow-node {
 .cy-legend {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 8px;
+  gap: var(--px-sp-5);
+  margin-top: var(--px-sp-4);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -6014,7 +6014,7 @@ a.flow-node {
   display: inline-block;
   width: 14px;
   height: 2px;
-  margin-right: 5px;
+  margin-right: var(--px-sp-2);
   vertical-align: middle;
 }
 
@@ -6027,7 +6027,7 @@ a.flow-node {
 }
 
 .cy-pool {
-  margin-top: 14px;
+  margin-top: var(--px-sp-5);
   font-family: var(--mono);
   font-size: var(--px-meta);
   color: var(--text-muted);
@@ -6040,15 +6040,15 @@ a.flow-node {
 }
 
 .cy-activity {
-  margin-top: 14px;
-  padding: 12px;
+  margin-top: var(--px-sp-5);
+  padding: var(--px-sp-5);
 }
 
 .ev-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 3px 0;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-2) 0;
   font-size: var(--px-body);
   border-bottom: 1px solid var(--border);
 }
@@ -6086,7 +6086,7 @@ a.flow-node {
 .view-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--px-sp-3);
   align-items: center;
 }
 
@@ -6097,7 +6097,7 @@ a.flow-node {
 
 .col-form-row {
   display: flex;
-  gap: 6px;
+  gap: var(--px-sp-3);
 }
 
 .col-f-name,
@@ -6111,7 +6111,7 @@ a.flow-node {
   border-radius: 0;
   font-family: var(--mono);
   font-size: var(--px-body);
-  padding: 4px 6px;
+  padding: var(--px-sp-2) var(--px-sp-3);
   width: 100%;
 }
 
