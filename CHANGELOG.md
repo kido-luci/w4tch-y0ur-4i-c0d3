@@ -26,5 +26,13 @@ First public release.
 - **Live updates** — a ~500 ms file watch by default, or instant push via
   Claude Code hooks (`--print-hooks`), plus optional OS notifications when a
   session needs input or finishes.
+- **Service views** — read-only Cloudflare Analytics and Google Search Console
+  dashboards for sites you own, proxied server-side so the browser never sees a
+  token. Credentials come from `webstats.json` in the config dir; with none
+  configured the endpoints answer 503 and the view shows setup hints.
+- **Share a drawing for review** — an opt-in `share` action PUTs one drawing's
+  scene to a review backend you name via `COWORK_API` + `DESIGN_INGEST_SECRET`.
+  No backend ships with the app: unset either variable and the button explains
+  itself rather than sending anything.
 - **MCP server** — create and update board cards, docs pages and drawings
   from inside a Claude Code session.

@@ -16,7 +16,10 @@ import {
   getProjects,
   getTodos,
   hasFreshThumbnail,
+  isPublished,
+  isPublishFresh,
   moveDrawing,
+  publishDrawing,
   putDrawingContent,
   renameDrawing,
   setDrawingTopics,
@@ -122,12 +125,15 @@ export function renderDesignView(container: HTMLElement): () => void {
               : `<span class="design-thumb-empty">no preview yet</span>`
           }</div>
           <div class="design-card-name">${escapeHtml(d.name)}</div>
-          <div class="design-card-meta">updated ${formatRelativeTime(d.updatedAt)}</div>
+          <div class="design-card-meta">updated ${formatRelativeTime(d.updatedAt)}${
+            isPublishFresh(d) ? " · shared ✓" : isPublished(d) ? " · shared (stale)" : ""
+          }</div>
           <div class="design-card-actions">
             <button type="button" class="design-act" data-act="rename">rename</button>
             <button type="button" class="design-act" data-act="move">move</button>
             <button type="button" class="design-act" data-act="topics">topics</button>
             <button type="button" class="design-act" data-act="copy">copy</button>
+            <button type="button" class="design-act" data-act="share">share</button>
             <button type="button" class="design-act" data-act="delete">✕</button>
           </div>
         </article>`;
@@ -311,6 +317,22 @@ export function renderDesignView(container: HTMLElement): () => void {
     }
     if (act === "copy") {
       void duplicateDrawing(d.id).catch(console.error); // SSE re-renders with the copy
+      return;
+    }
+    if (act === "share") {
+      const btn = target.closest<HTMLButtonElement>(".design-act")!;
+      btn.disabled = true;
+      void publishDrawing(d.id)
+        .then(async (url) => {
+          // SSE re-renders the card with "shared ✓"; hand the reviewer link
+          // to the clipboard so sharing is paste-ready.
+          await navigator.clipboard.writeText(url).catch(() => {});
+          alert(`review link copied:\n${url}`);
+        })
+        .catch((err: unknown) => alert(`share failed: ${err instanceof Error ? err.message : err}`))
+        .finally(() => {
+          btn.disabled = false;
+        });
       return;
     }
     if (act === "delete") {

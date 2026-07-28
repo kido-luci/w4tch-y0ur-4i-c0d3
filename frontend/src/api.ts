@@ -384,11 +384,34 @@ export interface Drawing {
   // The updatedAt the cached thumbnail was rendered from; the thumbnail is
   // fresh iff it equals updatedAt (see hasFreshThumbnail).
   thumbUpdatedAt: string;
+  // The updatedAt the last publish sent to the review backend (zero time =
+  // never published; fresh iff it equals updatedAt — same idiom as thumbs).
+  publishedAt: string;
 }
 
 /** Whether the server's cached thumbnail matches the current scene version. */
 export function hasFreshThumbnail(d: Drawing): boolean {
   return d.thumbUpdatedAt === d.updatedAt;
+}
+
+/** Whether the drawing has ever been pushed to the review backend. */
+export function isPublished(d: Drawing): boolean {
+  return !!d.publishedAt && !d.publishedAt.startsWith("0001-");
+}
+
+/** Whether the published copy matches the current scene version. */
+export function isPublishFresh(d: Drawing): boolean {
+  return isPublished(d) && d.publishedAt === d.updatedAt;
+}
+
+/** Pushes the drawing to the review backend; resolves to the review URL. */
+export async function publishDrawing(id: string): Promise<string> {
+  const res = await fetch(`/api/drawings/${encodeURIComponent(id)}/publish`, { method: "POST" });
+  const parsed = (await res.json().catch(() => null)) as { error?: string; reviewUrl?: string } | null;
+  if (!res.ok || !parsed?.reviewUrl) {
+    throw new Error(parsed?.error ?? `publish failed (${res.status})`);
+  }
+  return parsed.reviewUrl;
 }
 
 /** Cache-busted URL of a drawing's cached thumbnail PNG. */
@@ -775,6 +798,182 @@ export function getShips(
   return getJSON<ShipsResult>(
     `/api/ships${buildQuery({ days, project, limit, log: withLog ? 1 : undefined })}`,
   );
+}
+
+// --- web analytics (/service/cloudflare) --------------------------------------
+// Read proxies over Cloudflare + Search Console (see webstats.go server-side).
+// Shapes mirror the Go Result structs; nil Go slices arrive as null, so the
+// view guards every list with `?? []`.
+
+export interface NameCount {
+  name: string;
+  count: number;
+}
+
+export interface CFTimePoint {
+  ts: string; // RFC3339 hour or YYYY-MM-DD day
+  requests: number;
+  cached: number;
+  bytes: number;
+  err4xx: number;
+  err5xx: number;
+  uniques: number;
+  threats: number;
+}
+
+export interface CFCodeCount {
+  code: number;
+  requests: number;
+}
+
+export interface CFTraffic {
+  totals: {
+    requests: number;
+    cached: number;
+    bytes: number;
+    cachedBytes: number;
+    uniques: number;
+    threats: number;
+  };
+  series: CFTimePoint[] | null;
+  statusCodes: CFCodeCount[] | null;
+  topCountries: NameCount[] | null;
+}
+
+export interface CFSecEvent {
+  datetime: string;
+  action: string;
+  clientIP: string;
+  country: string;
+  host: string;
+  path: string;
+  ruleId: string;
+  source: string;
+}
+
+export interface CFSecurity {
+  windowHours: number;
+  total: number;
+  byAction: NameCount[] | null;
+  byCountry: NameCount[] | null;
+  byHost: NameCount[] | null;
+  byRule: NameCount[] | null;
+  recent: CFSecEvent[] | null;
+}
+
+export interface CFRUMPoint {
+  ts: string;
+  pageviews: number;
+  visits: number;
+}
+
+export interface CFRUM {
+  pageviews: number;
+  visits: number;
+  series: CFRUMPoint[] | null;
+  topPaths: NameCount[] | null;
+  topHosts: NameCount[] | null;
+  topCountries: NameCount[] | null;
+  topReferers: NameCount[] | null;
+}
+
+// Sections are independent server-side: a failed one is null with its reason
+// under `errors`, so one unavailable dataset never blanks the whole view.
+export interface CFResult {
+  range: string;
+  host?: string;
+  traffic: CFTraffic | null;
+  security: CFSecurity | null;
+  rum: CFRUM | null;
+  errors?: Record<string, string>;
+}
+
+export interface GSCRow {
+  name: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface GSCDayPoint {
+  date: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface GSCSummary {
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number; // impression-weighted
+}
+
+export interface GSCQueryPage {
+  page: string;
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface GSCSitemap {
+  path: string;
+  lastSubmitted: string;
+  lastDownloaded: string;
+  isPending: boolean;
+  errors: number;
+  warnings: number;
+}
+
+export interface GSCResult {
+  range: string;
+  property: string;
+  startDate: string;
+  endDate: string;
+  summary: GSCSummary | null;
+  series: GSCDayPoint[] | null;
+  topQueries: GSCRow[] | null;
+  topPages: GSCRow[] | null;
+  queryPages: GSCQueryPage[] | null;
+  byHost: GSCRow[] | null;
+  devices: GSCRow[] | null;
+  countries: GSCRow[] | null;
+  sitemaps: GSCSitemap[] | null;
+  errors?: Record<string, string>;
+}
+
+/** null = the server has no webstats.json for this section (503) — the view
+ *  renders setup hints instead of an error. Other failures still throw. */
+async function getAnalytics<T>(url: string): Promise<T | null> {
+  const res = await fetch(url);
+  if (res.status === 503) return null;
+  if (!res.ok) {
+    throw new Error(`${url} -> ${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as T;
+}
+
+export function getCloudflareAnalytics(range: string, host?: string): Promise<CFResult | null> {
+  return getAnalytics<CFResult>(`/api/cloudflare/analytics${buildQuery({ range, host })}`);
+}
+
+export function getGSCAnalytics(range: string): Promise<GSCResult | null> {
+  return getAnalytics<GSCResult>(`/api/gsc/analytics${buildQuery({ range })}`);
+}
+
+// One zone-hostname↔repo mapping entry from webstats.json — non-secret, so
+// the endpoint answers (possibly an empty list) even with no credentials.
+export interface WebSite {
+  host: string;
+  project: string;
+}
+
+export function getWebSites(): Promise<WebSite[]> {
+  return getJSON<WebSite[]>(`/api/webstats/sites`);
 }
 
 // --- code graph (/project/codegraph) ------------------------------------------

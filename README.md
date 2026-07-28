@@ -8,11 +8,21 @@ token/cost by model, shows lines changed per session, and can notify you when
 a session needs input or finishes — watch your AI code as it works.
 
 Reads `~/.claude/projects/` transcript **metadata** only (never prompt text), no
-database, no network beyond `127.0.0.1:4777` — with one **opt-in** exception,
-click-triggered: the milestone *summarize* button shells out to your own
-`claude` CLI (haiku, `--no-session-persistence`) to write one line per milestone
-group. Only the milestone labels (branch names, commit subjects, tag names) are
-sent, and the result is cached on disk so each session is summarized once.
+database, no network beyond `127.0.0.1:4777` — with three **opt-in** exceptions,
+each one off until you configure it:
+
+- the milestone *summarize* button shells out to your own `claude` CLI (haiku,
+  `--no-session-persistence`) to write one line per milestone group. Only the
+  milestone labels (branch names, commit subjects, tag names) are sent, and the
+  result is cached on disk so each session is summarized once.
+- the **service** tab proxies Cloudflare Analytics and Google Search Console for
+  sites you own, so the browser never sees a token. Credentials live in
+  `webstats.json` in the config dir, never in this repo; with no file there the
+  endpoints answer 503 and the view renders setup hints.
+- the design library's *share* button PUTs that one drawing's `.excalidraw`
+  scene to a review backend you name, so teammates can view and comment. There
+  is **no built-in backend**: `COWORK_API` and `DESIGN_INGEST_SECRET` must both
+  be set or the button explains itself instead of sending anything.
 
 Nothing else ever leaves the machine, and nothing happens unless you click.
 Design notes: `docs/spec.md`.

@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"watch-your-ai-code/cfanalytics"
+	"watch-your-ai-code/gsc"
 )
 
 //go:embed all:frontend/dist
@@ -103,6 +106,13 @@ func main() {
 	importDataOnce(dataDB, cfgDir)
 	go backupDataDB(dataDB, cfgDir)
 
+	// Web analytics (/service/*): read-only Cloudflare + Search Console clients,
+	// configured via webstats.json in the config dir; absent config just means
+	// the endpoints answer 503 and the view shows setup hints.
+	ws := loadWebstats(cfgDir)
+	cfClient := cfanalytics.New(ws.Cloudflare.ZoneID, ws.Cloudflare.AccountID, ws.Cloudflare.AnalyticsToken, ws.Cloudflare.RumSiteTag)
+	gscClient := gsc.New(ws.SearchConsole.Property, ws.SearchConsole.SAKeyFile)
+
 	todoStore := NewTodoStore(dataDB)
 	drawingStore := NewDrawingStore(dataDB)
 	docStore := NewDocStore(dataDB)
@@ -117,7 +127,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, drawingStore, docStore, groupStore, projectStore)
+	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, drawingStore, docStore, groupStore, projectStore, cfClient, gscClient, ws.Sites)
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
