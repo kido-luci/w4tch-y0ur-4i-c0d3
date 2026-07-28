@@ -21,6 +21,10 @@
   --live: var(--px-green);
   --accent: var(--px-accent);
 
+  /* Accent as a letterform, not as a frame — see the note in pixel.css. Use
+     this for `color:`, keep --accent for borders, fills and rules. */
+  --accent-text: var(--px-accent-text);
+
   --row-hover: var(--px-rule-soft);
   --chip-active-bg: var(--px-rule-soft);
   --danger: var(--px-red);
@@ -818,6 +822,21 @@ a {
   border-radius: 0;
   padding: 3px 8px;
   white-space: nowrap;
+}
+
+/* The model hues are fixed data colours (format.ts) picked to stay recognisable
+   in a chart, where they sit on the ground as areas. As a WORD on a 15% tint of
+   themselves they are far weaker than they look: sonnet lands at 1.68:1 on
+   cream, haiku at 1.92:1. Pulling the hue toward the theme's ink keeps the
+   badge unmistakably that model's colour — the dot beside it stays pure — while
+   the label itself clears 4.5:1. The two percentages are the loosest mixes that
+   do so for all five hues; sonnet binds in light, opus in dark. */
+.model-badge {
+  color: color-mix(in srgb, var(--model-color, #9ca3af) 50%, var(--px-ink));
+}
+
+:root[data-theme="dark"] .model-badge {
+  color: color-mix(in srgb, var(--model-color, #9ca3af) 78%, var(--px-ink));
 }
 
 .model-dot {
@@ -3092,7 +3111,7 @@ a.flow-node {
 
 .md a,
 .md-inline a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .md .md-table {
@@ -3249,7 +3268,7 @@ a.flow-node {
 .panel-sess-pr {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--accent);
+  color: var(--accent-text);
   border: 1px solid var(--accent);
   padding: 0 4px;
   text-decoration: none;
@@ -3805,7 +3824,7 @@ a.flow-node {
 /* Your own words, marked — you scan for those first. */
 .search-hit-role--user {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .search-hit-title {
@@ -4030,7 +4049,7 @@ a.flow-node {
 }
 
 .git-badge--dirty {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
@@ -4087,7 +4106,7 @@ a.flow-node {
 .git-hash {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .git-subject {
@@ -4130,7 +4149,7 @@ a.flow-node {
   align-self: flex-start;
 }
 .git-back:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .git-detail-head {
@@ -4174,7 +4193,7 @@ a.flow-node {
   color: var(--text);
 }
 .git-tab--on {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
@@ -4258,7 +4277,7 @@ a.flow-node {
 }
 .git-more:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .git-more:disabled {
   cursor: default;
@@ -4341,7 +4360,7 @@ a.flow-node {
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 .git-dl--hunk {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .git-dl--meta {
   color: var(--text-muted);
@@ -4405,7 +4424,7 @@ a.flow-node {
   white-space: nowrap;
 }
 .git-btag--cur {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
 }
 .git-btag--merged {
@@ -4423,7 +4442,7 @@ a.flow-node {
   white-space: nowrap;
 }
 .git-pr-title:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: underline;
 }
 .git-pr-num {
@@ -4937,7 +4956,7 @@ a.flow-node {
 }
 
 .cg-stale {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .cg-search {
@@ -5192,7 +5211,7 @@ a.flow-node {
 }
 
 .todo-kind-epic {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .todo-kind-bug {
@@ -5769,7 +5788,7 @@ a.flow-node {
 }
 
 .ev-card:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .ev-what {
