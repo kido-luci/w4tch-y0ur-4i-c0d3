@@ -95,26 +95,26 @@ export function renderInsightsView(container: HTMLElement): () => void {
           <p class="section-desc">Where the loop went in circles: files ranked by the lines that got
           written and then unwritten again — not by how often they were touched, which just finds
           the files every session appends a line to.</p>
-          <div id="churn-wrap"><div class="empty-state">loading…</div></div>
+          <div id="churn-wrap" class="table-scroll"><div class="empty-state">loading…</div></div>
         </section>
         <section class="card friction-card">
           <h2 class="section-heading">friction</h2>
           <p class="section-desc">The sessions you kept stopping — a session you hit ESC in six
           times is one whose prompt, or CLAUDE.md, was wrong. What it cost sits next to the count.</p>
-          <div id="friction-wrap"><div class="empty-state">loading…</div></div>
+          <div id="friction-wrap" class="table-scroll"><div class="empty-state">loading…</div></div>
         </section>
         <section class="card sizing-card">
           <h2 class="section-heading">work sizing</h2>
           <p class="section-desc">Work that outgrew one session. A compaction means the context
           filled up and had to be squeezed — the mark of a task too big for one sitting.</p>
-          <div id="sizing-wrap"><div class="empty-state">loading…</div></div>
+          <div id="sizing-wrap" class="table-scroll"><div class="empty-state">loading…</div></div>
         </section>
         <section class="card ledger-card">
           <h2 class="section-heading">cost per outcome</h2>
           <p class="section-desc">What a week of spending produced. Each week's <em>whole</em> cost
           divided by what came out of it — not the price of a PR: exploring, debugging and arguing
           about a plan all cost money and open nothing.</p>
-          <div id="ledger-wrap"><div class="empty-state">loading…</div></div>
+          <div id="ledger-wrap" class="table-scroll"><div class="empty-state">loading…</div></div>
         </section>
       </div>
     </div>

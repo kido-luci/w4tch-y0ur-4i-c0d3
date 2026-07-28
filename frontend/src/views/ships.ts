@@ -166,10 +166,12 @@ export function renderShipsView(container: HTMLElement): () => void {
     }
     listEl.innerHTML = `
       <div class="ships-meta">${windowNote}${filterNote}</div>
-      <table class="sessions-table ships-table">
-        <thead><tr><th>when</th><th>project</th><th>kind</th><th>version</th><th>gates</th><th>took</th><th>session</th></tr></thead>
-        <tbody>${rows.map(rowHtml).join("")}</tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="sessions-table ships-table">
+          <thead><tr><th>when</th><th>project</th><th>kind</th><th>version</th><th>gates</th><th>took</th><th>session</th></tr></thead>
+          <tbody>${rows.map(rowHtml).join("")}</tbody>
+        </table>
+      </div>
     `;
   }
 

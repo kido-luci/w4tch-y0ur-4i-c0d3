@@ -102,9 +102,17 @@ export function renderGitView(container: HTMLElement): () => void {
         }">${escapeHtml(r.branch)}</span>`
       : "";
     const { body: commit, when } = latestCommit(r);
-    const inner = `<span class="git-row-name">${escapeHtml(r.folder || r.root)}</span>${branch}${stateBadge(r)}${trackBits(
-      r,
-    )}${commit}${when}`;
+    // Every cell is emitted even when empty. The row is a grid, and a grid only
+    // lines up if each row fills the same tracks — drop the absent ones and a
+    // repo with no upstream shifts its commit under the next repo's branch,
+    // which is the ragged column this layout exists to fix.
+    const inner =
+      `<span class="git-row-name" title="${escapeHtml(r.folder || r.root)}">${escapeHtml(r.folder || r.root)}</span>` +
+      `<span class="git-cell">${branch}</span>` +
+      `<span class="git-cell">${stateBadge(r)}</span>` +
+      `<span class="git-cell git-cell--track">${trackBits(r)}</span>` +
+      commit +
+      `<span class="git-cell git-cell--when">${when}</span>`;
     // The whole row is the entry point into the detail view; a resolved-but-not-a
     // -repo root isn't clickable (there's nothing to drill into).
     return r.isRepo && r.folder

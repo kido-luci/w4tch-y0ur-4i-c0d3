@@ -84,6 +84,37 @@ a {
   min-width: 0;
 }
 
+/* On a phone the rail's fixed 240px is most of the screen, and what it leaves
+   is narrower than the min-content of everything it flanks — so the shell
+   itself overflowed and took the page sideways with it. Below the same 800px
+   where .doc-layout already folds to one column, the rail becomes a normal
+   block above the content: full width, its own height, no longer pinned (a
+   sticky element that starts a stacked page would sit on top of it). Capped
+   so a long project list can't push the view off the first screen. */
+@media (max-width: 800px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  /* Selector carries the parent deliberately: the .proj-rail block below sets
+     `flex: 0 0 240px` and sits later in the file, so a bare .proj-rail here
+     would tie on specificity and lose on source order. Two classes settle it
+     wherever either rule moves to.
+
+     `flex: none` is the load-bearing part. Once the shell is a column, that
+     240px basis stops being a width and becomes a HEIGHT — the rail rendered
+     as a 240px-tall empty box above the content. */
+  .app-shell > .proj-rail {
+    flex: none;
+    width: auto;
+    position: static;
+    height: auto;
+    max-height: 45vh;
+    border-right: none;
+    border-bottom: 2px solid var(--border);
+  }
+}
+
 /* Content hugs the rail: next to a left column, `margin: 0 auto` centering
    would strand the page as an island past a void — left-align it instead.
    Rail-less routes keep the centered page.
@@ -685,6 +716,14 @@ a {
 }
 
 /* ---------- tables ---------- */
+
+/* A wide table has to scroll inside its own box, or it scrolls the page — and a
+   page that scrolls sideways takes the fixed header off the left edge with it.
+   This is the chrome-less half of .sessions-table-wrap below, for the tables
+   that already sit inside a .card and only need the containment. */
+.table-scroll {
+  overflow-x: auto;
+}
 
 .sessions-table-wrap {
   background: var(--card);
@@ -3968,9 +4007,21 @@ a.flow-node {
   gap: 6px;
 }
 
-/* One compact status row per repo — the whole row links into the detail view. */
+/* One compact status row per repo — the whole row links into the detail view.
+   A grid, not a flex row: as flex, every field started wherever the repo name
+   happened to end, so the branch chip began at x=370 on one row and x=479 on
+   the next and nothing scanned down a column. Fixed tracks (not minmax) are the
+   point — they have to agree between rows, so a long name ellipses inside its
+   track rather than pushing the rest of the row along. */
 .git-row {
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    14rem                /* name */
+    11rem                /* branch */
+    6rem                 /* clean / N dirty */
+    3.5rem               /* ahead / behind */
+    minmax(0, 1fr)       /* latest commit — takes the slack */
+    5.5rem;              /* when */
   align-items: baseline;
   gap: 10px;
   padding: 7px 14px;
@@ -3978,6 +4029,51 @@ a.flow-node {
   background: var(--card);
   color: inherit;
   text-decoration: none;
+}
+
+/* Each cell holds at most one chip and must not stretch it to the track. */
+.git-cell {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.git-cell--when {
+  justify-content: flex-end;
+}
+
+.git-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-cell .git-branch {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Below the shell's stacking breakpoint the six tracks don't fit. Fall back to
+   the old wrapping row: alignment across rows is worth nothing on a screen that
+   shows one row at a time anyway. */
+@media (max-width: 800px) {
+  .git-row {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  /* Its own line. Sharing one with the name and chips left it `flex: 1 1 0%`
+     against no remaining space — it collapsed to a 1px sliver that cut the
+     commit hash mid-character. Parent in the selector for the same reason as
+     the rail above: the `.git-row-commit { flex: 1 }` shorthand further down
+     the file would otherwise reset this basis back to 0%. */
+  .git-row > .git-row-commit {
+    flex-basis: 100%;
+  }
+
+  .git-cell--when {
+    margin-left: auto;
+  }
 }
 .git-row:hover {
   border-color: var(--border-hover);

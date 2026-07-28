@@ -439,21 +439,23 @@ function renderAgentsTable(session: SessionDetail): string {
     .join("");
 
   return `
-    <table class="sessions-table agents-table">
-      <thead>
-        <tr>
-          <th>type</th>
-          <th>model</th>
-          <th>description</th>
-          <th>tokens</th>
-          <th>duration</th>
-          <th>tools</th>
-          <th>files</th>
-          <th>lines</th>
-          <th>status</th>
-        </tr>
-      </thead>
-      <tbody>${mainRow}${rows}</tbody>
-    </table>
+    <div class="table-scroll">
+      <table class="sessions-table agents-table">
+        <thead>
+          <tr>
+            <th>type</th>
+            <th>model</th>
+            <th>description</th>
+            <th>tokens</th>
+            <th>duration</th>
+            <th>tools</th>
+            <th>files</th>
+            <th>lines</th>
+            <th>status</th>
+          </tr>
+        </thead>
+        <tbody>${mainRow}${rows}</tbody>
+      </table>
+    </div>
   `;
 }

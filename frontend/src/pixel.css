@@ -376,6 +376,10 @@
    the top bar's ink box, so the two levels read as levels. */
 .px-subnav {
   display: flex;
+  /* Same reason .px-nav wraps: seven tabs do not fit a phone. Wrapping to a
+     second row beats scrolling here — every tab stays visible, and there is no
+     hidden-affordance problem to solve. */
+  flex-wrap: wrap;
   gap: 4px;
   padding: 0 20px;
   border-bottom: var(--px-edge);
@@ -389,6 +393,9 @@
   color: var(--px-muted);
   text-decoration: none;
   cursor: pointer;
+  /* "code graph" must break between tabs, never inside one — a two-line tab
+     reads as two tabs. */
+  white-space: nowrap;
 }
 
 .px-subnav-link:hover {
