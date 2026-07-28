@@ -15,6 +15,7 @@
 import {
   createCycle,
   deleteCycle,
+  getBoardEvents,
   getBoardStates,
   getBurndown,
   getTodos,
@@ -22,7 +23,8 @@ import {
   patchCycle,
   subscribeRawEvents,
 } from "../api";
-import type { Burndown, CycleReport, Todo, TodoState } from "../api";
+import type { Burndown, CycleReport, Todo, TodoEvent, TodoState } from "../api";
+import { describeEventOrCreated } from "../boardEvents";
 import { escapeHtml, formatDay, formatRelativeTime } from "../format";
 import { getScope, getScopeSet } from "../scope";
 
@@ -83,6 +85,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
   let selectedId: string | null = null;
   let burndown: Burndown | null = null;
   let creating = false;
+  let events: TodoEvent[] = [];
   const scope = getScope();
   const scopeSet = getScopeSet();
 
@@ -185,6 +188,58 @@ export function renderCyclesView(container: HTMLElement): () => void {
       </div>`;
   }
 
+  /**
+   * What moved lately, board-wide. This is the other half of the event log's
+   * reason for existing: the burndown consumes it as numbers, this reads it as
+   * a sentence — "what happened this sprint" without opening seven cards.
+   *
+   * Scoped by the CARD's repo, not the event's, because an event stores only a
+   * card id; a card since deleted is skipped rather than rendered as an orphan.
+   */
+  function activityHtml(): string {
+    const names = {
+      state: (id: string): string => states.find((x) => x.id === id)?.name ?? id ?? "—",
+      cycle: (id: string): string =>
+        id ? (rows.find((r) => r.cycle.id === id)?.cycle.name ?? id) : "no cycle",
+      card: (id: string): string => {
+        const c = todos.find((x) => x.id === id);
+        return c ? `#${c.seq}` : "a card";
+      },
+    };
+    const byId = new Map(todos.map((t) => [t.id, t]));
+    const inScope = (t: Todo | undefined): boolean =>
+      !!t && (!scopeSet || (!!t.repo && scopeSet.has(t.repo)));
+
+    const items = events
+      .map((e) => {
+        const card = byId.get(e.todoId);
+        if (!inScope(card)) return null;
+        const body = describeEventOrCreated(e, names);
+        if (!body) return null;
+        return `
+          <div class="ev-row" title="${escapeHtml(e.ts)}">
+            <span class="ev-when">${escapeHtml(formatRelativeTime(e.ts))}</span>
+            <a class="ev-card" href="/project/board/${escapeHtml(e.todoId)}">#${card!.seq}</a>
+            <span class="ev-what">${body}</span>
+          </div>`;
+      })
+      .filter((x): x is string => x !== null)
+      .slice(0, 40);
+
+    if (!items.length) {
+      return `
+        <div class="card cy-activity">
+          <div class="web-subheading">recent activity</div>
+          <div class="empty-state">nothing has moved in this scope yet</div>
+        </div>`;
+    }
+    return `
+      <div class="card cy-activity">
+        <div class="web-subheading">recent activity</div>
+        ${items.join("")}
+      </div>`;
+  }
+
   function render(): void {
     const pool = unplanned();
     bodyEl.innerHTML = `
@@ -195,6 +250,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
           : `<div class="cy-list">${rows.map(rowHtml).join("")}</div>`
       }
       ${detailHtml()}
+      ${activityHtml()}
       <div class="cy-pool">${pool.length} open card${pool.length === 1 ? "" : "s"} in this scope are in no cycle${
         pool.length ? ` — set one from a card's panel on the board` : ""
       }</div>
@@ -296,14 +352,17 @@ export function renderCyclesView(container: HTMLElement): () => void {
 
   async function refresh(): Promise<void> {
     try {
-      const [v, t, s] = await Promise.all([
+      const [v, t, st, ev] = await Promise.all([
         getVelocity(scope || undefined),
         getTodos(),
         getBoardStates(scope || undefined),
+        // The feed is an extra: a failure here must not blank the cycle list.
+        getBoardEvents(200).catch((): TodoEvent[] => []),
       ]);
       rows = v;
       todos = t;
-      states = s;
+      states = st;
+      events = ev;
       // A cycle deleted elsewhere must not leave a dead selection behind.
       if (selectedId && !rows.some((r) => r.cycle.id === selectedId)) {
         selectedId = null;
