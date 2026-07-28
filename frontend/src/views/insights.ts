@@ -21,6 +21,7 @@ import type {
   ToolCount,
 } from "../api";
 import {
+  chipAttrs,
   escapeHtml,
   formatCost,
   formatDuration,
@@ -129,7 +130,7 @@ export function renderInsightsView(container: HTMLElement): () => void {
   function renderDaysChips(): void {
     daysEl.innerHTML = DAY_OPTS.map(
       (o) =>
-        `<button type="button" class="filter-chip${o.v === filters.days ? " filter-chip-on" : ""}" ` +
+        `<button type="button" ${chipAttrs(o.v === filters.days)} ` +
         `data-days="${o.v}">${escapeHtml(o.label)}</button>`,
     ).join("");
   }

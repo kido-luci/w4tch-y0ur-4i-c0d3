@@ -6,7 +6,7 @@
 
 import { getShips, subscribeRawEvents } from "../api";
 import type { ShipRecord } from "../api";
-import { escapeHtml, formatDuration, formatRelativeTime, truncate } from "../format";
+import { chipAttrs, escapeHtml, formatDuration, formatRelativeTime, truncate } from "../format";
 import { getScope, getScopeSet, labelForFolder } from "../scope";
 
 const DAY_OPTS: { v: number; label: string }[] = [
@@ -64,7 +64,7 @@ export function renderShipsView(container: HTMLElement): () => void {
   function renderDays(): void {
     daysEl.innerHTML = DAY_OPTS.map(
       (o) =>
-        `<button type="button" class="filter-chip${o.v === days ? " filter-chip-on" : ""}" ` +
+        `<button type="button" ${chipAttrs(o.v === days)} ` +
         `data-days="${o.v}">${escapeHtml(o.label)}</button>`,
     ).join("");
   }
@@ -76,7 +76,7 @@ export function renderShipsView(container: HTMLElement): () => void {
   // the needle you'd otherwise scroll for.
   function renderChips(): void {
     const chip = (attr: string, key: string, label: string, on: boolean): string =>
-      `<button type="button" class="filter-chip${on ? " filter-chip-on" : ""}" ${attr}="${key}">${label}</button>`;
+      `<button type="button" ${chipAttrs(on)} ${attr}="${key}">${label}</button>`;
     gatesEl.innerHTML =
       chip("data-gate", "green", "green", gatesOn.has("green")) +
       chip("data-gate", "failed", "failed", gatesOn.has("failed"));

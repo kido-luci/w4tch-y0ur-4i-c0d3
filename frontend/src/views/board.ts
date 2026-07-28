@@ -49,6 +49,7 @@ import { mountBoardTable } from "../boardTableIsland";
 import { describeEvent } from "../boardEvents";
 import { matchesQuery, renderTimeline } from "../boardQuery";
 import {
+  chipAttrs,
   escapeHtml,
   formatCost,
   formatDuration,
@@ -376,13 +377,9 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
   function toolbarHtml(): string {
     const hidden = hiddenCount();
     const chip = (k: ViewKind, label: string) =>
-      `<button type="button" class="filter-chip${
-        viewKind === k ? " filter-chip-on" : ""
-      }" data-view="${k}">${label}</button>`;
+      `<button type="button" ${chipAttrs(viewKind === k)} data-view="${k}">${label}</button>`;
     const kindChip = (k: TodoKind) =>
-      `<button type="button" class="filter-chip${
-        query.kinds?.includes(k) ? " filter-chip-on" : ""
-      }" data-kind="${k}">${KIND_ICON[k]} ${k}</button>`;
+      `<button type="button" ${chipAttrs(query.kinds?.includes(k))} data-kind="${k}">${KIND_ICON[k]} ${k}</button>`;
     const viewOpts = savedViews
       .map(
         (v) =>
@@ -409,9 +406,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
           <option value="">any cycle</option>
           ${cycleOpts}
         </select>
-        <button type="button" class="filter-chip${
-          query.unestimatedOnly ? " filter-chip-on" : ""
-        }" data-unestimated="1">unestimated</button>
+        <button type="button" ${chipAttrs(query.unestimatedOnly)} data-unestimated="1">unestimated</button>
         <span class="board-toolbar-spacer"></span>
         <select class="board-view-picker">
           <option value="">saved views…</option>

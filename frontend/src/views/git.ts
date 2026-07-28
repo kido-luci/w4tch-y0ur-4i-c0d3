@@ -7,7 +7,7 @@
 
 import { getGit } from "../api";
 import type { GitRepo } from "../api";
-import { escapeHtml, formatRelativeTime } from "../format";
+import { chipAttrs, escapeHtml, formatRelativeTime } from "../format";
 import { getScopeParam } from "../scope";
 
 /** Renders the git view into `container`; returns a cleanup callback. */
@@ -51,7 +51,7 @@ export function renderGitView(container: HTMLElement): () => void {
   function renderChips(): void {
     chipsEl.innerHTML = FILTERS.map(
       (f) =>
-        `<button type="button" class="filter-chip${on.has(f.key) ? " filter-chip-on" : ""}" data-f="${f.key}">${f.label}</button>`,
+        `<button type="button" ${chipAttrs(on.has(f.key))} data-f="${f.key}">${f.label}</button>`,
     ).join("");
   }
 

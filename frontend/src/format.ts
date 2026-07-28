@@ -99,6 +99,22 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** `class` + `aria-pressed` for a toggle chip, from one boolean so the look and
+    the announced state cannot drift apart. Every filter row in the app is built
+    from innerHTML strings, so there is no shared element to hang this on — the
+    chips were styled as selected while reading to a screen reader exactly like
+    the unselected ones beside them.
+
+    Chips that only act (code graph's "◂ overview") are NOT toggles and keep a
+    plain class: aria-pressed would claim a state they don't have.
+
+    Takes `boolean | undefined` because an absent filter is an off filter:
+    `query.kinds?.includes(k)` is undefined when no kinds are set, and that is
+    the same chip state as false, not a mistake to guard at every call site. */
+export function chipAttrs(on: boolean | undefined): string {
+  return `class="filter-chip${on ? " filter-chip-on" : ""}" aria-pressed="${on ? "true" : "false"}"`;
+}
+
 const MODEL_COLORS: Record<string, string> = {
   opus: "#7c5cff",
   sonnet: "#2dd4bf",

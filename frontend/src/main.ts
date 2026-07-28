@@ -219,12 +219,22 @@ function render(): void {
   // tabs and lights the active one.
   const family =
     active === "list" || active === "insights" || active === "search" ? "claude" : "project";
+  // aria-current alongside the class: the underline says "you are here" to
+  // anyone who can see it, and said nothing to anyone who can't. "page" is the
+  // right token for both rows — each is a link to a location, and the active
+  // one IS the current page.
   for (const link of famLinks) {
-    link.classList.toggle("px-nav-link--active", link.dataset.fam === family);
+    const on = link.dataset.fam === family;
+    link.classList.toggle("px-nav-link--active", on);
+    if (on) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
   }
   for (const link of navLinks) {
     link.hidden = link.dataset.fam !== family;
-    link.classList.toggle("px-subnav-link--active", link.dataset.nav === active);
+    const on = link.dataset.nav === active;
+    link.classList.toggle("px-subnav-link--active", on);
+    if (on) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
   }
 
   // The project rail (scope switcher + wiki index, one constant block —

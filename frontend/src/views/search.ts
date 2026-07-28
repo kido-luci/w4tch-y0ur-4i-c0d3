@@ -8,7 +8,7 @@
 
 import { search } from "../api";
 import type { SearchHit, SearchResult } from "../api";
-import { escapeHtml, formatRelativeTime, truncate } from "../format";
+import { chipAttrs, escapeHtml, formatRelativeTime, truncate } from "../format";
 import { getScopeParam, labelForFolder } from "../scope";
 
 const DAY_OPTS: { v: number; label: string }[] = [
@@ -54,7 +54,7 @@ export function renderSearchView(container: HTMLElement): () => void {
   function renderDays(): void {
     daysEl.innerHTML = DAY_OPTS.map(
       (o) =>
-        `<button type="button" class="filter-chip${o.v === days ? " filter-chip-on" : ""}" ` +
+        `<button type="button" ${chipAttrs(o.v === days)} ` +
         `data-days="${o.v}">${escapeHtml(o.label)}</button>`,
     ).join("");
   }

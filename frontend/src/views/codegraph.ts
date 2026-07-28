@@ -28,7 +28,7 @@ import {
 import type { CGResponse, CGSymbol } from "../api";
 import { mountCodegraphGraph } from "./codegraphGraph";
 import type { GraphHandle, GVEdge, GVNode } from "./codegraphGraph";
-import { escapeHtml, formatRelativeTime, formatTokens } from "../format";
+import { chipAttrs, escapeHtml, formatRelativeTime, formatTokens } from "../format";
 import { getScope, getScopeParam } from "../scope";
 
 // Which subsystems (components) are shown, persisted per scope. Default is
@@ -322,14 +322,14 @@ export function renderCodegraphView(container: HTMLElement): () => void {
     const chips = ["calls", "imports", "references"]
       .map(
         (k) =>
-          `<button type="button" class="filter-chip${kindOn[k] ? " filter-chip-on" : ""}" data-kind="${k}">${k}</button>`,
+          `<button type="button" ${chipAttrs(kindOn[k])} data-kind="${k}">${k}</button>`,
       )
       .join("");
     kindsEl.innerHTML =
       chips +
-      `<button type="button" class="filter-chip${showTests ? " filter-chip-on" : ""}" data-kind="tests">tests</button>` +
+      `<button type="button" ${chipAttrs(showTests)} data-kind="tests">tests</button>` +
       (denseRelevant
-        ? `<button type="button" class="filter-chip${showWeak ? " filter-chip-on" : ""}" data-kind="weak">weak edges</button>`
+        ? `<button type="button" ${chipAttrs(showWeak)} data-kind="weak">weak edges</button>`
         : "");
   }
 
@@ -346,7 +346,7 @@ export function renderCodegraphView(container: HTMLElement): () => void {
   function renderLayoutChips(): void {
     layoutsEl.innerHTML = LAYOUTS.map(
       (l) =>
-        `<button type="button" class="filter-chip${l.key === layoutName ? " filter-chip-on" : ""}" data-lay="${l.key}">${l.label}</button>`,
+        `<button type="button" ${chipAttrs(l.key === layoutName)} data-lay="${l.key}">${l.label}</button>`,
     ).join("");
   }
   renderLayoutChips();
@@ -371,10 +371,18 @@ export function renderCodegraphView(container: HTMLElement): () => void {
       subsysEl.innerHTML = "";
       return;
     }
-    const chip = (s: string): string =>
-      `<button type="button" class="filter-chip cg-sub-chip${subsysOn.has(s) ? " filter-chip-on" : ""}" data-sub="${escapeHtml(s)}">` +
-      `<span class="cg-sub-dot" style="background:${palette.get(s)}"></span>${escapeHtml(s)}` +
-      `<span class="cg-sub-n">${counts.get(s) ?? 0}</span></button>`;
+    // Not chipAttrs(): this chip carries a second class the helper doesn't know
+    // about. Same contract though — one boolean drives both the class and the
+    // announced state.
+    const chip = (s: string): string => {
+      const on = subsysOn.has(s);
+      return (
+        `<button type="button" class="filter-chip cg-sub-chip${on ? " filter-chip-on" : ""}" ` +
+        `aria-pressed="${on ? "true" : "false"}" data-sub="${escapeHtml(s)}">` +
+        `<span class="cg-sub-dot" style="background:${palette.get(s)}"></span>${escapeHtml(s)}` +
+        `<span class="cg-sub-n">${counts.get(s) ?? 0}</span></button>`
+      );
+    };
     // Primary layers first, then the auxiliary ones behind an "aux" divider.
     const primary = subs.filter((s) => !isAux(s));
     const aux = subs.filter((s) => isAux(s));

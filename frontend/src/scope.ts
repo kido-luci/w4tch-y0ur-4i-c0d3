@@ -360,7 +360,13 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       depth: number,
       opts: { logo?: string; nodeId?: string; expandable?: boolean; folded?: boolean } = {},
     ): string => {
-      const active = scope === current ? " rail-item--active" : "";
+      const isActive = scope === current;
+      const active = isActive ? " rail-item--active" : "";
+      // The rail is a list of locations and one of them is where you are, so
+      // aria-current carries it. These are <button>s, not links, hence "true"
+      // rather than "page" — the token has to describe the control, and only a
+      // link can claim to be the current page.
+      const cur = isActive ? ` aria-current="true"` : "";
       const pad = 8 + depth * 14;
       const lead =
         opts.expandable && opts.nodeId
@@ -368,7 +374,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
               opts.folded ? "▸" : "▾"
             }</span>`
           : `<span class="rail-tree-spacer"></span>`;
-      return `<button type="button" class="rail-item${active}" data-scope="${escapeHtml(
+      return `<button type="button" class="rail-item${active}"${cur} data-scope="${escapeHtml(
         scope,
       )}" style="padding-left:${pad}px">${lead}${opts.logo ?? ""}${escapeHtml(label)}</button>`;
     };

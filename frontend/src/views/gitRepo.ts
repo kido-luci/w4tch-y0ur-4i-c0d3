@@ -15,7 +15,7 @@ import {
   getGitPRs,
 } from "../api";
 import type { GitBranch, GitCommit, GitCommitDetail, GitFileChange, GitPR, GitRepo } from "../api";
-import { escapeHtml, formatRelativeTime } from "../format";
+import { chipAttrs, escapeHtml, formatRelativeTime } from "../format";
 import { getScopeParam } from "../scope";
 
 type TabKey = "commits" | "changes" | "branches" | "prs" | "activity";
@@ -116,7 +116,7 @@ export function renderGitRepoView(container: HTMLElement, folder: string): () =>
     return `<div class="filter-row git-filters">${items
       .map(
         (i) =>
-          `<button type="button" class="filter-chip${i.on ? " filter-chip-on" : ""}" ${attr}="${i.key}">${i.label}</button>`,
+          `<button type="button" ${chipAttrs(i.on)} ${attr}="${i.key}">${i.label}</button>`,
       )
       .join("")}</div>`;
   }
