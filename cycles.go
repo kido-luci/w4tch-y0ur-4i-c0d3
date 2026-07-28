@@ -28,16 +28,20 @@ import (
 	"time"
 )
 
-// Cycle is one planning window. ClosedAt zero means still open — an end date
+// Cycle is one planning window. A nil ClosedAt means still open — an end date
 // that has passed does not close a cycle, the user does.
+//
+// ClosedAt is a POINTER because `omitempty` does nothing for a time.Time: a
+// zero one marshals as "0001-01-01T00:00:00Z", which is a truthy string to
+// every client, so an open cycle rendered as closed. A pointer omits.
 type Cycle struct {
-	ID       string    `json:"id"`
-	Name     string    `json:"name"`
-	Repo     string    `json:"repo,omitempty"`
-	Goal     string    `json:"goal,omitempty"`
-	StartsAt time.Time `json:"startsAt"`
-	EndsAt   time.Time `json:"endsAt"`
-	ClosedAt time.Time `json:"closedAt,omitempty"`
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Repo     string     `json:"repo,omitempty"`
+	Goal     string     `json:"goal,omitempty"`
+	StartsAt time.Time  `json:"startsAt"`
+	EndsAt   time.Time  `json:"endsAt"`
+	ClosedAt *time.Time `json:"closedAt,omitempty"`
 }
 
 var errCycleNotFound = errors.New("cycle not found")
@@ -73,7 +77,8 @@ func (cs *CycleStore) loadDB() {
 		}
 		c.StartsAt, c.EndsAt = nanoToTime(starts), nanoToTime(ends)
 		if closed != 0 {
-			c.ClosedAt = nanoToTime(closed)
+			at := nanoToTime(closed)
+			c.ClosedAt = &at
 		}
 		cs.cycles = append(cs.cycles, c)
 	}
@@ -82,8 +87,8 @@ func (cs *CycleStore) loadDB() {
 // persist writes one cycle through. Callers hold cs.mu.
 func (cs *CycleStore) persist(c *Cycle) error {
 	closed := int64(0)
-	if !c.ClosedAt.IsZero() {
-		closed = timeToNano(c.ClosedAt)
+	if c.ClosedAt != nil {
+		closed = timeToNano(*c.ClosedAt)
 	}
 	res, err := cs.db.Exec(
 		`UPDATE cycles SET name=?,repo=?,goal=?,starts_at=?,ends_at=?,closed_at=? WHERE id=?`,
@@ -221,10 +226,11 @@ func (cs *CycleStore) Update(id string, p cyclePatch) (Cycle, error) {
 			return Cycle{}, fmt.Errorf("endsAt must be after startsAt")
 		}
 		if p.Closed != nil {
-			if *p.Closed && next.ClosedAt.IsZero() {
-				next.ClosedAt = time.Now()
+			if *p.Closed && next.ClosedAt == nil {
+				at := time.Now()
+				next.ClosedAt = &at
 			} else if !*p.Closed {
-				next.ClosedAt = time.Time{}
+				next.ClosedAt = nil
 			}
 		}
 		if err := cs.persist(&next); err != nil {
@@ -361,13 +367,23 @@ func ComputeBurndown(c Cycle, todos *TodoStore, events *EventStore, now time.Tim
 		return out, err
 	}
 
+	// Every day boundary is computed in NOW's zone. A cycle's bounds arrive as
+	// UTC over JSON, and mixing the two shifted the last day off the end of the
+	// chart — the run that caught it produced a three-day window for a
+	// four-day-old cycle.
+	loc := now.Location()
+	first := startOfDay(c.StartsAt.In(loc))
 	last := startOfDay(now)
-	if end := startOfDay(c.EndsAt); last.After(end) {
+	if end := startOfDay(c.EndsAt.In(loc)); last.After(end) {
 		last = end
 	}
 	var cutoffs []time.Time
-	for d := startOfDay(c.StartsAt); !d.After(last); d = d.AddDate(0, 0, 1) {
-		cutoffs = append(cutoffs, d.AddDate(0, 0, 1)) // measured at end of day
+	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
+		cut := d.AddDate(0, 0, 1) // a day is measured at its end…
+		if cut.After(now) {
+			cut = now // …except today, which is measured now.
+		}
+		cutoffs = append(cutoffs, cut)
 	}
 	if len(cutoffs) == 0 {
 		return out, nil // the cycle has not started yet
@@ -391,21 +407,31 @@ func ComputeBurndown(c Cycle, todos *TodoStore, events *EventStore, now time.Tim
 			}
 		}
 		points[k] = BurndownPoint{
-			Date:      cutoffs[k].AddDate(0, 0, -1).Format("2006-01-02"),
+			Date:      first.AddDate(0, 0, k).Format("2006-01-02"),
 			Total:     total,
 			Done:      done,
 			Remaining: total - done,
 		}
 	}
-	// The ideal line is anchored to the committed total on day one and to the
-	// cycle's real length, so it keeps sloping to zero on the end date even
-	// when today is only halfway through.
-	span := int(startOfDay(c.EndsAt).Sub(startOfDay(c.StartsAt)).Hours() / 24)
+	// The ideal line slopes to zero on the END date — not on today — so a cycle
+	// halfway through still shows where it should be.
+	//
+	// It is anchored to the LARGEST total the cycle ever carried, not to day
+	// one's. Anchoring to day one drew a flat zero for every cycle opened
+	// before its cards were filed, which is the normal order of events and was
+	// exactly what the first verification run produced.
+	span := int(startOfDay(c.EndsAt.In(loc)).Sub(first).Hours() / 24)
 	if span < 1 {
 		span = 1
 	}
+	peak := 0.0
+	for _, p := range points {
+		if p.Total > peak {
+			peak = p.Total
+		}
+	}
 	for k := range points {
-		points[k].Ideal = points[0].Total * float64(span-k) / float64(span)
+		points[k].Ideal = peak * float64(span-k) / float64(span)
 		if points[k].Ideal < 0 {
 			points[k].Ideal = 0
 		}

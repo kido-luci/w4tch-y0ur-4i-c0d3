@@ -431,6 +431,14 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	// the cards — rather than inside the state store.
 	mux.HandleFunc("DELETE /api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
+		// Builtin first: "this column can never be deleted" is the real reason,
+		// and reporting "move the cards out" instead sends the user off to do
+		// work that changes nothing.
+		if builtinStates[id] {
+			writeJSONError(w, http.StatusBadRequest,
+				fmt.Sprintf("%q is a builtin column and cannot be deleted", id))
+			return
+		}
 		n := 0
 		for _, t := range todos.List() {
 			if t.Status == id {

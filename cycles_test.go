@@ -153,7 +153,7 @@ func TestCycleCreateValidatesWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Goal != "ship checkout" || !c.ClosedAt.IsZero() {
+	if c.Goal != "ship checkout" || c.ClosedAt != nil {
 		t.Fatalf("unexpected cycle: %#v", c)
 	}
 }
@@ -167,11 +167,11 @@ func TestCycleCloseAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ClosedAt.IsZero() {
+	if got.ClosedAt == nil {
 		t.Fatal("closing must stamp closedAt")
 	}
 	closed = false
-	if got, err = cs.Update(c.ID, cyclePatch{Closed: &closed}); err != nil || !got.ClosedAt.IsZero() {
+	if got, err = cs.Update(c.ID, cyclePatch{Closed: &closed}); err != nil || got.ClosedAt != nil {
 		t.Fatalf("reopening must clear closedAt: %#v (%v)", got, err)
 	}
 }
