@@ -8,10 +8,17 @@
 // mutations broadcast `todos-updated` over SSE.
 
 import {
+  createBoardState,
+  createBoardView,
   createDoc,
   createDrawing,
   createTodo,
+  deleteBoardState,
+  deleteBoardView,
   deleteTodo,
+  getBoardStates,
+  getBoardViews,
+  getCycles,
   getDocs,
   getDrawings,
   getProjects,
@@ -19,10 +26,25 @@ import {
   getSessions,
   getShips,
   getTodos,
+  patchBoardState,
   patchTodo,
   subscribeRawEvents,
 } from "../api";
-import type { Doc, Drawing, Session, Todo, TodoStatus } from "../api";
+import type {
+  BoardQuery,
+  BoardView,
+  Cycle,
+  Doc,
+  Drawing,
+  Session,
+  Todo,
+  TodoKind,
+  TodoState,
+  TodoStatus,
+  ViewKind,
+} from "../api";
+import { mountBoardTable } from "../boardTableIsland";
+import { matchesQuery, renderTimeline } from "../boardQuery";
 import {
   escapeHtml,
   formatCost,
@@ -34,11 +56,29 @@ import {
 import { renderInlineMarkdown, renderMarkdown } from "../markdown";
 import { getScope, getScopeSet, labelForFolder, navigate } from "../scope";
 
-const COLUMNS: { status: TodoStatus; label: string }[] = [
-  { status: "backlog", label: "backlog" },
-  { status: "doing", label: "doing" },
-  { status: "done", label: "done" },
+// The columns are data now (data.db v12), not a const: the board renders
+// whatever todo_states holds for this scope. FALLBACK_COLUMNS only covers the
+// gap before the first fetch lands — the three ids it names are seeded by the
+// migration, so it is never wrong, only incomplete.
+const FALLBACK_COLUMNS: TodoState[] = [
+  { id: "backlog", name: "backlog", category: "todo", order: 0, builtin: true },
+  { id: "doing", name: "doing", category: "started", order: 1, builtin: true },
+  { id: "done", name: "done", category: "done", order: 2, builtin: true },
 ];
+
+const KIND_ICON: Record<string, string> = {
+  epic: "◈",
+  story: "▢",
+  task: "▪",
+  bug: "▲",
+};
+
+const PRIORITY_LABEL = ["none", "low", "medium", "high", "urgent"];
+
+/** Points render trimmed: 3 not 3.0, 2.5 stays 2.5. */
+function formatPoints(v: number): string {
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
 
 /** Deterministic palette slot for a label name. */
 function labelClass(name: string): string {
@@ -70,6 +110,19 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
   let noteEditingFor: string | null = null; // todo id whose note is in edit mode
   let composerStatus: TodoStatus | null = null; // column whose composer is open
   let dragging = false;
+  // The workflow's columns for this scope, and the cycles cards can be planned
+  // into. Both are refetched on their SSE events.
+  let states: TodoState[] = FALLBACK_COLUMNS;
+  let cycles: Cycle[] = [];
+  let savedViews: BoardView[] = [];
+  // Which shape the board is drawing, and the filter riding every shape. The
+  // filter is deliberately NOT persisted per-scope in localStorage: an unseen
+  // filter that survives a reload reads as "my cards are gone". Saving one is
+  // an explicit act — that is what savedViews are for.
+  let viewKind: ViewKind = "board";
+  let query: BoardQuery = {};
+  let activeViewId: string | null = null;
+  let unmountTable: (() => void) | null = null;
   // The rail's global project scope; a change re-renders the whole view, so
   // reading it once per mount is enough. The label feeds new cards, the set
   // filters (a group scope covers its name plus its member projects).
@@ -87,6 +140,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
 
   container.innerHTML = `
     <div class="page">
+      <div class="board-toolbar" id="board-toolbar"></div>
       <div class="board-layout">
         <section class="board" id="board">
           <div class="empty-state">loading…</div>
@@ -99,6 +153,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
 
   const boardEl = container.querySelector<HTMLElement>("#board")!;
   const panelEl = container.querySelector<HTMLElement>("#panel")!;
+  const toolbarEl = container.querySelector<HTMLElement>("#board-toolbar")!;
   const datalistEl = container.querySelector<HTMLDataListElement>("#board-projects")!;
 
   getProjects()
@@ -117,8 +172,33 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     return !scopeSet || (!!t.repo && scopeSet.has(t.repo));
   }
 
+  /** Everything the current scope AND filter let through. */
+  function visible(): Todo[] {
+    return todos.filter((t) => inScope(t) && matchesQuery(t, query));
+  }
+
+  /** How many cards the filter is hiding — a short board must never read as
+   *  an empty one. */
+  function hiddenCount(): number {
+    const inScopeCount = todos.filter(inScope).length;
+    return inScopeCount - visible().length;
+  }
+
   function byColumn(status: TodoStatus): Todo[] {
-    return todos.filter((t) => t.status === status && inScope(t));
+    return visible().filter((t) => t.status === status);
+  }
+
+  function stateById(id: string): TodoState | undefined {
+    return states.find((s) => s.id === id);
+  }
+
+  function cycleById(id?: string): Cycle | undefined {
+    return id ? cycles.find((c) => c.id === id) : undefined;
+  }
+
+  /** Cards this one nests (already scope+filter-checked). */
+  function childrenOf(id: string): Todo[] {
+    return visible().filter((t) => t.parentId === id);
   }
 
   function selected(): Todo | undefined {
@@ -205,14 +285,45 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       ? `<span class="todo-doc-ind" title="${nDoc} linked doc${nDoc > 1 ? "s" : ""}">¶ ${nDoc}</span>`
       : "";
     const sel = t.id === selectedId ? " selected" : "";
+    const kind = t.kind ?? "task";
+    const kindInd = `<span class="todo-kind todo-kind-${kind}" title="${kind}">${KIND_ICON[kind] ?? "▪"}</span>`;
+    const prio = t.priority
+      ? `<span class="todo-prio todo-prio-${t.priority}" title="priority: ${PRIORITY_LABEL[t.priority]}"></span>`
+      : "";
+    const est = t.estimate
+      ? `<span class="todo-est" title="${formatPoints(t.estimate)} story points">${formatPoints(t.estimate)}</span>`
+      : "";
+    const cyc = cycleById(t.cycleId);
+    const cycInd = cyc ? `<span class="todo-cycle" title="cycle">${escapeHtml(cyc.name)}</span>` : "";
+    // A parent shows how far its children have got; a child shows whose it is.
+    const roll = t.rollup
+      ? `<div class="todo-rollup" title="${t.rollup.done}/${t.rollup.children} children done">
+           <span class="todo-rollup-bar"><i style="width:${
+             t.rollup.children ? Math.round((t.rollup.done / t.rollup.children) * 100) : 0
+           }%"></i></span>
+           <span class="todo-rollup-text">${t.rollup.done}/${t.rollup.children}${
+             t.rollup.estimate
+               ? ` · ${formatPoints(t.rollup.estimateDone)}/${formatPoints(t.rollup.estimate)} pts`
+               : ""
+           }</span>
+         </div>`
+      : "";
+    const parent = t.parentId ? todos.find((x) => x.id === t.parentId) : undefined;
+    const parentInd = parent
+      ? `<span class="todo-parent" title="child of #${parent.seq}">↳ #${parent.seq}</span>`
+      : "";
     return `
-      <div class="todo-card${sel}" draggable="true" data-id="${escapeHtml(t.id)}">
+      <div class="todo-card${sel}${t.parentId ? " todo-child" : ""}" draggable="true" data-id="${escapeHtml(t.id)}">
         ${labels}
-        <div class="todo-title md-inline">${renderInlineMarkdown(t.title)}</div>
+        <div class="todo-title md-inline">${kindInd}${prio}${renderInlineMarkdown(t.title)}</div>
+        ${roll}
         ${sessLinksHtml(t)}
         ${sessMetricsHtml(t)}
         <div class="todo-meta">
           <span class="todo-seq">#${t.seq}</span>
+          ${parentInd}
+          ${est}
+          ${cycInd}
           ${repo}
           ${noteInd}
           ${drawInd}
@@ -252,21 +363,145 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     )} tok · ${escapeHtml(formatCost(cost))}</span>`;
   }
 
-  function render(): void {
-    boardEl.innerHTML = COLUMNS.map(({ status, label }) => {
-      const cards = byColumn(status);
-      const sum = status === "done" ? doneSumHtml(cards) : "";
-      return `
+  /** The filter + view switcher that rides every shape of the board. */
+  function toolbarHtml(): string {
+    const hidden = hiddenCount();
+    const chip = (k: ViewKind, label: string) =>
+      `<button type="button" class="filter-chip${
+        viewKind === k ? " filter-chip-on" : ""
+      }" data-view="${k}">${label}</button>`;
+    const kindChip = (k: TodoKind) =>
+      `<button type="button" class="filter-chip${
+        query.kinds?.includes(k) ? " filter-chip-on" : ""
+      }" data-kind="${k}">${KIND_ICON[k]} ${k}</button>`;
+    const viewOpts = savedViews
+      .map(
+        (v) =>
+          `<option value="${escapeHtml(v.id)}"${v.id === activeViewId ? " selected" : ""}>${escapeHtml(
+            v.name,
+          )}</option>`,
+      )
+      .join("");
+    const cycleOpts = cycles
+      .map(
+        (c) =>
+          `<option value="${escapeHtml(c.id)}"${c.id === query.cycleId ? " selected" : ""}>${escapeHtml(
+            c.name,
+          )}</option>`,
+      )
+      .join("");
+    return `
+      <div class="board-toolbar-row">
+        <span class="filter-group">${chip("board", "board")}${chip("table", "table")}${chip("timeline", "timeline")}</span>
+        <input class="board-search" type="search" placeholder="search titles…"
+          value="${escapeHtml(query.text ?? "")}" autocomplete="off">
+        <span class="filter-group">${(["epic", "story", "task", "bug"] as TodoKind[]).map(kindChip).join("")}</span>
+        <select class="board-cycle-filter">
+          <option value="">any cycle</option>
+          ${cycleOpts}
+        </select>
+        <button type="button" class="filter-chip${
+          query.unestimatedOnly ? " filter-chip-on" : ""
+        }" data-unestimated="1">unestimated</button>
+        <span class="board-toolbar-spacer"></span>
+        <select class="board-view-picker">
+          <option value="">saved views…</option>
+          ${viewOpts}
+        </select>
+        <button type="button" class="todo-btn board-view-save" title="save the current filter as a view">save view</button>
+        ${
+          activeViewId
+            ? `<button type="button" class="todo-btn todo-btn-danger board-view-delete" title="delete this saved view">✕</button>`
+            : ""
+        }
+      </div>
+      ${
+        hidden > 0
+          ? `<div class="board-filter-note">${hidden} card${hidden > 1 ? "s" : ""} hidden by the filter
+               <button type="button" class="todo-btn board-filter-clear">clear</button></div>`
+          : ""
+      }`;
+  }
+
+  /** One column head, with its WIP state and the rename/delete affordances. */
+  function colHeadHtml(s: TodoState, cards: Todo[]): string {
+    const over = s.wipLimit ? cards.length > s.wipLimit : false;
+    const wip = s.wipLimit
+      ? `<span class="board-wip${over ? " over" : ""}" title="WIP limit">/${s.wipLimit}</span>`
+      : "";
+    const sum = s.category === "done" ? doneSumHtml(cards) : "";
+    return `
+      <div class="board-col-head" data-status="${escapeHtml(s.id)}">
+        <span class="board-col-name" title="${escapeHtml(s.category)} column — double-click to rename">${escapeHtml(
+          s.name,
+        )}</span>
+        <span class="board-count">${cards.length}</span>${wip}
+        ${sum}
+        ${
+          s.builtin
+            ? ""
+            : `<button type="button" class="todo-btn todo-btn-danger board-col-delete" title="delete column">✕</button>`
+        }
+      </div>`;
+  }
+
+  function renderBoardShape(): void {
+    boardEl.innerHTML =
+      states
+        .map((s) => {
+          const cards = byColumn(s.id);
+          return `
         <div class="board-col">
-          <div class="board-col-head">${label}
-            <span class="board-count">${cards.length}</span>
-            ${sum}
-          </div>
-          <div class="board-cards" data-status="${status}">${cards.map(cardHtml).join("")}</div>
-          ${composerHtml(status)}
+          ${colHeadHtml(s, cards)}
+          <div class="board-cards" data-status="${escapeHtml(s.id)}">${cards.map(cardHtml).join("")}</div>
+          ${composerHtml(s.id)}
         </div>`;
-    }).join("");
+        })
+        .join("") +
+      `<div class="board-col board-col-add">
+         <button type="button" class="board-add-col" title="add a workflow column">+ column</button>
+       </div>`;
     wireBoard();
+  }
+
+  function render(): void {
+    toolbarEl.innerHTML = toolbarHtml();
+    wireToolbar();
+    renderBody();
+  }
+
+  // Only the board underneath the toolbar. Typing in the search box re-renders
+  // THIS, never the toolbar — rebuilding the chrome per keystroke takes the
+  // focus out of the input mid-word, the same trap the git tab's commit filter
+  // documents.
+  function renderBody(): void {
+    // The React island owns its subtree; tear it down before innerHTML would
+    // yank the DOM out from under it.
+    if (unmountTable) {
+      unmountTable();
+      unmountTable = null;
+    }
+    boardEl.classList.toggle("board-wide", viewKind !== "board");
+    if (viewKind === "board") {
+      renderBoardShape();
+    } else if (viewKind === "table") {
+      boardEl.innerHTML = `<div class="board-island" id="board-island"></div>`;
+      unmountTable = mountBoardTable(boardEl.querySelector<HTMLElement>("#board-island")!, {
+        todos: visible(),
+        states,
+        cycles,
+        selectedId,
+        onSelect: (id) => {
+          if (selectedId !== id) noteEditingFor = null;
+          selectedId = id;
+          render();
+        },
+        onPatch: (id, patch) => saveField(id, patch),
+      });
+    } else {
+      boardEl.innerHTML = renderTimeline(visible(), cycles, states);
+      wireTimeline();
+    }
     renderPanel();
   }
 
@@ -568,6 +803,93 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     return `<div class="panel-note-md panel-note-empty">details…</div>`;
   }
 
+  /** Kind, priority, points and cycle — the four fields that turn a card into
+   *  something a plan can be built out of. */
+  function panelPlanningHtml(t: Todo): string {
+    const kinds: TodoKind[] = ["epic", "story", "task", "bug"];
+    return `
+      <div class="panel-field panel-grid">
+        <div>
+          <div class="panel-label">kind</div>
+          <select class="panel-kind">
+            ${kinds
+              .map(
+                (k) =>
+                  `<option value="${k}"${(t.kind ?? "task") === k ? " selected" : ""}>${KIND_ICON[k]} ${k}</option>`,
+              )
+              .join("")}
+          </select>
+        </div>
+        <div>
+          <div class="panel-label">priority</div>
+          <select class="panel-priority">
+            ${PRIORITY_LABEL.map(
+              (label, i) =>
+                `<option value="${i}"${(t.priority ?? 0) === i ? " selected" : ""}>${label}</option>`,
+            ).join("")}
+          </select>
+        </div>
+        <div>
+          <div class="panel-label">points</div>
+          <input class="panel-estimate" type="number" min="0" step="0.5" placeholder="—"
+            value="${t.estimate ? formatPoints(t.estimate) : ""}">
+        </div>
+        <div>
+          <div class="panel-label">cycle</div>
+          <select class="panel-cycle">
+            <option value="">— none —</option>
+            ${cycles
+              .map(
+                (c) =>
+                  `<option value="${escapeHtml(c.id)}"${c.id === t.cycleId ? " selected" : ""}>${escapeHtml(
+                    c.name,
+                  )}</option>`,
+              )
+              .join("")}
+          </select>
+        </div>
+      </div>`;
+  }
+
+  /** Parent picker + the children this card owns. Only top-level cards can be
+   *  parents, so the picker offers exactly those (minus this card itself). */
+  function panelParentHtml(t: Todo): string {
+    const kids = childrenOf(t.id);
+    const canNest = kids.length === 0;
+    const options = todos
+      .filter((x) => x.id !== t.id && !x.parentId && inScope(x))
+      .map(
+        (x) =>
+          `<option value="${escapeHtml(x.id)}"${x.id === t.parentId ? " selected" : ""}>#${x.seq} ${escapeHtml(
+            truncate(x.title, 40),
+          )}</option>`,
+      )
+      .join("");
+    const kidRows = kids
+      .map(
+        (k) =>
+          `<button type="button" class="panel-child" data-id="${escapeHtml(k.id)}">
+             <span class="todo-kind">${KIND_ICON[k.kind ?? "task"]}</span>
+             <span class="cand-title">#${k.seq} ${escapeHtml(truncate(k.title, 34))}</span>
+             <span class="cand-meta">${escapeHtml(stateById(k.status)?.name ?? k.status)}</span>
+           </button>`,
+      )
+      .join("");
+    return `
+      <div class="panel-field">
+        <div class="panel-label">parent</div>
+        ${
+          canNest
+            ? `<select class="panel-parent">
+                 <option value="">— top level —</option>
+                 ${options}
+               </select>`
+            : `<div class="panel-hint">this card has children, so it stays top level</div>`
+        }
+        ${kids.length ? `<div class="panel-children">${kidRows}</div>` : ""}
+      </div>`;
+  }
+
   function renderPanel(): void {
     const t = selected();
     if (!t) {
@@ -581,10 +903,14 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       <div class="panel-head">
         <span class="todo-seq">#${t.seq}</span>
         <select class="panel-status">
-          ${COLUMNS.map(
-            ({ status, label }) =>
-              `<option value="${status}"${status === t.status ? " selected" : ""}>${label}</option>`,
-          ).join("")}
+          ${states
+            .map(
+              (s) =>
+                `<option value="${escapeHtml(s.id)}"${s.id === t.status ? " selected" : ""}>${escapeHtml(
+                  s.name,
+                )}</option>`,
+            )
+            .join("")}
         </select>
         <button type="button" class="todo-btn panel-close" title="close">✕</button>
       </div>
@@ -601,6 +927,8 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         <input class="panel-repo" list="board-projects" value="${escapeHtml(t.repo ?? "")}"
           placeholder="project name" autocomplete="off">
       </div>
+      ${panelPlanningHtml(t)}
+      ${panelParentHtml(t)}
       ${panelSessHtml(t)}
       ${panelDrawingsHtml(t)}
       ${panelDocsHtml(t)}
@@ -669,6 +997,38 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
 
     const repo = q<HTMLInputElement>(".panel-repo");
     repo.addEventListener("change", () => saveField(t.id, { repo: repo.value }));
+
+    q<HTMLSelectElement>(".panel-kind").addEventListener("change", (e) => {
+      saveField(t.id, { kind: (e.target as HTMLSelectElement).value as TodoKind });
+    });
+    q<HTMLSelectElement>(".panel-priority").addEventListener("change", (e) => {
+      saveField(t.id, { priority: Number((e.target as HTMLSelectElement).value) });
+    });
+    q<HTMLSelectElement>(".panel-cycle").addEventListener("change", (e) => {
+      saveField(t.id, { cycleId: (e.target as HTMLSelectElement).value });
+    });
+    const est = q<HTMLInputElement>(".panel-estimate");
+    est.addEventListener("change", () => {
+      const v = est.value.trim() === "" ? 0 : Number(est.value);
+      if (Number.isNaN(v) || v < 0) {
+        est.value = t.estimate ? formatPoints(t.estimate) : "";
+        return;
+      }
+      saveField(t.id, { estimate: v });
+    });
+    // Re-parenting is refused server-side for a nesting the board cannot draw
+    // (three levels, a cycle); saveField surfaces that error rather than
+    // silently reverting the select.
+    panelEl.querySelector<HTMLSelectElement>(".panel-parent")?.addEventListener("change", (e) => {
+      saveField(t.id, { parentId: (e.target as HTMLSelectElement).value });
+    });
+    panelEl.querySelectorAll<HTMLButtonElement>(".panel-child").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectedId = btn.dataset["id"]!;
+        noteEditingFor = null;
+        render();
+      });
+    });
 
     // Note: rendered markdown by default; click swaps in the textarea, change
     // (blur with a new value) saves, Escape cancels, blur without a change
@@ -831,7 +1191,154 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     boardEl.querySelectorAll(".drag-over").forEach((el) => el.classList.remove("drag-over"));
   }
 
+  /** The filter row. Handlers that only change what is SHOWN re-render the
+   *  body; the toolbar itself is left alone so the search keeps focus. */
+  function wireToolbar(): void {
+    toolbarEl.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        viewKind = btn.dataset["view"] as ViewKind;
+        render();
+      });
+    });
+    toolbarEl.querySelectorAll<HTMLButtonElement>("[data-kind]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const k = btn.dataset["kind"] as TodoKind;
+        const cur = query.kinds ?? [];
+        query = { ...query, kinds: cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k] };
+        if (!query.kinds?.length) delete query.kinds;
+        render();
+      });
+    });
+    toolbarEl.querySelector<HTMLButtonElement>("[data-unestimated]")?.addEventListener("click", () => {
+      query = { ...query, unestimatedOnly: !query.unestimatedOnly };
+      if (!query.unestimatedOnly) delete query.unestimatedOnly;
+      render();
+    });
+    const search = toolbarEl.querySelector<HTMLInputElement>(".board-search");
+    search?.addEventListener("input", () => {
+      const v = search.value.trim();
+      query = { ...query, text: v };
+      if (!v) delete query.text;
+      renderBody(); // NOT render() — see the comment on renderBody
+      updateFilterNote();
+    });
+    toolbarEl.querySelector<HTMLSelectElement>(".board-cycle-filter")?.addEventListener("change", (e) => {
+      const v = (e.target as HTMLSelectElement).value;
+      query = { ...query, cycleId: v };
+      if (!v) delete query.cycleId;
+      render();
+    });
+    toolbarEl.querySelector<HTMLButtonElement>(".board-filter-clear")?.addEventListener("click", () => {
+      query = {};
+      activeViewId = null;
+      render();
+    });
+    toolbarEl.querySelector<HTMLSelectElement>(".board-view-picker")?.addEventListener("change", (e) => {
+      const id = (e.target as HTMLSelectElement).value;
+      const v = savedViews.find((x) => x.id === id);
+      activeViewId = v ? v.id : null;
+      query = v ? { ...v.query } : {};
+      if (v) viewKind = v.kind;
+      render();
+    });
+    toolbarEl.querySelector<HTMLButtonElement>(".board-view-save")?.addEventListener("click", () => {
+      const name = prompt("Name this view")?.trim();
+      if (!name) return;
+      createBoardView({ name, repo: scope || undefined, kind: viewKind, query })
+        .then((v) => {
+          activeViewId = v.id;
+          return loadViews();
+        })
+        .catch((err: unknown) => alert(err instanceof Error ? err.message : "could not save the view"));
+    });
+    toolbarEl.querySelector<HTMLButtonElement>(".board-view-delete")?.addEventListener("click", () => {
+      if (!activeViewId) return;
+      const v = savedViews.find((x) => x.id === activeViewId);
+      if (!confirm(`Delete the view "${v?.name ?? ""}"?`)) return;
+      deleteBoardView(activeViewId)
+        .then(() => {
+          activeViewId = null;
+          return loadViews();
+        })
+        .catch((err: unknown) => alert(err instanceof Error ? err.message : "delete failed"));
+    });
+  }
+
+  /** Keep the "N hidden" line honest while typing, without rebuilding the row
+   *  the caret is sitting in. */
+  function updateFilterNote(): void {
+    const hidden = hiddenCount();
+    let note = toolbarEl.querySelector<HTMLElement>(".board-filter-note");
+    if (hidden <= 0) {
+      note?.remove();
+      return;
+    }
+    if (!note) {
+      note = document.createElement("div");
+      note.className = "board-filter-note";
+      toolbarEl.appendChild(note);
+    }
+    note.innerHTML = `${hidden} card${hidden > 1 ? "s" : ""} hidden by the filter
+      <button type="button" class="todo-btn board-filter-clear">clear</button>`;
+    note.querySelector<HTMLButtonElement>(".board-filter-clear")?.addEventListener("click", () => {
+      query = {};
+      activeViewId = null;
+      render();
+    });
+  }
+
+  /** The timeline is read-only chrome; clicking a bar opens the card. */
+  function wireTimeline(): void {
+    boardEl.querySelectorAll<HTMLElement>("[data-todo-id]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = el.dataset["todoId"]!;
+        if (selectedId !== id) noteEditingFor = null;
+        selectedId = id;
+        render();
+      });
+    });
+  }
+
   function wireBoard(): void {
+    boardEl.querySelector<HTMLButtonElement>(".board-add-col")?.addEventListener("click", () => {
+      const name = prompt("Column name (e.g. In review)")?.trim();
+      if (!name) return;
+      const cat =
+        prompt("Category — todo, started or done. This is what decides whether landing here freezes a card's cost snapshot.", "started")?.trim() ||
+        "started";
+      createBoardState({
+        name,
+        category: cat as "todo" | "started" | "done",
+        repo: scope || undefined,
+      })
+        .then(loadStates)
+        .catch((err: unknown) => alert(err instanceof Error ? err.message : "could not add the column"));
+    });
+
+    boardEl.querySelectorAll<HTMLElement>(".board-col-name").forEach((el) => {
+      el.addEventListener("dblclick", () => {
+        const id = el.closest<HTMLElement>(".board-col-head")!.dataset["status"]!;
+        const cur = stateById(id);
+        const name = prompt("Rename column", cur?.name ?? "")?.trim();
+        if (!name || name === cur?.name) return;
+        patchBoardState(id, { name })
+          .then(loadStates)
+          .catch((err: unknown) => alert(err instanceof Error ? err.message : "rename failed"));
+      });
+    });
+
+    boardEl.querySelectorAll<HTMLButtonElement>(".board-col-delete").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.closest<HTMLElement>(".board-col-head")!.dataset["status"]!;
+        if (!confirm(`Delete the "${stateById(id)?.name ?? id}" column?`)) return;
+        // The server refuses (409) while cards are still parked in it, which
+        // is the message worth showing verbatim.
+        deleteBoardState(id)
+          .then(loadStates)
+          .catch((err: unknown) => alert(err instanceof Error ? err.message : "delete failed"));
+      });
+    });
+
     boardEl.querySelectorAll<HTMLButtonElement>(".board-add").forEach((btn) => {
       btn.addEventListener("click", () => {
         composerStatus = btn.dataset["status"] as TodoStatus;
@@ -922,12 +1429,14 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         const t = todos.find((x) => x.id === id);
         patchTodo(id, { status, order })
           .then(() => {
-            // Dropping into "doing" links the card to the session doing the
-            // work: auto-link when exactly one is running in the todo's repo,
-            // otherwise open the panel so the user picks. A card that already
-            // has sessions is left alone — adding a second one behind the
-            // user's back would quietly change what the done snapshot counts.
-            if (status !== "doing" || !t || t.linkedSessionIds?.length) return;
+            // Dropping into a started-category column links the card to the
+            // session doing the work: auto-link when exactly one is running in
+            // the todo's repo, otherwise open the panel so the user picks. A
+            // card that already has sessions is left alone — adding a second
+            // one behind the user's back would quietly change what the done
+            // snapshot counts. Category, not the name "doing", so a renamed or
+            // custom in-progress column behaves the same.
+            if (stateById(status)?.category !== "started" || !t || t.linkedSessionIds?.length) return;
             return autoLink(id, t.repo);
           })
           .catch((err: unknown) => console.error("todo move failed", err))
@@ -984,8 +1493,50 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
   function renderIfIdle(): void {
     if (dragging) return;
     const active = document.activeElement;
-    if (active && (panelEl.contains(active) || active.classList.contains("composer-input"))) return;
+    if (
+      active &&
+      (panelEl.contains(active) ||
+        toolbarEl.contains(active) ||
+        active.classList.contains("composer-input"))
+    ) {
+      return;
+    }
     render();
+  }
+
+  /** The workflow's columns for this scope. A failure leaves the fallback trio
+   *  in place rather than an empty board. */
+  function loadStates(): Promise<void> {
+    return getBoardStates(scope || undefined)
+      .then((list) => {
+        if (list.length) states = list;
+        renderIfIdle();
+      })
+      .catch(() => {
+        /* keep whatever we last had; the builtin trio always renders */
+      });
+  }
+
+  function loadCycles(): Promise<void> {
+    return getCycles(scope || undefined)
+      .then((list) => {
+        cycles = list;
+        renderIfIdle();
+      })
+      .catch(() => {
+        /* the cycle pickers just stay empty */
+      });
+  }
+
+  function loadViews(): Promise<void> {
+    return getBoardViews(scope || undefined)
+      .then((list) => {
+        savedViews = list;
+        render();
+      })
+      .catch(() => {
+        /* saved views are a convenience; the live filter still works */
+      });
   }
 
   async function refresh(): Promise<void> {
@@ -1008,6 +1559,9 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
   }
 
   void refresh();
+  void loadStates();
+  void loadCycles();
+  void loadViews();
   getDrawings()
     .then((list) => {
       drawingList = list;
@@ -1048,11 +1602,29 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       if (t) fillJourney(t);
       return;
     }
+    // The columns, cycles and saved views each carry their whole list in the
+    // event, but re-fetching keeps the scope filter server-side rather than
+    // duplicating the union rule here.
+    if (type === "board-states-updated") {
+      void loadStates();
+      return;
+    }
+    if (type === "cycles-updated") {
+      void loadCycles();
+      return;
+    }
+    if (type === "board-views-updated") {
+      void loadViews();
+      return;
+    }
     if (type !== "todos-updated") return;
     todos = (data as Todo[] | null) ?? [];
     loadLinkedSessions();
     renderIfIdle();
   });
 
-  return unsubscribe;
+  return () => {
+    if (unmountTable) unmountTable();
+    unsubscribe();
+  };
 }

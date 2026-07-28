@@ -17,8 +17,11 @@ func dialMCP(t *testing.T) (*mcp.ClientSession, *DrawingStore, *TodoStore, *DocS
 	db := newTestDataDB(t)
 	ds := NewDrawingStore(db)
 	ts := NewTodoStore(db)
+	ss := NewStateStore(db)
+	ts.UseStates(ss)
+	ts.UseEvents(NewEventStore(db))
 	dcs := NewDocStore(db)
-	server := newMCPServer(ds, ts, dcs, NewGroupStore(db), NewIndex(t.TempDir()), newSSEHub())
+	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewIndex(t.TempDir()), newSSEHub())
 
 	ctx := context.Background()
 	clientTr, serverTr := mcp.NewInMemoryTransports()
@@ -46,7 +49,7 @@ func TestMCPListsDesignAndBoardTools(t *testing.T) {
 	}
 	for _, name := range []string{
 		"list_drawings", "get_drawing", "create_drawing", "rename_drawing", "update_drawing", "set_drawing_topics",
-		"list_todos", "create_todo", "update_todo",
+		"list_todos", "create_todo", "update_todo", "list_board_states", "list_cycles",
 		"list_docs", "get_doc", "create_doc", "update_doc", "move_doc",
 		"list_ships",
 		"list_groups", "upsert_group",
@@ -55,8 +58,8 @@ func TestMCPListsDesignAndBoardTools(t *testing.T) {
 			t.Errorf("tool %q missing (got %v)", name, res.Tools)
 		}
 	}
-	if len(res.Tools) != 17 {
-		t.Errorf("want exactly 17 tools (delete stays UI-only across stores), got %d", len(res.Tools))
+	if len(res.Tools) != 19 {
+		t.Errorf("want exactly 19 tools (delete stays UI-only across stores), got %d", len(res.Tools))
 	}
 }
 

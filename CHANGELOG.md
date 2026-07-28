@@ -5,6 +5,35 @@ All notable changes to this project are documented here. Versions follow
 
 ## Unreleased
 
+### Added
+- **Board depth** — the board tracks work the way a tracker does, not the way
+  a sticky note does.
+  - **Custom workflow columns.** Add, rename, reorder and WIP-limit your own
+    columns ("In review", "Blocked", "Shipped"), globally or per project.
+    Every column carries a category — `todo`, `started` or `done` — and it is
+    the *category*, not the name, that decides whether landing there freezes a
+    card's cost snapshot or auto-links the running session.
+  - **Card hierarchy.** Cards nest two levels (epic → story → subtask) with a
+    kind (epic/story/task/bug). A parent shows a live rollup of its children's
+    progress and points. Deleting a parent promotes its children rather than
+    deleting them.
+  - **Cycles, estimates and priority.** Plan cards into a named sprint, size
+    them in story points, and rank them 0–4. A **burndown** chart per cycle
+    and a **velocity** table across cycles, both computed from a new
+    append-only event log rather than stored totals.
+  - **Table and timeline views**, plus a filter bar (text, kind, cycle,
+    unestimated) you can save as a named view per scope. The table view drags
+    rows to reorder or to nest one card under another.
+  - **MCP**: `list_board_states` and `list_cycles`, and `create_todo` /
+    `update_todo` take the new fields — a session can file a sized epic with
+    children in one pass.
+
+### Changed
+- `data.db` migrates to schema v12. The three original columns are seeded as
+  rows rather than migrated, so every existing card, REST body and MCP call
+  keeps working unchanged; boards with no custom columns look and behave
+  exactly as before.
+
 ### Removed
 - **Service views.** The Cloudflare Analytics and Search Console dashboards
   moved to their own private repo, `w4tch-y0ur-s3rv1c3s`. They watched third-

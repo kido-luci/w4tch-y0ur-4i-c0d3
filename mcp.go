@@ -66,10 +66,15 @@ type todoListOutput struct {
 }
 
 type createTodoInput struct {
-	Title  string `json:"title" jsonschema:"one-line card title; renders as markdown"`
-	Note   string `json:"note,omitempty" jsonschema:"optional markdown body holding the details"`
-	Repo   string `json:"repo,omitempty" jsonschema:"project the card belongs to, named as the board reports it"`
-	Status string `json:"status,omitempty" jsonschema:"backlog (default), doing or done"`
+	Title    string  `json:"title" jsonschema:"one-line card title; renders as markdown"`
+	Note     string  `json:"note,omitempty" jsonschema:"optional markdown body holding the details"`
+	Repo     string  `json:"repo,omitempty" jsonschema:"project the card belongs to, named as the board reports it"`
+	Status   string  `json:"status,omitempty" jsonschema:"which column to land in — a state id from list_board_states; defaults to backlog"`
+	Kind     string  `json:"kind,omitempty" jsonschema:"epic, story, task (default) or bug"`
+	ParentID string  `json:"parentId,omitempty" jsonschema:"nest under this card id (from list_todos); the board nests two levels deep, so the parent must itself be top level"`
+	Priority int     `json:"priority,omitempty" jsonschema:"0 none (default), 1 low, 2 medium, 3 high, 4 urgent"`
+	Estimate float64 `json:"estimate,omitempty" jsonschema:"story points — relative size, not hours; 0 means unestimated"`
+	CycleID  string  `json:"cycleId,omitempty" jsonschema:"plan into this cycle (sprint) id, from list_cycles"`
 }
 
 // updateTodoInput mirrors todoPatch: every field is optional, and only the
@@ -80,10 +85,31 @@ type updateTodoInput struct {
 	Note             *string   `json:"note,omitempty" jsonschema:"replace the whole markdown note (read it first if you mean to append)"`
 	Repo             *string   `json:"repo,omitempty" jsonschema:"replace the project name"`
 	Labels           *[]string `json:"labels,omitempty" jsonschema:"replace the whole label list"`
-	Status           *string   `json:"status,omitempty" jsonschema:"move the card: backlog, doing or done. Landing in done freezes the linked sessions' summed tokens/cost onto the card"`
+	Status           *string   `json:"status,omitempty" jsonschema:"move the card to this column — a state id from list_board_states. Landing in a done-category column freezes the linked sessions' summed tokens/cost onto the card"`
 	LinkedSessionIDs *[]string `json:"linkedSessionIds,omitempty" jsonschema:"replace the linked session list (empty unlinks all). A ticket may span several sessions and the done snapshot sums them; to add yours, send the existing ids plus your own"`
 	LinkedDrawingIDs *[]string `json:"linkedDrawingIds,omitempty" jsonschema:"replace the linked wireframe list (empty unlinks all); ids come from list_drawings"`
 	LinkedDocIDs     *[]string `json:"linkedDocIds,omitempty" jsonschema:"replace the linked docs-wiki page list (empty unlinks all); ids come from list_docs"`
+	ParentID         *string   `json:"parentId,omitempty" jsonschema:"re-nest under this card id; empty string un-nests to top level. The parent must be top level itself, and a card that already has children cannot be nested"`
+	Kind             *string   `json:"kind,omitempty" jsonschema:"epic, story, task or bug"`
+	Priority         *int      `json:"priority,omitempty" jsonschema:"0 none, 1 low, 2 medium, 3 high, 4 urgent"`
+	Estimate         *float64  `json:"estimate,omitempty" jsonschema:"story points; 0 clears the estimate"`
+	CycleID          *string   `json:"cycleId,omitempty" jsonschema:"move into this cycle (sprint) id from list_cycles; empty string takes it out of any cycle"`
+}
+
+type stateListInput struct {
+	Repo string `json:"repo,omitempty" jsonschema:"only the columns this project sees (its own plus the shared ones); omit for every column"`
+}
+
+type stateListOutput struct {
+	States []TodoState `json:"states"`
+}
+
+type cycleListInput struct {
+	Repo string `json:"repo,omitempty" jsonschema:"only cycles this project sees; omit for all of them"`
+}
+
+type cycleListOutput struct {
+	Cycles []CycleReport `json:"cycles"`
 }
 
 type docIDInput struct {
@@ -136,7 +162,7 @@ type listShipsInput struct {
 
 // newMCPServer builds the "wyac" MCP server over the drawing, todo and doc
 // stores. ix is read-only here — it backs the done snapshot.
-func newMCPServer(drawings *DrawingStore, todos *TodoStore, docs *DocStore, groups *GroupStore, ix *Index, hub *sseHub) *mcp.Server {
+func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, ix *Index, hub *sseHub) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "wyac",
 		Title:   "W4tch y0ur 4I c0d3",
@@ -236,7 +262,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, docs *DocStore, grou
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_todos",
-		Description: "List the board's cards, column-ordered (backlog, then doing, then done). Each card carries its id, its #seq, title, note, repo, labels, linked session/wireframe ids, and — once done — the frozen cost snapshot.",
+		Description: "List the board's cards, column-ordered (the workflow's own column order — see list_board_states). Each card carries its id, its #seq, title, note, repo, labels, kind, priority, estimate, parentId, cycleId, linked session/wireframe ids, a rollup of its children, and — once done — the frozen cost snapshot.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in todoListInput) (*mcp.CallToolResult, todoListOutput, error) {
 		list := todos.List()
 		if repo := strings.TrimSpace(in.Repo); repo != "" {
@@ -253,14 +279,45 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, docs *DocStore, grou
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_todo",
-		Description: "Add a card to the board. Title and note render as markdown.",
+		Description: "Add a card to the board. Title and note render as markdown. An epic and its children can be created in one pass: create the epic, then create each child with parentId set to the epic's id.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in createTodoInput) (*mcp.CallToolResult, Todo, error) {
-		t, err := todos.Create(in.Title, in.Note, in.Repo, in.Status)
+		t, err := todos.CreateFull(todoCreate{
+			Title:    in.Title,
+			Note:     in.Note,
+			Repo:     in.Repo,
+			Status:   in.Status,
+			Kind:     in.Kind,
+			ParentID: in.ParentID,
+			Priority: in.Priority,
+			Estimate: in.Estimate,
+			CycleID:  in.CycleID,
+		})
 		if err != nil {
 			return nil, Todo{}, err
 		}
 		hub.broadcast("todos-updated", todos.List())
 		return nil, t, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_board_states",
+		Description: "List the board's workflow columns in order. A column's id is what create_todo/update_todo take as `status`, and its category (todo | started | done) is what decides whether landing there freezes a card's cost snapshot — so read this before moving a card, rather than assuming backlog/doing/done.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in stateListInput) (*mcp.CallToolResult, stateListOutput, error) {
+		if repo := strings.TrimSpace(in.Repo); repo != "" {
+			return nil, stateListOutput{States: states.ListFor(repo)}, nil
+		}
+		return nil, stateListOutput{States: states.List()}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_cycles",
+		Description: "List the board's cycles (sprints), newest first, each with what it committed to and what has landed: card counts, story points, and how many cards carry no estimate. Use a cycle's id as create_todo/update_todo's cycleId to plan work into it.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in cycleListInput) (*mcp.CallToolResult, cycleListOutput, error) {
+		list := cycles.List()
+		if repo := strings.TrimSpace(in.Repo); repo != "" {
+			list = cycles.ListFor(repo)
+		}
+		return nil, cycleListOutput{Cycles: Velocity(list, todos)}, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -286,6 +343,11 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, docs *DocStore, grou
 			LinkedSessionIDs: in.LinkedSessionIDs,
 			LinkedDrawingIDs: in.LinkedDrawingIDs,
 			LinkedDocIDs:     in.LinkedDocIDs,
+			ParentID:         in.ParentID,
+			Kind:             in.Kind,
+			Priority:         in.Priority,
+			Estimate:         in.Estimate,
+			CycleID:          in.CycleID,
 		})
 		if errors.Is(err, errTodoNotFound) {
 			return nil, Todo{}, fmt.Errorf("no todo with id %q — see list_todos (the #N on a card is its seq, not its id)", in.ID)
@@ -403,7 +465,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, docs *DocStore, grou
 }
 
 // newMCPHandler serves the MCP server on a streamable HTTP endpoint.
-func newMCPHandler(drawings *DrawingStore, todos *TodoStore, docs *DocStore, groups *GroupStore, ix *Index, hub *sseHub) http.Handler {
-	server := newMCPServer(drawings, todos, docs, groups, ix, hub)
+func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, ix *Index, hub *sseHub) http.Handler {
+	server := newMCPServer(drawings, todos, states, cycles, docs, groups, ix, hub)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 }
