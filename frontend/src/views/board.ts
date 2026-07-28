@@ -57,6 +57,7 @@ import {
   formatTokens,
   truncate,
 } from "../format";
+import { announce } from "../live";
 import { renderInlineMarkdown, renderMarkdown } from "../markdown";
 import { getScope, getScopeSet, labelForFolder, navigate } from "../scope";
 
@@ -1716,6 +1717,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       loadLinkedSessions();
     } catch (err) {
       boardEl.innerHTML = `<div class="empty-state">failed to load todos</div>`;
+      announce("failed to load todos");
       console.error("failed to load todos", err);
     }
   }

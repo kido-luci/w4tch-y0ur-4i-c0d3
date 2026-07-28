@@ -8,6 +8,7 @@
 import { getGit } from "../api";
 import type { GitRepo } from "../api";
 import { chipAttrs, escapeHtml, formatRelativeTime } from "../format";
+import { announce } from "../live";
 import { getScopeParam } from "../scope";
 
 /** Renders the git view into `container`; returns a cleanup callback. */
@@ -150,6 +151,7 @@ export function renderGitView(container: HTMLElement): () => void {
       if (dead) return;
       metaEl.textContent = "";
       listEl.innerHTML = `<div class="empty-state">failed to load git status</div>`;
+      announce("failed to load git status");
       console.error("git load failed", err);
     }
   }

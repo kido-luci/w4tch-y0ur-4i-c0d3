@@ -1,5 +1,6 @@
 import "./style.css";
 import "./pixel.css";
+import { announce } from "./live";
 import { initNotifications } from "./notify";
 import { buildPath, mountScopeRail, navigate, parseLocation, syncScopeToURL } from "./scope";
 import { initTheme, mountThemeToggle } from "./theme";
@@ -123,6 +124,7 @@ const app: HTMLDivElement = appRoot;
    the second one's offset is the first one's height, which is not a
    constant (the sub-row wraps to two lines on a phone). */
 app.innerHTML = `
+  <a class="skip-link" href="#view">skip to content</a>
   <div class="px-chrome">
   <nav class="px-nav">
     <div class="px-nav__mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -149,17 +151,18 @@ app.innerHTML = `
   </nav>
   </div>
   <div class="app-shell">
-    <nav class="proj-rail" id="proj-rail" hidden></nav>
-    <div id="view"></div>
+    <nav class="proj-rail" id="proj-rail" aria-label="project scope" hidden></nav>
+    <main id="view" tabindex="-1"></main>
   </div>
+  <div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
 `;
 
-const viewRoot = app.querySelector<HTMLDivElement>("#view");
+const viewRoot = app.querySelector<HTMLElement>("#view");
 const railRoot = app.querySelector<HTMLElement>("#proj-rail");
 if (!viewRoot || !railRoot) {
   throw new Error("#view / #proj-rail root elements not found");
 }
-const view: HTMLDivElement = viewRoot;
+const view: HTMLElement = viewRoot;
 const railEl: HTMLElement = railRoot;
 
 // Publish the sticky chrome's real height as --chrome-h. Everything else that
@@ -275,11 +278,28 @@ function render(): void {
                         : route.view === "gitRepo"
                         ? renderGitRepoView(view, route.folder)
                         : renderSessionsView(view);
+
+  // After the view is mounted, not before — the label describes what is now on
+  // screen. document.title moves with it so the browser's own view of "where
+  // am I" stays right for history and tab lists.
+  const label = navLinks.find((l) => l.dataset.nav === active)?.textContent?.trim() ?? "sessions";
+  document.title = `${label} — W4tch y0ur 4I c0d3`;
+  announce(`${label} view`);
 }
 
 // Back/Forward, and every programmatic navigate()/setScope() (which dispatch a
 // popstate), re-render through here.
 window.addEventListener("popstate", render);
+
+// The skip link moves focus itself rather than letting `href="#view"` do it.
+// Routing here is History-API paths (see scope.ts); letting the browser handle
+// the fragment would leave "#view" hanging off every URL copied afterwards, in
+// an app that already had to migrate away from hash routing once.
+app.querySelector<HTMLAnchorElement>(".skip-link")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  view.focus();
+  view.scrollIntoView({ block: "start" });
+});
 
 // Intercept clicks on internal path links so they route in-app (pushState) instead
 // of triggering a full page load. External links (github PRs/issues, target=_blank),

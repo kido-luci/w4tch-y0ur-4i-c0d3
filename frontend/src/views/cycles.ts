@@ -26,6 +26,7 @@ import {
 import type { Burndown, CycleReport, Todo, TodoEvent, TodoState } from "../api";
 import { describeEventOrCreated } from "../boardEvents";
 import { escapeHtml, formatDay, formatRelativeTime } from "../format";
+import { announce } from "../live";
 import { getScope, getScopeSet } from "../scope";
 
 function points(v: number): string {
@@ -374,6 +375,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
       if (selectedId && !burndown) void loadBurndown();
     } catch (err) {
       bodyEl.innerHTML = `<div class="empty-state">failed to load cycles</div>`;
+      announce("failed to load cycles");
       console.error("failed to load cycles", err);
     }
   }

@@ -71,6 +71,59 @@ a {
   padding: 16px 20px 48px;
 }
 
+/* Visually gone, still announced. Not display:none and not visibility:hidden —
+   both remove the node from the accessibility tree, which is the opposite of
+   what a live region needs. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Docs is four columns deep, so reaching content by keyboard meant tabbing past
+   the whole chrome and the entire scope rail — around thirty stops, on every
+   navigation. Off-screen until focused, then a normal control in the app's
+   language. */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--card);
+  border: 2px solid var(--accent);
+  box-shadow: var(--px-shadow-sm);
+  color: var(--text);
+  font: 400 var(--px-label) var(--px-pixel);
+  text-decoration: none;
+  transition: top 120ms ease;
+}
+
+/* :focus, not :focus-visible — a skip link is only ever reached by keyboard, and
+   :focus-visible would leave it hidden for any focus the browser judges
+   non-keyboard, which for this control means hidden when it matters. */
+.skip-link:focus {
+  top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
+}
+
+/* The skip target. It takes focus programmatically, so it must not also draw a
+   focus ring — the ring belongs to whatever the user tabs to next. */
+#view:focus {
+  outline: none;
+}
+
 /* Shell under the nav: the project rail (board / design / docs' shared scope
    switcher) flanks #view as the leftmost column; other routes hide it and
    #view takes the full width. */

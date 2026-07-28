@@ -27,6 +27,7 @@ import {
 } from "../api";
 import type { Drawing, Todo } from "../api";
 import { escapeHtml, formatRelativeTime, truncate } from "../format";
+import { announce } from "../live";
 import { getScope, getScopeSet, navigate } from "../scope";
 import { getTheme } from "../theme";
 import type { ExcalidrawIsland } from "../excalidrawIsland";
@@ -351,6 +352,7 @@ export function renderDesignView(container: HTMLElement): () => void {
     })
     .catch(() => {
       gridEl.innerHTML = `<div class="empty-state">failed to load drawings.</div>`;
+      announce("failed to load drawings.");
     });
 
   // Project names feed the move/create group datalist; a failure just leaves
@@ -519,6 +521,7 @@ export function renderDesignEditorView(container: HTMLElement, id: string): () =
       console.error("editor load failed", err);
       if (!disposed) {
         hostEl.innerHTML = `<div class="empty-state">failed to load this drawing.</div>`;
+        announce("failed to load this drawing.");
       }
     }
   })();
