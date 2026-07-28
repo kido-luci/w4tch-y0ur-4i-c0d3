@@ -50,17 +50,19 @@ export function renderSessionsView(container: HTMLElement): () => void {
       </header>
 
       <section class="stat-cards" id="stat-cards"></section>
-      <section class="card heatmap-card">
-        <h2 class="section-heading">activity · last ${HEATMAP_WEEKS} weeks</h2>
-        <p class="panel-scope">this scope · fixed ${HEATMAP_WEEKS}-week window, ignores the day filter</p>
-        <div id="heatmap-slot"></div>
-      </section>
+      <div class="summary-row">
+        <section class="card heatmap-card">
+          <h2 class="section-heading">activity · last ${HEATMAP_WEEKS} weeks</h2>
+          <p class="panel-scope">this scope · fixed ${HEATMAP_WEEKS}-week window, ignores the day filter</p>
+          <div id="heatmap-slot"></div>
+        </section>
+        <section class="card">
+          <h2 class="section-heading">model distribution</h2>
+          <p class="panel-scope">this scope · follows every filter above</p>
+          <div id="dist-slot"></div>
+        </section>
+      </div>
       <section class="card tot-card" id="tot-card"></section>
-      <section class="card">
-        <h2 class="section-heading">model distribution</h2>
-        <p class="panel-scope">this scope · follows every filter above</p>
-        <div id="dist-slot"></div>
-      </section>
       <section class="live-strip hidden" id="live-strip"></section>
       <section class="sessions-table-wrap" id="table-wrap">
         <div class="empty-state">loading…</div>

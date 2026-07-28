@@ -1374,6 +1374,35 @@ a {
   }
 }
 
+/* The heatmap draws at a fixed intrinsic width — 26 weeks x 14px plus the
+   weekday gutter, 387px — and it cannot be stretched to fill a panel: the SVG
+   sizes by viewBox, so scaling it up would take the month labels and the
+   less/more legend with it at the same factor. Nor can it be widened with more
+   weeks; /api/activity caps the window at 53, which reaches 765px and still
+   leaves a third of a full-width panel empty.
+
+   So it shares a row rather than sitting alone in one. `auto 1fr` lets the
+   heatmap take exactly the width it draws and hands the remainder to the
+   distribution panel beside it, which is a stacked bar and stretches happily.
+   Below 900px there is no remainder worth having and the two stack.
+
+   Heights are stretched rather than start-aligned: the distribution panel is
+   the shorter of the two (156px against 207px), and leaving it short puts a
+   notch in the bottom edge of the row. Equal heights read as one band, which
+   is what a paired row should look like. */
+.summary-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--px-sp-5);
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .summary-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---------- activity heatmap (SVG) ---------- */
 
 .heatmap-wrapper {
