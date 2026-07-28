@@ -177,13 +177,16 @@ func unknownDocID(docs *DocStore, ids []string) string {
 }
 
 // refreezeTodo keeps a card's cost snapshot in step with the status it just
-// moved to: landing in done freezes its linked sessions' summed numbers onto
-// the card, leaving done thaws it (the numbers re-freeze on the next done).
-// Shared by the REST PATCH handler and the MCP update_todo tool so a card
-// costs the same however it was moved. Sessions missing from the index (their
-// transcript is gone) are skipped rather than counted as zero.
+// moved to: landing in a done-category column freezes its linked sessions'
+// summed numbers onto the card, leaving one thaws it (the numbers re-freeze on
+// the next done). Shared by the REST PATCH handler and the MCP update_todo tool
+// so a card costs the same however it was moved. Sessions missing from the
+// index (their transcript is gone) are skipped rather than counted as zero.
+//
+// Since data.db v12 the test is the column's category, not the literal string
+// "done" — a workflow whose last column is "Shipped" freezes just the same.
 func refreezeTodo(todos *TodoStore, ix *Index, todo Todo, status string) Todo {
-	if status != "done" {
+	if !todos.IsDoneStatus(status) {
 		if todo.Snapshot == nil {
 			return todo
 		}
@@ -225,7 +228,7 @@ var validGSCRange = map[string]bool{"7d": true, "28d": true, "90d": true}
 // spaces, or escapes may pass.
 var hostRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
 
-func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, todos *TodoStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, cf *cfanalytics.Client, gs *gsc.Client, sites []WebSite) {
+func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, cf *cfanalytics.Client, gs *gsc.Client, sites []WebSite) {
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 		writeJSON(w, ix.Sessions(days, r.URL.Query().Get("project"), r.URL.Query().Get("status")))
@@ -286,12 +289,12 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	})
 
 	mux.HandleFunc("POST /api/todos", func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ Title, Note, Repo, Status string }
+		var in todoCreate
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			writeJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		todo, err := todos.Create(in.Title, in.Note, in.Repo, in.Status)
+		todo, err := todos.CreateFull(in)
 		if err != nil {
 			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
@@ -337,11 +340,271 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	})
 
 	mux.HandleFunc("DELETE /api/todos/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if err := todos.Delete(r.PathValue("id")); err != nil {
+		id := r.PathValue("id")
+		if err := todos.Delete(id); err != nil {
 			writeJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		// The card is gone, so its history can name nothing — the one place
+		// the append-only log is allowed to shrink.
+		events.PurgeTodo(id)
 		hub.broadcast("todos-updated", todos.List())
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// One card's activity feed, oldest first.
+	mux.HandleFunc("GET /api/todos/{id}/events", func(w http.ResponseWriter, r *http.Request) {
+		evs, err := events.ForTodo(r.PathValue("id"))
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, evs)
+	})
+
+	// The board-wide feed, newest first. `?limit=` caps at 500.
+	mux.HandleFunc("GET /api/board/events", func(w http.ResponseWriter, r *http.Request) {
+		n, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		evs, err := events.Recent(n)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, evs)
+	})
+
+	// --- workflow columns (states.go). `?repo=` narrows to what one scope
+	// sees: the shared columns plus that project's own.
+
+	mux.HandleFunc("GET /api/board/states", func(w http.ResponseWriter, r *http.Request) {
+		if repo := r.URL.Query().Get("repo"); repo != "" {
+			writeJSON(w, states.ListFor(repo))
+			return
+		}
+		writeJSON(w, states.List())
+	})
+
+	mux.HandleFunc("POST /api/board/states", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Name     string `json:"name"`
+			Category string `json:"category"`
+			Repo     string `json:"repo"`
+			WIPLimit int    `json:"wipLimit"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad JSON body")
+			return
+		}
+		st, err := states.Create(in.Name, in.Category, in.Repo, in.WIPLimit)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hub.broadcast("board-states-updated", states.List())
+		writeJSON(w, st)
+	})
+
+	mux.HandleFunc("PATCH /api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var p statePatch
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad JSON body")
+			return
+		}
+		st, err := states.Update(r.PathValue("id"), p)
+		if errors.Is(err, errStateNotFound) {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		// A recategorised column changes what counts as done, so the board's
+		// order and its snapshots both need re-reading.
+		hub.broadcast("board-states-updated", states.List())
+		hub.broadcast("todos-updated", todos.List())
+		writeJSON(w, st)
+	})
+
+	// Deleting a column that still holds cards would strand them in a status
+	// nothing renders, so the count is checked here — the side that can see
+	// the cards — rather than inside the state store.
+	mux.HandleFunc("DELETE /api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		// Builtin first: "this column can never be deleted" is the real reason,
+		// and reporting "move the cards out" instead sends the user off to do
+		// work that changes nothing.
+		if builtinStates[id] {
+			writeJSONError(w, http.StatusBadRequest,
+				fmt.Sprintf("%q is a builtin column and cannot be deleted", id))
+			return
+		}
+		n := 0
+		for _, t := range todos.List() {
+			if t.Status == id {
+				n++
+			}
+		}
+		if n > 0 {
+			writeJSONError(w, http.StatusConflict,
+				fmt.Sprintf("%d card(s) are still in this column — move them first", n))
+			return
+		}
+		if err := states.Delete(id); err != nil {
+			if errors.Is(err, errStateNotFound) {
+				writeJSONError(w, http.StatusNotFound, err.Error())
+				return
+			}
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hub.broadcast("board-states-updated", states.List())
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// --- cycles (cycles.go): the sprints cards are planned into, plus the two
+	// reports that make the bookkeeping pay for itself.
+
+	mux.HandleFunc("GET /api/cycles", func(w http.ResponseWriter, r *http.Request) {
+		if repo := r.URL.Query().Get("repo"); repo != "" {
+			writeJSON(w, cycles.ListFor(repo))
+			return
+		}
+		writeJSON(w, cycles.List())
+	})
+
+	mux.HandleFunc("POST /api/cycles", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Name     string    `json:"name"`
+			Repo     string    `json:"repo"`
+			Goal     string    `json:"goal"`
+			StartsAt time.Time `json:"startsAt"`
+			EndsAt   time.Time `json:"endsAt"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad JSON body")
+			return
+		}
+		c, err := cycles.Create(in.Name, in.Repo, in.Goal, in.StartsAt, in.EndsAt)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hub.broadcast("cycles-updated", cycles.List())
+		writeJSON(w, c)
+	})
+
+	mux.HandleFunc("PATCH /api/cycles/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var p cyclePatch
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad JSON body")
+			return
+		}
+		c, err := cycles.Update(r.PathValue("id"), p)
+		if errors.Is(err, errCycleNotFound) {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hub.broadcast("cycles-updated", cycles.List())
+		writeJSON(w, c)
+	})
+
+	// Deleting a cycle keeps its cards — they fall back out of any cycle, the
+	// way a deleted drawing is unlinked rather than taking the card with it.
+	mux.HandleFunc("DELETE /api/cycles/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if err := cycles.Delete(id); err != nil {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if todos.UnlinkCycle(id) {
+			hub.broadcast("todos-updated", todos.List())
+		}
+		hub.broadcast("cycles-updated", cycles.List())
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	mux.HandleFunc("GET /api/cycles/{id}/burndown", func(w http.ResponseWriter, r *http.Request) {
+		c, ok := cycles.Get(r.PathValue("id"))
+		if !ok {
+			writeJSONError(w, http.StatusNotFound, "cycle not found")
+			return
+		}
+		bd, err := ComputeBurndown(c, todos, events, time.Now())
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, bd)
+	})
+
+	mux.HandleFunc("GET /api/cycles/velocity", func(w http.ResponseWriter, r *http.Request) {
+		list := cycles.List()
+		if repo := r.URL.Query().Get("repo"); repo != "" {
+			list = cycles.ListFor(repo)
+		}
+		writeJSON(w, Velocity(list, todos))
+	})
+
+	// --- saved views (boardviews.go): a named filter plus the shape it draws.
+
+	mux.HandleFunc("GET /api/board/views", func(w http.ResponseWriter, r *http.Request) {
+		if repo := r.URL.Query().Get("repo"); repo != "" {
+			writeJSON(w, views.ListFor(repo))
+			return
+		}
+		writeJSON(w, views.List())
+	})
+
+	mux.HandleFunc("POST /api/board/views", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Name  string          `json:"name"`
+			Repo  string          `json:"repo"`
+			Kind  string          `json:"kind"`
+			Query json.RawMessage `json:"query"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad JSON body")
+			return
+		}
+		v, err := views.Create(in.Name, in.Repo, in.Kind, in.Query)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hub.broadcast("board-views-updated", views.List())
+		writeJSON(w, v)
+	})
+
+	mux.HandleFunc("PATCH /api/board/views/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var p viewPatch
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad JSON body")
+			return
+		}
+		v, err := views.Update(r.PathValue("id"), p)
+		if errors.Is(err, errViewNotFound) {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hub.broadcast("board-views-updated", views.List())
+		writeJSON(w, v)
+	})
+
+	mux.HandleFunc("DELETE /api/board/views/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := views.Delete(r.PathValue("id")); err != nil {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		hub.broadcast("board-views-updated", views.List())
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -800,11 +1063,20 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 		if todos.RenameRepo(old, to) > 0 {
 			hub.broadcast("todos-updated", todos.List())
 		}
+		if states.RenameRepo(old, to) > 0 {
+			hub.broadcast("board-states-updated", states.List())
+		}
+		if cycles.RenameRepo(old, to) > 0 {
+			hub.broadcast("cycles-updated", cycles.List())
+		}
 		if docs.RenameGroup(old, to) > 0 {
 			hub.broadcast("docs-updated", docs.List())
 		}
 		if drawings.RenameGroup(old, to) > 0 {
 			hub.broadcast("drawings-updated", drawings.List())
+		}
+		if views.RenameRepo(old, to) > 0 {
+			hub.broadcast("board-views-updated", views.List())
 		}
 		if groups.RenameMember(old, to) > 0 {
 			hub.broadcast("groups-updated", groups.List())
@@ -872,7 +1144,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	registerCodegraphAPI(mux, ix)
 	registerGitAPI(mux, ix)
 
-	mux.Handle("/mcp", newMCPHandler(drawings, todos, docs, groups, ix, hub))
+	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, ix, hub))
 
 	// Per-day activity buckets for the last `weeks` weeks (default 26), bucketed
 	// by the local calendar day of each session's start. Powers the heatmap; its

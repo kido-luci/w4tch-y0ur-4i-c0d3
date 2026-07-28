@@ -114,6 +114,15 @@ func main() {
 	gscClient := gsc.New(ws.SearchConsole.Property, ws.SearchConsole.SAKeyFile)
 
 	todoStore := NewTodoStore(dataDB)
+	stateStore := NewStateStore(dataDB)
+	cycleStore := NewCycleStore(dataDB)
+	eventStore := NewEventStore(dataDB)
+	viewStore := NewViewStore(dataDB)
+	// The board's columns and its history are injected rather than constructed
+	// inside TodoStore: each store keeps its own serving copy of one table, and
+	// a second instance would be a second writer over it.
+	todoStore.UseStates(stateStore)
+	todoStore.UseEvents(eventStore)
 	drawingStore := NewDrawingStore(dataDB)
 	docStore := NewDocStore(dataDB)
 	groupStore := NewGroupStore(dataDB)
@@ -127,7 +136,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, drawingStore, docStore, groupStore, projectStore, cfClient, gscClient, ws.Sites)
+	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore, cfClient, gscClient, ws.Sites)
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
