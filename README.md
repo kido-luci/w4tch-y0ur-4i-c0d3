@@ -85,16 +85,20 @@ standalone window).
 
 ## Run persistently (macOS launchd)
 
-Edit `launchd/watch-your-ai-code.plist` — set the `ProgramArguments` path to
-your built binary — then:
+Edit `launchd/com.luci.watch-your-ai-code.plist` — set the `ProgramArguments`
+path to your built binary — then:
 
 ```bash
-cp launchd/watch-your-ai-code.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/watch-your-ai-code.plist
+cp launchd/com.luci.watch-your-ai-code.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.luci.watch-your-ai-code.plist
 ```
 
 Logs: `/tmp/watch-your-ai-code.log`. After a rebuild:
-`launchctl kickstart -k gui/$(id -u)/watch-your-ai-code`.
+`launchctl kickstart -k gui/$(id -u)/com.luci.watch-your-ai-code`.
+
+The label, the filename and the `kickstart` argument are all the same string —
+that is a launchd convention, not a coincidence. Rename it and all three have
+to move together, or `kickstart` answers `Could not find service`.
 
 ## Live updates (optional)
 

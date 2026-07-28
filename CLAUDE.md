@@ -83,10 +83,19 @@ SQLite index uses pure-Go `modernc.org/sqlite`, and a CGO dependency would take
 the whole release flow down with it.
 
 **The everyday instance — delivering.** Under the optional launchd agent
-(`launchd/watch-your-ai-code.plist`, `KeepAlive=true`), restart it AFTER
-`make build`:
+(`launchd/com.luci.watch-your-ai-code.plist`, `KeepAlive=true`), restart it
+AFTER `make build`:
 
-    launchctl kickstart -k gui/$(id -u)/watch-your-ai-code
+    launchctl kickstart -k gui/$(id -u)/com.luci.watch-your-ai-code
+
+That argument is the plist's `Label`, which is also its filename. It used to be
+documented here as the bare `watch-your-ai-code`, which no longer matched the
+installed agent — every `kickstart` answered `Could not find service ... in
+domain for user gui: 501`, and the tempting next move is to `kill` the pid,
+which is the one thing the paragraph below says not to do. If it ever fails
+again, read the label back rather than guessing:
+
+    launchctl list | grep watch-your-ai-code
 
 Don't `kill` the PID and relaunch by hand — KeepAlive respawns the old binary within
 seconds and grabs the port (`bind: address already in use`), and you keep serving

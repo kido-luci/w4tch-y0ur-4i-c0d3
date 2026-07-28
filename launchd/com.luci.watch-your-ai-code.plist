@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>watch-your-ai-code</string>
+    <string>com.luci.watch-your-ai-code</string>
     <key>ProgramArguments</key>
     <array>
         <string>/ABSOLUTE/PATH/TO/watch-your-ai-code</string>
