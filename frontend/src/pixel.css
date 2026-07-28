@@ -157,6 +157,14 @@
      --px-ink is the bug this token exists to prevent. */
   --px-line: #a8a296;
   --px-muted: #757169;
+  /* Muted text that sits on a --px-rule-soft FILL rather than on the surface.
+     Same split as --px-accent / --px-accent-text, and for the same reason: the
+     tint costs contrast, and a letterform is held to 4.5:1. Measured on the
+     built binary — --px-muted on the fill is 4.12:1 in light, which fails; on
+     the surface it was 4.86:1. This lands at 4.77:1. Dark needs no split, its
+     muted already clears the bar on the fill (4.78:1), so the override below
+     just points this back at --px-muted. */
+  --px-muted-on-fill: #6b6760;
   --px-rule-soft: #efece6;
 
   /* --- accent ---
@@ -218,11 +226,68 @@
      app runs fluid at 1400px+, where the literal px values are unreadable.
      Silkscreen is drawn on an 8px em, so only 8 and 16 are pixel-crisp and
      --px-label's 10px interpolates slightly soft. That was chosen knowingly:
-     8px is crisp but too small to read at this width. */
+     8px is crisp but too small to read at this width.
+
+     The ramp below is named by ROLE, not by size. Size and family are separate
+     axes here and the ramp does NOT imply one: counted across style.css,
+     --px-label is mono at 25 sites against Silkscreen at 10, and --px-display
+     is mostly mono rather than Pixelify. The family rule above still stands on
+     its own — it just is not a function of the size, so do not read one off
+     the other.
+
+       --px-label-xs  9px   densest label or tag
+       --px-label    10px   standard chrome label, and small mono tags
+       --px-meta     11px   row meta, ids, counts, timestamps
+       --px-body     12px   the workhorse — table and list text
+       --px-word     13px   prose that wraps
+       --px-sans-sm  14px   body default (set on <body>)
+       --px-title    16px   card and section titles
+       --px-display  20px   stat values
+
+     --px-meta and --px-body are new, and they are not new SIZES: 11px and 12px
+     were already the two most common values in style.css (98 and 67 literal
+     font-size declarations). They had no token, so every component re-typed
+     them; naming them is what lets those 165 sites converge. --px-title and
+     --px-display absorb the one-off 15/16/17 and 18/20 stragglers. */
   --px-label-xs: 9px;
   --px-label: 10px;
+  --px-meta: 11px;
+  --px-body: 12px;
   --px-word: 13px;
   --px-sans-sm: 14px;
+  --px-title: 16px;
+  --px-display: 20px;
+
+  /* --- space ---
+     There was no spacing scale at all: 454 padding/gap/margin declarations
+     spread across 21 distinct values, including 3px, 5px, 7px, 9px, 11px and
+     34px. Nothing lined up because nothing was asked to.
+
+     The shape is fine at the bottom and coarse at the top, which is what a
+     dense UI needs: 2/4/6/8, then 12/16, then 24/32/48. Above 8px the steps
+     land on the 16px dot grid body paints, so layout spacing keeps that
+     rhythm; below it the steps stay 2px apart, because that is the range
+     where a chip's inner padding actually lives and where a 4px jump is
+     visible.
+
+     6px earns its step on usage, not symmetry — it is the third most common
+     spacing value in style.css (71 occurrences, split evenly between padding
+     and gap). An earlier draft of this scale was a clean 4px ladder with no
+     6, designed before counting; it would have moved all 71 for the sake of
+     the pattern rather than for anything you could see.
+
+     1px is deliberately NOT on the scale and is left alone where it appears:
+     it is a sub-scale hairline, most often padding compensating for a border
+     that was removed. */
+  --px-sp-1: 2px;
+  --px-sp-2: 4px;
+  --px-sp-3: 6px;
+  --px-sp-4: 8px;
+  --px-sp-5: 12px;
+  --px-sp-6: 16px;
+  --px-sp-7: 24px;
+  --px-sp-8: 32px;
+  --px-sp-9: 48px;
 }
 
 /* Dark is NOT in the makeup doc — it lists "pixel nhưng dark" as an untried
@@ -249,6 +314,7 @@
   --px-ink: #f2ede3;
   --px-line: #6b6357;
   --px-muted: #9a9184;
+  --px-muted-on-fill: var(--px-muted);
   --px-rule-soft: #2b2720;
 
   --px-accent: #e8823f;
