@@ -46,6 +46,10 @@ All notable changes to this project are documented here. Versions follow
   through one function, which walks the tree in both directions — an ancestor's
   configuration governs the cards below it, and a descendant's holds cards the
   view shows.
+- **The scope rule now exists once.** The client recomputed it from
+  `/api/groups` + `/api/projects` — a second implementation of the resolver, in
+  another language, agreeing with the Go one only by inspection. It now reads a
+  resolved index from `/api/scopes` and looks the answer up.
 - **The burndown and velocity respect scope.** Both counted the whole board
   regardless, so a scoped cycles tab showed a stats row disagreeing with the
   activity feed beside it. The burndown also validates its cycle against the

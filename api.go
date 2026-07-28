@@ -269,6 +269,37 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 		writeJSON(w, map[string]any{"summaries": sums, "fresh": true})
 	})
 
+	// The resolved scope index: every label the rail can show, mapped to the
+	// project names whose CARDS it covers.
+	//
+	// It exists so the rule lives in exactly one place. The client used to
+	// recompute it from /api/groups + /api/projects — a second implementation of
+	// resolveScope, in another language, agreeing only by inspection. Two copies
+	// of one rule drift the moment someone edits one, and the last time this rule
+	// was wrong a workflow column vanished from a member project.
+	mux.HandleFunc("GET /api/scopes", func(w http.ResponseWriter, r *http.Request) {
+		out := map[string][]string{}
+		add := func(label string) {
+			if label == "" {
+				return
+			}
+			in := resolveScope(label, groups, projects)
+			names := make([]string, 0, len(in.cards))
+			for n := range in.cards {
+				names = append(names, n)
+			}
+			sort.Strings(names) // stable payload, so a refetch diffs cleanly
+			out[label] = names
+		}
+		for _, p := range projects.List() {
+			add(p.Name)
+		}
+		for _, g := range groups.List() {
+			add(g.Name)
+		}
+		writeJSON(w, out)
+	})
+
 	mux.HandleFunc("GET /api/projects", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, ix.Projects())
 	})
