@@ -770,6 +770,21 @@ a {
 
 /* ---------- tables ---------- */
 
+.retry-btn {
+  margin-left: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  border-color: var(--border-hover);
+}
+
 /* What a panel's numbers actually cover. The sessions page runs three different
    scopings at once — stat cards on every filter, the heatmap on scope alone,
    the token chart on nothing at all — and every one of them was correct and
@@ -2446,6 +2461,11 @@ a.flow-node {
   cursor: pointer;
   opacity: 0.45;
   filter: grayscale(1);
+  /* Was 31x23. A 23px-tall control is under the 24px floor these two were the
+     only things in the app to miss, and they are the app-wide toggles — the
+     ones most likely to be hit on a trackpad or a phone. */
+  min-width: 26px;
+  min-height: 26px;
 }
 
 .notify-btn:hover {
@@ -2469,6 +2489,9 @@ a.flow-node {
   line-height: 1;
   padding: 4px 8px;
   cursor: pointer;
+  /* Same 24px floor as .notify-btn above. */
+  min-width: 26px;
+  min-height: 26px;
 }
 
 .theme-btn:hover {
@@ -3749,6 +3772,48 @@ a.flow-node {
   font-size: 13px;
   margin: -4px 0 12px;
   line-height: 1.45;
+  /* These run the full shell width — measured at 191 characters per line on
+     the cycles page, roughly 2.5x the readable maximum, because the eye loses
+     the start of the next line on the way back. The doc body already sets a
+     sane measure; this is prose too and gets the same treatment. ch is the
+     right unit: it tracks the font, so the cap stays ~90 characters whatever
+     the size becomes. */
+  max-width: 90ch;
+}
+
+/* Right-align the count and money columns on the insights tables. Left-aligned,
+   4268 / 1109 / 870 / 853 do not line up on the units digit, so the column
+   can't be read as magnitudes at a glance — which is the entire job of a
+   "ranked by churn" table. Header and cell are aligned together so the label
+   stays over its own numbers. Column indexes are one-based and count the
+   churn table's leading chevron <th>. */
+.churn-table th:nth-child(3),
+.churn-table td:nth-child(3),
+.churn-table th:nth-child(4),
+.churn-table td:nth-child(4),
+.churn-table th:nth-child(5),
+.churn-table td:nth-child(5),
+.friction-table th:nth-child(3),
+.friction-table td:nth-child(3),
+.friction-table th:nth-child(4),
+.friction-table td:nth-child(4),
+.friction-table th:nth-child(5),
+.friction-table td:nth-child(5),
+.friction-table th:nth-child(6),
+.friction-table td:nth-child(6),
+.ledger-table th:nth-child(n + 2):nth-child(-n + 5),
+.ledger-table td:nth-child(n + 2):nth-child(-n + 5),
+.ledger-table th:nth-child(7),
+.ledger-table td:nth-child(7),
+.ledger-table th:nth-child(8),
+.ledger-table td:nth-child(8),
+.sizing-table th:nth-child(3),
+.sizing-table td:nth-child(3),
+.sizing-table th:nth-child(4),
+.sizing-table td:nth-child(4),
+.sizing-table th:nth-child(5),
+.sizing-table td:nth-child(5) {
+  text-align: right;
 }
 
 .churn-table th:first-child,
@@ -4716,6 +4781,21 @@ a.flow-node {
   grid-template-columns: 220px 1fr 200px;
 }
 
+/* Between the phone breakpoint and roughly a laptop, four columns (rail, index,
+   page, toc) don't fit and the one that gave way was the page: at 1024px the
+   reading column fell to about 28 characters while both navigation columns held
+   their full width. That is backwards — the toc is a convenience, the prose is
+   the point. Drop the toc first and let the page have the room. */
+@media (max-width: 1200px) {
+  .doc-layout.doc-layout--toc {
+    grid-template-columns: 220px 1fr;
+  }
+
+  .doc-toc {
+    display: none;
+  }
+}
+
 @media (max-width: 800px) {
   .doc-layout,
   .doc-layout.doc-layout--toc {
@@ -4759,9 +4839,14 @@ a.flow-node {
   font-size: 12px;
   padding: 4px 8px;
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Wrap to a second line instead of ellipsing. These titles share long
+     prefixes — "luci-studio.com — Blog…", "api.luci-studio.com — B…",
+     "admin.luci-studio.com —…", "tools.luci-studio.com —…" — so a single
+     clipped line cut off exactly the part that tells them apart, and nine
+     entries read as near-duplicates. Two lines of a 12px mono cost less than
+     an index you cannot use. */
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .doc-index-item:hover {

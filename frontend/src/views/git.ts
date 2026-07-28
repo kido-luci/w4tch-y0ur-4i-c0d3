@@ -8,7 +8,7 @@
 import { getGit } from "../api";
 import type { GitRepo } from "../api";
 import { chipAttrs, escapeHtml, formatRelativeTime } from "../format";
-import { announce } from "../live";
+import { showError } from "../live";
 import { getScopeParam } from "../scope";
 
 /** Renders the git view into `container`; returns a cleanup callback. */
@@ -129,6 +129,13 @@ export function renderGitView(container: HTMLElement): () => void {
     metaEl.textContent = hidden
       ? `${shown.length} / ${repos.length} repos — ${hidden} filtered out`
       : `${repos.length} repo${repos.length === 1 ? "" : "s"}`;
+    // The count reads like "this is what the scope contains"; it isn't. The
+    // server resolves repos from the cwds your sessions actually ran in
+    // (cgRepos), so a configured project you've never opened Claude in never
+    // appears — a scope with ten game projects can legitimately show one. The
+    // empty state already says this; the count needs it more, because a
+    // plausible number invites no questions.
+    metaEl.title = "repos are resolved from the working trees your Claude sessions ran in, so a project with no session history won't be listed";
     listEl.innerHTML = shown.length
       ? shown.map(rowHtml).join("")
       : `<div class="empty-state">no repos match the filters — drop a chip to see them again.</div>`;
@@ -150,8 +157,7 @@ export function renderGitView(container: HTMLElement): () => void {
     } catch (err) {
       if (dead) return;
       metaEl.textContent = "";
-      listEl.innerHTML = `<div class="empty-state">failed to load git status</div>`;
-      announce("failed to load git status");
+      showError(listEl, "failed to load git status", () => void load());
       console.error("git load failed", err);
     }
   }

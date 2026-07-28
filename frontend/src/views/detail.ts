@@ -14,7 +14,7 @@ import {
   modelColor,
   truncate,
 } from "../format";
-import { announce } from "../live";
+import { showError } from "../live";
 import { labelForFolder } from "../scope";
 import { renderModelDistribution } from "../distribution";
 import { renderSessionFlow } from "../flow";
@@ -252,8 +252,7 @@ export function renderSessionDetailView(container: HTMLElement, id: string): () 
         });
       }
     } catch (err) {
-      content.innerHTML = `<div class="empty-state">failed to load session</div>`;
-      announce("failed to load session");
+      showError(content, "failed to load session", () => void load());
       console.error("failed to load session", err);
     }
   }

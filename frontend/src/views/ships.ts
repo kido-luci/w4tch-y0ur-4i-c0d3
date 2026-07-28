@@ -7,7 +7,7 @@
 import { getShips, subscribeRawEvents } from "../api";
 import type { ShipRecord } from "../api";
 import { chipAttrs, escapeHtml, formatDuration, formatRelativeTime, truncate } from "../format";
-import { announce } from "../live";
+import { showError } from "../live";
 import { getScope, getScopeSet, labelForFolder, scopeChipHtml } from "../scope";
 
 const DAY_OPTS: { v: number; label: string }[] = [
@@ -107,8 +107,7 @@ export function renderShipsView(container: HTMLElement): () => void {
       total = res.total;
       renderList();
     } catch (err) {
-      listEl.innerHTML = `<div class="empty-state">failed to load ship history</div>`;
-      announce("failed to load ship history");
+      showError(listEl, "failed to load ship history", () => void load());
       console.error("ships load failed", err);
     }
   }

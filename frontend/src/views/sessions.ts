@@ -12,7 +12,7 @@ import {
   modelBadgeHtml,
   truncate,
 } from "../format";
-import { announce } from "../live";
+import { showError } from "../live";
 import { renderModelDistribution } from "../distribution";
 import { renderActivityHeatmap } from "../heatmap";
 import { createTokensOverTime } from "../tokensOverTime";
@@ -125,8 +125,7 @@ export function renderSessionsView(container: HTMLElement): () => void {
       renderLiveStrip(liveStripEl, sessions);
       renderTable(tableWrapEl, sessions, filters);
     } catch (err) {
-      tableWrapEl.innerHTML = `<div class="empty-state">failed to load sessions</div>`;
-      announce("failed to load sessions");
+      showError(tableWrapEl, "failed to load sessions", () => void refresh());
       console.error("failed to load sessions", err);
     }
   }

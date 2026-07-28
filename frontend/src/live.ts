@@ -41,3 +41,33 @@ export function announce(message: string): void {
   last = message;
   node.textContent = message;
 }
+
+/** Render a failed read into `host`, announce it, and offer the way out.
+ *
+ *  Every read-path failure used to render a bare empty-state div: a dead end,
+ *  recoverable only by reloading the page or navigating away and back, which
+ *  on a local-first viewer is a heavy answer to a request that just lost a
+ *  race. The write paths already retry (docs/design autosave); reads did not.
+ *
+ *  `retry` re-runs whatever loader failed. Omit it only where there is nothing
+ *  sensible to re-run. */
+export function showError(host: HTMLElement, message: string, retry?: () => void): void {
+  const div = document.createElement("div");
+  div.className = "empty-state";
+  div.textContent = message;
+  if (retry) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "retry-btn";
+    btn.textContent = "retry";
+    btn.addEventListener("click", () => {
+      // Say something immediately: the retry may take a moment, and a button
+      // that visibly does nothing reads as broken.
+      host.textContent = "loading…";
+      retry();
+    });
+    div.append(" ", btn);
+  }
+  host.replaceChildren(div);
+  announce(message);
+}

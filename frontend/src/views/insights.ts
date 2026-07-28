@@ -30,7 +30,7 @@ import {
   linesBadgeHtml,
   truncate,
 } from "../format";
-import { announce } from "../live";
+import { showError } from "../live";
 import { getScopeParam, labelForFolder, scopeChipHtml } from "../scope";
 
 interface InsightsFilters {
@@ -178,8 +178,7 @@ export function renderInsightsView(container: HTMLElement): () => void {
         })
         .catch((err: unknown) => {
           if (mine !== seq) return;
-          churnWrapEl.innerHTML = `<div class="empty-state">failed to load rework data</div>`;
-          announce("failed to load rework data");
+          showError(churnWrapEl, "failed to load rework data", () => void refresh());
           console.error("failed to load churn", err);
         }),
       getFriction(filters.days, project, FRICTION_LIMIT)
@@ -190,8 +189,7 @@ export function renderInsightsView(container: HTMLElement): () => void {
         })
         .catch((err: unknown) => {
           if (mine !== seq) return;
-          frictionWrapEl.innerHTML = `<div class="empty-state">failed to load friction data</div>`;
-          announce("failed to load friction data");
+          showError(frictionWrapEl, "failed to load friction data", () => void refresh());
           console.error("failed to load friction", err);
         }),
       getSizing(filters.days, project, SIZING_LIMIT)
@@ -201,8 +199,7 @@ export function renderInsightsView(container: HTMLElement): () => void {
         })
         .catch((err: unknown) => {
           if (mine !== seq) return;
-          sizingWrapEl.innerHTML = `<div class="empty-state">failed to load sizing data</div>`;
-          announce("failed to load sizing data");
+          showError(sizingWrapEl, "failed to load sizing data", () => void refresh());
           console.error("failed to load sizing", err);
         }),
       getLedger(filters.days, project)
@@ -212,8 +209,7 @@ export function renderInsightsView(container: HTMLElement): () => void {
         })
         .catch((err: unknown) => {
           if (mine !== seq) return;
-          ledgerWrapEl.innerHTML = `<div class="empty-state">failed to load ledger data</div>`;
-          announce("failed to load ledger data");
+          showError(ledgerWrapEl, "failed to load ledger data", () => void refresh());
           console.error("failed to load ledger", err);
         }),
     ]);

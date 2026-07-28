@@ -26,7 +26,7 @@ import {
 import type { Burndown, CycleReport, Todo, TodoEvent, TodoState } from "../api";
 import { describeEventOrCreated } from "../boardEvents";
 import { escapeHtml, formatDay, formatRelativeTime } from "../format";
-import { announce } from "../live";
+import { showError } from "../live";
 import { getScope, getScopeSet, scopeChipHtml } from "../scope";
 
 function points(v: number): string {
@@ -372,11 +372,15 @@ export function renderCyclesView(container: HTMLElement): () => void {
         selectedId = null;
         burndown = null;
       }
+      // With exactly one cycle there is nothing to pick between, and "pick a
+      // cycle to see its burndown" was a click you had to make every visit to
+      // reach the only answer. Only for one: with several, choosing for you
+      // would be guessing.
+      if (!selectedId && rows.length === 1) selectedId = rows[0]!.cycle.id;
       render();
       if (selectedId && !burndown) void loadBurndown();
     } catch (err) {
-      bodyEl.innerHTML = `<div class="empty-state">failed to load cycles</div>`;
-      announce("failed to load cycles");
+      showError(bodyEl, "failed to load cycles", () => void refresh());
       console.error("failed to load cycles", err);
     }
   }
