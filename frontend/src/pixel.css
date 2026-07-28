@@ -218,11 +218,62 @@
      app runs fluid at 1400px+, where the literal px values are unreadable.
      Silkscreen is drawn on an 8px em, so only 8 and 16 are pixel-crisp and
      --px-label's 10px interpolates slightly soft. That was chosen knowingly:
-     8px is crisp but too small to read at this width. */
+     8px is crisp but too small to read at this width.
+
+     The ramp below is named by ROLE, not by size, and each role carries the
+     family it is meant to be set in. That pairing is the enforceable half of
+     the rule stated above: picking --px-meta gets you mono at 11px, so the
+     four families stop drifting across components the way they did when every
+     rule wrote its own literal.
+
+       --px-label-xs  9px   Silkscreen   densest chrome label
+       --px-label    10px   Silkscreen   standard chrome label, all-caps
+       --px-meta     11px   mono         row meta, ids, counts, timestamps
+       --px-body     12px   mono/sans    the workhorse — table and list text
+       --px-word     13px   sans         prose that wraps
+       --px-sans-sm  14px   sans         body default (set on <body>)
+       --px-title    16px   sans         card and section titles
+       --px-display  20px   Pixelify     stat numerals, and only numerals
+
+     --px-meta and --px-body are new, and they are not new SIZES: 11px and 12px
+     were already the two most common values in style.css (98 and 67 literal
+     font-size declarations). They had no token, so every component re-typed
+     them; naming them is what lets those 165 sites converge. --px-title and
+     --px-display absorb the one-off 15/16/17 and 18/20 stragglers. */
   --px-label-xs: 9px;
   --px-label: 10px;
+  --px-meta: 11px;
+  --px-body: 12px;
   --px-word: 13px;
   --px-sans-sm: 14px;
+  --px-title: 16px;
+  --px-display: 20px;
+
+  /* --- space ---
+     There was no spacing scale at all: 454 padding/gap/margin declarations
+     spread across 21 distinct values, including 3px, 5px, 7px, 9px, 11px and
+     34px. Nothing lined up because nothing was asked to.
+
+     The rhythm is 4px, and it is not arbitrary — body paints a 16px dot grid,
+     so quarter/half/full of that cell is what the eye is already being given.
+     Silkscreen's 8px em agrees.
+
+     --px-sp-1 (2px) is deliberately OFF that rhythm and exists only for
+     inline nudges inside a control — the gap between a chip's icon and its
+     label, where 4px is visibly too much. Reach for it there and nowhere
+     else; layout spacing starts at --px-sp-2.
+
+     Off-grid values resolve by whether they are inline or layout: 6 -> 4 or 8,
+     10 -> 8 or 12, 14 -> 12 or 16. That call is per-site and belongs to the
+     sweep, not here. */
+  --px-sp-1: 2px;
+  --px-sp-2: 4px;
+  --px-sp-3: 8px;
+  --px-sp-4: 12px;
+  --px-sp-5: 16px;
+  --px-sp-6: 24px;
+  --px-sp-7: 32px;
+  --px-sp-8: 48px;
 }
 
 /* Dark is NOT in the makeup doc — it lists "pixel nhưng dark" as an untried
