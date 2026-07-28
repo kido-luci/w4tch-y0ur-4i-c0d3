@@ -126,15 +126,19 @@ func (ss *StateStore) List() []TodoState {
 	return out
 }
 
-// ListFor returns the columns one scope sees: the shared ones plus that
-// project's own. A card parked in another project's column therefore stays
-// invisible here — which is fine, because the board filters cards by scope too.
-func (ss *StateStore) ListFor(repo string) []TodoState {
+// ListForScope returns the columns one scope sees: the shared ones plus those
+// owned by any project the scope covers.
+//
+// Takes a resolved scopeSet, not a label: a label can name a GROUP, and a
+// column created under that group must stay visible when the rail narrows to a
+// member project. Comparing the label to s.Repo made it disappear instead —
+// see scope.go.
+func (ss *StateStore) ListForScope(in scopeSet) []TodoState {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 	out := make([]TodoState, 0, len(ss.states))
 	for _, s := range ss.states {
-		if s.Repo == "" || s.Repo == repo {
+		if in.coversOwner(s.Repo) {
 			out = append(out, *s)
 		}
 	}

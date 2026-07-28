@@ -21,7 +21,7 @@ func dialMCP(t *testing.T) (*mcp.ClientSession, *DrawingStore, *TodoStore, *DocS
 	ts.UseStates(ss)
 	ts.UseEvents(NewEventStore(db))
 	dcs := NewDocStore(db)
-	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewIndex(t.TempDir()), newSSEHub())
+	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewProjectStore(db), NewIndex(t.TempDir()), newSSEHub())
 
 	ctx := context.Background()
 	clientTr, serverTr := mcp.NewInMemoryTransports()

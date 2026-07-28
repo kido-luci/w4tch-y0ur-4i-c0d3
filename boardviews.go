@@ -111,13 +111,14 @@ func (vs *ViewStore) List() []BoardView {
 	return out
 }
 
-// ListFor returns the views one scope sees: shared plus that project's own.
-func (vs *ViewStore) ListFor(repo string) []BoardView {
+// ListForScope returns the views one scope sees: shared plus those owned by any
+// project the scope covers (scope.go).
+func (vs *ViewStore) ListForScope(in scopeSet) []BoardView {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 	out := make([]BoardView, 0, len(vs.views))
 	for _, v := range vs.views {
-		if v.Repo == "" || v.Repo == repo {
+		if in.coversOwner(v.Repo) {
 			out = append(out, *v)
 		}
 	}

@@ -162,7 +162,7 @@ type listShipsInput struct {
 
 // newMCPServer builds the "wyac" MCP server over the drawing, todo and doc
 // stores. ix is read-only here — it backs the done snapshot.
-func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, ix *Index, hub *sseHub) *mcp.Server {
+func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ix *Index, hub *sseHub) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "wyac",
 		Title:   "W4tch y0ur 4I c0d3",
@@ -265,10 +265,13 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		Description: "List the board's cards, column-ordered (the workflow's own column order — see list_board_states). Each card carries its id, its #seq, title, note, repo, labels, kind, priority, estimate, parentId, cycleId, linked session/wireframe ids, a rollup of its children, and — once done — the frozen cost snapshot.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in todoListInput) (*mcp.CallToolResult, todoListOutput, error) {
 		list := todos.List()
-		if repo := strings.TrimSpace(in.Repo); repo != "" {
+		// Resolve rather than compare: `repo` may name a GROUP or a parent in the
+		// rail tree, and an exact match answered those with zero cards even
+		// though every card sat inside them. See scope.go.
+		if in := resolveScope(strings.TrimSpace(in.Repo), groups, projects); !in.all {
 			kept := make([]Todo, 0, len(list))
 			for _, t := range list {
-				if t.Repo == repo {
+				if in.covers(t.Repo) {
 					kept = append(kept, t)
 				}
 			}
@@ -303,21 +306,17 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		Name:        "list_board_states",
 		Description: "List the board's workflow columns in order. A column's id is what create_todo/update_todo take as `status`, and its category (todo | started | done) is what decides whether landing there freezes a card's cost snapshot — so read this before moving a card, rather than assuming backlog/doing/done.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in stateListInput) (*mcp.CallToolResult, stateListOutput, error) {
-		if repo := strings.TrimSpace(in.Repo); repo != "" {
-			return nil, stateListOutput{States: states.ListFor(repo)}, nil
-		}
-		return nil, stateListOutput{States: states.List()}, nil
+		return nil, stateListOutput{
+			States: states.ListForScope(resolveScope(strings.TrimSpace(in.Repo), groups, projects)),
+		}, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_cycles",
 		Description: "List the board's cycles (sprints), newest first, each with what it committed to and what has landed: card counts, story points, and how many cards carry no estimate. Use a cycle's id as create_todo/update_todo's cycleId to plan work into it.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in cycleListInput) (*mcp.CallToolResult, cycleListOutput, error) {
-		list := cycles.List()
-		if repo := strings.TrimSpace(in.Repo); repo != "" {
-			list = cycles.ListFor(repo)
-		}
-		return nil, cycleListOutput{Cycles: Velocity(list, todos)}, nil
+		scoped := resolveScope(strings.TrimSpace(in.Repo), groups, projects)
+		return nil, cycleListOutput{Cycles: Velocity(cycles.ListForScope(scoped), todos, scoped)}, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -465,7 +464,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 }
 
 // newMCPHandler serves the MCP server on a streamable HTTP endpoint.
-func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, ix *Index, hub *sseHub) http.Handler {
-	server := newMCPServer(drawings, todos, states, cycles, docs, groups, ix, hub)
+func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ix *Index, hub *sseHub) http.Handler {
+	server := newMCPServer(drawings, todos, states, cycles, docs, groups, projects, ix, hub)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 }

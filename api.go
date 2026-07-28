@@ -215,6 +215,12 @@ func refreezeTodo(todos *TodoStore, ix *Index, todo Todo, status string) Todo {
 }
 
 func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
+	// Every scope question below goes through here, so a group label expands the
+	// same way the rail expands it — see scope.go.
+	scopeOf := func(r *http.Request) scopeSet {
+		return resolveScope(strings.TrimSpace(r.URL.Query().Get("repo")), groups, projects)
+	}
+
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 		writeJSON(w, ix.Sessions(days, r.URL.Query().Get("project"), r.URL.Query().Get("status")))
@@ -363,11 +369,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	// sees: the shared columns plus that project's own.
 
 	mux.HandleFunc("GET /api/board/states", func(w http.ResponseWriter, r *http.Request) {
-		if repo := r.URL.Query().Get("repo"); repo != "" {
-			writeJSON(w, states.ListFor(repo))
-			return
-		}
-		writeJSON(w, states.List())
+		writeJSON(w, states.ListForScope(scopeOf(r)))
 	})
 
 	mux.HandleFunc("POST /api/board/states", func(w http.ResponseWriter, r *http.Request) {
@@ -452,11 +454,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	// reports that make the bookkeeping pay for itself.
 
 	mux.HandleFunc("GET /api/cycles", func(w http.ResponseWriter, r *http.Request) {
-		if repo := r.URL.Query().Get("repo"); repo != "" {
-			writeJSON(w, cycles.ListFor(repo))
-			return
-		}
-		writeJSON(w, cycles.List())
+		writeJSON(w, cycles.ListForScope(scopeOf(r)))
 	})
 
 	mux.HandleFunc("POST /api/cycles", func(w http.ResponseWriter, r *http.Request) {
@@ -516,11 +514,16 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 
 	mux.HandleFunc("GET /api/cycles/{id}/burndown", func(w http.ResponseWriter, r *http.Request) {
 		c, ok := cycles.Get(r.PathValue("id"))
-		if !ok {
+		in := scopeOf(r)
+		// A drill-down validates its target against the resolved scope, the way
+		// the git tab's endpoints validate ?repo: without it this charted a
+		// cycle that GET /api/cycles at the same scope says does not exist, so a
+		// shared URL rendered a report for something the page cannot list.
+		if !ok || !in.coversOwner(c.Repo) {
 			writeJSONError(w, http.StatusNotFound, "cycle not found")
 			return
 		}
-		bd, err := ComputeBurndown(c, todos, events, time.Now())
+		bd, err := ComputeBurndown(c, todos, events, time.Now(), in)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -529,21 +532,14 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	})
 
 	mux.HandleFunc("GET /api/cycles/velocity", func(w http.ResponseWriter, r *http.Request) {
-		list := cycles.List()
-		if repo := r.URL.Query().Get("repo"); repo != "" {
-			list = cycles.ListFor(repo)
-		}
-		writeJSON(w, Velocity(list, todos))
+		in := scopeOf(r)
+		writeJSON(w, Velocity(cycles.ListForScope(in), todos, in))
 	})
 
 	// --- saved views (boardviews.go): a named filter plus the shape it draws.
 
 	mux.HandleFunc("GET /api/board/views", func(w http.ResponseWriter, r *http.Request) {
-		if repo := r.URL.Query().Get("repo"); repo != "" {
-			writeJSON(w, views.ListFor(repo))
-			return
-		}
-		writeJSON(w, views.List())
+		writeJSON(w, views.ListForScope(scopeOf(r)))
 	})
 
 	mux.HandleFunc("POST /api/board/views", func(w http.ResponseWriter, r *http.Request) {
@@ -1130,7 +1126,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 	registerCodegraphAPI(mux, ix)
 	registerGitAPI(mux, ix)
 
-	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, ix, hub))
+	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, projects, ix, hub))
 
 	// Per-day activity buckets for the last `weeks` weeks (default 26), bucketed
 	// by the local calendar day of each session's start. Powers the heatmap; its
