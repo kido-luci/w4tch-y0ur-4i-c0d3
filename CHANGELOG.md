@@ -3,6 +3,21 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## v2.0.1 — 2026-07-28
+
+### Fixed
+- **The activity heatmap no longer sits stranded in a panel three times its
+  width.** It draws at a fixed 387px — 26 weeks of cells plus the weekday
+  gutter — and filled 32% of the full-width card it had to itself, the only
+  graphic in the app that did. It cannot be stretched to fit: the SVG sizes by
+  its `viewBox`, so scaling it up would enlarge the month labels and the
+  less/more legend by the same factor, and widening it with more weeks is
+  capped at 53 by `/api/activity`, which still leaves a third of the panel
+  empty. So it now shares a row with **model distribution**, taking exactly the
+  width it draws and handing the rest to the distribution bar, which stretches.
+  Below 900px the two stack. The two at-a-glance summaries also read better
+  together, above the detailed tokens-over-time chart rather than split by it.
+
 ## v2.0.0 — 2026-07-28
 
 ### Added
