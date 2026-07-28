@@ -228,20 +228,21 @@
      --px-label's 10px interpolates slightly soft. That was chosen knowingly:
      8px is crisp but too small to read at this width.
 
-     The ramp below is named by ROLE, not by size, and each role carries the
-     family it is meant to be set in. That pairing is the enforceable half of
-     the rule stated above: picking --px-meta gets you mono at 11px, so the
-     four families stop drifting across components the way they did when every
-     rule wrote its own literal.
+     The ramp below is named by ROLE, not by size. Size and family are separate
+     axes here and the ramp does NOT imply one: counted across style.css,
+     --px-label is mono at 25 sites against Silkscreen at 10, and --px-display
+     is mostly mono rather than Pixelify. The family rule above still stands on
+     its own — it just is not a function of the size, so do not read one off
+     the other.
 
-       --px-label-xs  9px   Silkscreen   densest chrome label
-       --px-label    10px   Silkscreen   standard chrome label, all-caps
-       --px-meta     11px   mono         row meta, ids, counts, timestamps
-       --px-body     12px   mono/sans    the workhorse — table and list text
-       --px-word     13px   sans         prose that wraps
-       --px-sans-sm  14px   sans         body default (set on <body>)
-       --px-title    16px   sans         card and section titles
-       --px-display  20px   Pixelify     stat numerals, and only numerals
+       --px-label-xs  9px   densest label or tag
+       --px-label    10px   standard chrome label, and small mono tags
+       --px-meta     11px   row meta, ids, counts, timestamps
+       --px-body     12px   the workhorse — table and list text
+       --px-word     13px   prose that wraps
+       --px-sans-sm  14px   body default (set on <body>)
+       --px-title    16px   card and section titles
+       --px-display  20px   stat values
 
      --px-meta and --px-body are new, and they are not new SIZES: 11px and 12px
      were already the two most common values in style.css (98 and 67 literal
