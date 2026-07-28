@@ -1,15 +1,17 @@
 # W4tch y0ur 4I c0d3
 
-A local, privacy-first viewer for **Claude Code** sessions: per-session history
-(tokens, cost, models, duration), a live **agent graph** and **timeline** of
-every subagent a session spawned, and a click-node inspector for digging into
-any of them. It also tracks activity over time with a heatmap, breaks down
-token/cost by model, shows lines changed per session, and can notify you when
-a session needs input or finishes — watch your AI code as it works.
+A local, privacy-first dashboard for solo development with **Claude Code**. It
+reads `~/.claude/projects/` to show what your sessions actually did — tokens,
+cost, models, the agent graph, the milestones — and then puts the rest of the
+work next to them: a board whose cards link to the sessions that moved them, a
+drawing library, a docs wiki, a read-only git dashboard, and a ship log. One Go
+binary, one page, everything scoped to the project you're looking at.
 
-Reads `~/.claude/projects/` transcript **metadata** only (never prompt text), no
-database, no network beyond `127.0.0.1:4777` — with three **opt-in** exceptions,
-each one off until you configure it:
+Everything runs on `127.0.0.1:4777` against local files. Session text is indexed
+locally into `index.db` in the config dir so search can rank and fold diacritics
+("loi" finds "lỗi"); tool inputs and results are deliberately kept out of that
+index. **Nothing is sent anywhere** — with three **opt-in** exceptions, each one
+off until you configure it:
 
 - the milestone *summarize* button shells out to your own `claude` CLI (haiku,
   `--no-session-persistence`) to write one line per milestone group. Only the
@@ -24,36 +26,61 @@ each one off until you configure it:
   is **no built-in backend**: `COWORK_API` and `DESIGN_INGEST_SECRET` must both
   be set or the button explains itself instead of sending anything.
 
-Nothing else ever leaves the machine, and nothing happens unless you click.
+All three are click-triggered: nothing goes out in the background, ever.
 Design notes: `docs/spec.md`.
 
-## Features
+## Layout
 
-- **Sessions list** — filter by day and project; stat cards for sessions, total
-  tokens, est. cost, and agent spawns; a live strip of running sessions; and a
-  table with per-session duration, models, tokens, lines changed, and cost.
-- **Activity heatmap** — a GitHub-style contribution calendar of the last 26
-  weeks, colored by sessions per day.
-- **Model distribution** — a stacked bar of tokens split by model family
-  (opus / sonnet / haiku / fable) with each family's cost; global on the list,
-  per-session on the detail view.
+Routes are real paths shaped `family/scope/tab`. Three families across the top,
+one **project scope** rail down the side — pick a project (or a group, or a
+parent with its whole subtree) and every view follows it. The scope lives in the
+URL, so any view you are looking at is a link you can paste.
+
+### claude — what your sessions did
+
+- **Sessions** — filter by day and status; stat cards for sessions, tokens,
+  est. cost and agent spawns; a live strip of running sessions; a table with
+  per-session duration, models, tokens, lines changed and cost.
+- **Session detail** — the **agent graph** (main thread plus every subagent it
+  spawned), a **timeline** Gantt on a shared time axis, and a click-node
+  **inspector** for any node's model, status, tokens, tools, cost and duration.
+  Plus cost-ranked subagent cards and lines added/removed.
 - **Milestones** — the session's semantic arc (plans, branches, commits, PRs,
-  releases) mined from its own git commands and folded into branch-scoped,
-  collapsible groups; a button summarizes each group in one line via your
-  local `claude` CLI (on-demand, cached).
-- **Agent graph** — the main session plus every subagent it spawned, drawn as
-  a live node graph.
-- **Session timeline** — a compact Gantt of the main thread plus each subagent
-  on a shared time axis.
-- **Click-node inspector** — click any graph node or timeline row to open a
-  side drawer with that node's model, status, token breakdown, tools, cost,
-  and duration.
-- **Subagent cost cards** — cost-ranked cards, one per subagent.
-- **Lines changed** — added/removed lines per session (main thread from each
-  edit's structuredPatch; subagent edits approximated from their tool inputs).
-- **Live + notifications** — instant updates via Claude Code hooks (see
-  below), plus optional OS notifications when a session finishes or needs
-  input.
+  releases) mined from its own git commands and folded into branch-scoped
+  groups; a button summarizes each group in one line via your local `claude`
+  CLI (on-demand, cached).
+- **Insights** — an activity heatmap, tokens over time by model family, and
+  four cards that ask harder questions: **rework radar**, **friction**, **work
+  sizing**, **cost per outcome**.
+- **Search** — full-text over what you said and what Claude said back, ranked,
+  diacritics folded.
+
+### project — everything else about the work
+
+- **Board** — backlog / doing / done cards, each linkable to the Claude
+  sessions that worked it, so a card carries its own history.
+- **Design** — an embedded Excalidraw library with groups, topic tags and
+  cached thumbnails.
+- **Docs** — a markdown wiki with an index rail and a per-page TOC.
+- **Ships** — every `make check` and `make release` run recorded with project,
+  version, exit code, duration and log tail.
+- **Code graph** — a read-only view over each repo's `.codegraph` index:
+  folder overview, drill-down, and an ELK-routed graph with subsystem colours.
+- **Git** — strictly read-only. An overview row per repo (branch, clean/dirty,
+  ahead/behind, latest commit), and a detail view with commits → diffs, working
+  tree, branches, pull requests and CI. GitHub remotes are read via `gh`.
+
+### service — sites you run
+
+- **Cloudflare** and **Search Console** dashboards, proxied server-side so the
+  browser never sees a token. Opt-in; see the note at the top.
+
+### everywhere
+
+- **Live + notifications** — instant updates via Claude Code hooks (below),
+  plus optional OS notifications when a session finishes or needs input.
+- **MCP server** — create and update board cards, docs pages and drawings from
+  inside a Claude Code session, so the agent files its own work.
 
 ## Build & run
 
