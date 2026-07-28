@@ -14,7 +14,6 @@ import { renderInsightsView } from "./views/insights";
 import { renderSearchView } from "./views/search";
 import { renderSessionsView } from "./views/sessions";
 import { renderShipsView } from "./views/ships";
-import { renderWebView } from "./views/web";
 
 initTheme();
 
@@ -35,17 +34,13 @@ type Route =
   | { view: "ships" }
   | { view: "codegraph" }
   | { view: "git" }
-  | { view: "gitRepo"; folder: string }
-  | { view: "web"; section: "cloudflare" | "gsc" };
+  | { view: "gitRepo"; folder: string };
 
 // Routes are real paths, shaped family/scope/tab[/detail] (see scope.ts). The
 // scope segment is orthogonal to the view, so it's parsed out here and the view
 // is chosen from family + tab + detail. Detail segments arrive already decoded.
 function parseRoute(pathname: string): Route {
   const loc = parseLocation(pathname);
-  if (loc.family === "service") {
-    return { view: "web", section: loc.tab === "search-console" ? "gsc" : "cloudflare" };
-  }
   if (loc.family === "claude") {
     if (loc.tab === "session" && loc.detail) {
       return { view: "detail", id: loc.detail };
@@ -99,12 +94,6 @@ function migrateLegacyHash(): void {
     case "git":
       path = buildPath("project", scope, tab, detail);
       break;
-    case "service":
-      path = "/service/" + (detail || "cloudflare");
-      break;
-    case "web":
-      path = "/service/cloudflare";
-      break;
     default:
       path = buildPath("claude", scope, "sessions", "");
   }
@@ -119,11 +108,11 @@ const app: HTMLDivElement = appRoot;
 
 /* The nav is the one piece of chrome outside the views: it renders once and
    survives route changes, so only #view is torn down on navigation. Two-level
-   IA: the top bar carries the three families — claude (views over the Claude
-   transcripts: sessions / insights / search), project (views over YOUR
-   content: board / design / docs / ships) and service (one tab per external
-   service: cloudflare / search console) — and the sub-row lists the active
-   family's views. The theme toggle is the one other app-wide control.
+   IA: the top bar carries the two families — claude (views over the Claude
+   transcripts: sessions / insights / search) and project (views over YOUR
+   content: board / design / docs / ships) — and the sub-row lists the active
+   family's views. (A third, service, held the Cloudflare and Search Console
+   dashboards until they moved to their own repo.) The theme toggle is the one other app-wide control.
 
    Both rows sit in one .px-chrome wrapper so a single `position: sticky`
    pins them together — as siblings each would need its own top offset, and
@@ -137,7 +126,6 @@ app.innerHTML = `
     <div class="px-nav__links">
       <a class="px-nav-link" href="/" data-fam="claude">claude</a>
       <a class="px-nav-link" href="/project/board" data-fam="project">project</a>
-      <a class="px-nav-link" href="/service/cloudflare" data-fam="service">service</a>
     </div>
     <div class="px-nav__end">
       <button type="button" class="theme-btn" id="theme-btn" aria-label="toggle light/dark theme"></button>
@@ -153,8 +141,6 @@ app.innerHTML = `
     <a class="px-subnav-link" href="/project/ships" data-nav="ships" data-fam="project">ships</a>
     <a class="px-subnav-link" href="/project/codegraph" data-nav="codegraph" data-fam="project">code graph</a>
     <a class="px-subnav-link" href="/project/git" data-nav="git" data-fam="project">git</a>
-    <a class="px-subnav-link" href="/service/cloudflare" data-nav="cloudflare" data-fam="service">cloudflare</a>
-    <a class="px-subnav-link" href="/service/search-console" data-nav="gsc" data-fam="service">search console</a>
   </nav>
   </div>
   <div class="app-shell">
@@ -221,19 +207,11 @@ function render(): void {
                   ? "codegraph"
                   : route.view === "git" || route.view === "gitRepo"
                   ? "git"
-                  : route.view === "web"
-                  ? route.section === "gsc"
-                    ? "gsc"
-                    : "cloudflare"
                   : "list";
   // The family follows the active view; the sub-row shows only that family's
   // tabs and lights the active one.
   const family =
-    active === "list" || active === "insights" || active === "search"
-      ? "claude"
-      : active === "cloudflare" || active === "gsc"
-        ? "service"
-        : "project";
+    active === "list" || active === "insights" || active === "search" ? "claude" : "project";
   for (const link of famLinks) {
     link.classList.toggle("px-nav-link--active", link.dataset.fam === family);
   }
@@ -277,9 +255,7 @@ function render(): void {
                         ? renderGitView(view)
                         : route.view === "gitRepo"
                         ? renderGitRepoView(view, route.folder)
-                        : route.view === "web"
-                          ? renderWebView(view, route.section)
-                          : renderSessionsView(view);
+                        : renderSessionsView(view);
 }
 
 // Back/Forward, and every programmatic navigate()/setScope() (which dispatch a

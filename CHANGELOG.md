@@ -34,6 +34,17 @@ All notable changes to this project are documented here. Versions follow
   keeps working unchanged; boards with no custom columns look and behave
   exactly as before.
 
+### Removed
+- **Service views.** The Cloudflare Analytics and Search Console dashboards
+  moved to their own private repo, `w4tch-y0ur-s3rv1c3s`. They watched third-
+  party services, which is a different job from watching your own coding
+  sessions, and they shared this binary only by accident of history. Gone with
+  them: the `service` nav family and its `/service/*` routes, the
+  `/api/cloudflare/*`, `/api/gsc/*` and `/api/webstats/sites` endpoints, the
+  `cfanalytics` and `gsc` packages, and `webstats.json` handling. An existing
+  `webstats.json` is simply ignored here now; move it to the new app's config
+  dir. Nothing else changes — no data is touched.
+
 ## v1.0.0 — 2026-07-27
 
 First public release.
@@ -57,10 +68,6 @@ First public release.
 - **Live updates** — a ~500 ms file watch by default, or instant push via
   Claude Code hooks (`--print-hooks`), plus optional OS notifications when a
   session needs input or finishes.
-- **Service views** — read-only Cloudflare Analytics and Google Search Console
-  dashboards for sites you own, proxied server-side so the browser never sees a
-  token. Credentials come from `webstats.json` in the config dir; with none
-  configured the endpoints answer 503 and the view shows setup hints.
 - **Share a drawing for review** — an opt-in `share` action PUTs one drawing's
   scene to a review backend you name via `COWORK_API` + `DESIGN_INGEST_SECRET`.
   No backend ships with the app: unset either variable and the button explains
