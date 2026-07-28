@@ -17,10 +17,6 @@ off until you configure it:
   `--no-session-persistence`) to write one line per milestone group. Only the
   milestone labels (branch names, commit subjects, tag names) are sent, and the
   result is cached on disk so each session is summarized once.
-- the **service** tab proxies Cloudflare Analytics and Google Search Console for
-  sites you own, so the browser never sees a token. Credentials live in
-  `webstats.json` in the config dir, never in this repo; with no file there the
-  endpoints answer 503 and the view renders setup hints.
 - the design library's *share* button PUTs that one drawing's `.excalidraw`
   scene to a review backend you name, so teammates can view and comment. There
   is **no built-in backend**: `COWORK_API` and `DESIGN_INGEST_SECRET` must both
@@ -69,11 +65,6 @@ URL, so any view you are looking at is a link you can paste.
 - **Git** — strictly read-only. An overview row per repo (branch, clean/dirty,
   ahead/behind, latest commit), and a detail view with commits → diffs, working
   tree, branches, pull requests and CI. GitHub remotes are read via `gh`.
-
-### service — sites you run
-
-- **Cloudflare** and **Search Console** dashboards, proxied server-side so the
-  browser never sees a token. Opt-in; see the note at the top.
 
 ### everywhere
 

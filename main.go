@@ -12,9 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"watch-your-ai-code/cfanalytics"
-	"watch-your-ai-code/gsc"
 )
 
 //go:embed all:frontend/dist
@@ -106,13 +103,6 @@ func main() {
 	importDataOnce(dataDB, cfgDir)
 	go backupDataDB(dataDB, cfgDir)
 
-	// Web analytics (/service/*): read-only Cloudflare + Search Console clients,
-	// configured via webstats.json in the config dir; absent config just means
-	// the endpoints answer 503 and the view shows setup hints.
-	ws := loadWebstats(cfgDir)
-	cfClient := cfanalytics.New(ws.Cloudflare.ZoneID, ws.Cloudflare.AccountID, ws.Cloudflare.AnalyticsToken, ws.Cloudflare.RumSiteTag)
-	gscClient := gsc.New(ws.SearchConsole.Property, ws.SearchConsole.SAKeyFile)
-
 	todoStore := NewTodoStore(dataDB)
 	drawingStore := NewDrawingStore(dataDB)
 	docStore := NewDocStore(dataDB)
@@ -127,7 +117,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, drawingStore, docStore, groupStore, projectStore, cfClient, gscClient, ws.Sites)
+	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, drawingStore, docStore, groupStore, projectStore)
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
@@ -149,14 +139,24 @@ func main() {
 		// SPA fallback: the client routes on real paths (History API), so a clean
 		// route like /project/<scope>/git is not a file. Serve the embedded file
 		// when it exists; otherwise hand back index.html and let the client router
-		// take over. (/api and /mcp match more specific patterns, so they never
-		// reach here.) A missing /assets/ file stays a 404 — masking it with the
+		// take over. A missing /assets/ file stays a 404 — masking it with the
 		// HTML shell would feed a script/style tag a 200 of HTML.
+		//
+		// /api and /mcp are 404'd here for the same reason, one level up: only
+		// REGISTERED patterns are more specific than "/", so an unrouted API
+		// path lands in this handler and would answer 200 with a web page to a
+		// caller expecting JSON. That went unnoticed while every /api path had
+		// a handler; removing the service proxies turned three live endpoints
+		// into HTML-200s and made it visible.
 		name := strings.TrimPrefix(r.URL.Path, "/")
 		if name == "" {
 			name = "index.html"
 		}
 		if _, err := fs.Stat(dist, name); err != nil {
+			if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" {
+				writeJSONError(w, http.StatusNotFound, "no such endpoint")
+				return
+			}
 			if strings.HasPrefix(r.URL.Path, "/assets/") || strings.HasPrefix(r.URL.Path, "/excalidraw-assets/") {
 				http.NotFound(w, r)
 				return

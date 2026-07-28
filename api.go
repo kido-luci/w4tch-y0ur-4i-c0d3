@@ -5,20 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"watch-your-ai-code/cfanalytics"
-	"watch-your-ai-code/gsc"
 )
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -216,16 +211,7 @@ func refreezeTodo(todos *TodoStore, ix *Index, todo Todo, status string) Todo {
 	return todo
 }
 
-// Validation for the web-analytics proxies (see the handlers below).
-var validCFRange = map[string]bool{"24h": true, "72h": true, "30d": true}
-var validGSCRange = map[string]bool{"7d": true, "28d": true, "90d": true}
-
-// hostRe accepts a plain lowercase DNS name. Stricter than necessary on
-// purpose: the value is embedded into a GraphQL filter literal, so no quotes,
-// spaces, or escapes may pass.
-var hostRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
-
-func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, todos *TodoStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, cf *cfanalytics.Client, gs *gsc.Client, sites []WebSite) {
+func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, todos *TodoStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 		writeJSON(w, ix.Sessions(days, r.URL.Query().Get("project"), r.URL.Query().Get("status")))
@@ -1018,72 +1004,6 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 			}
 		}
 		writeJSON(w, st)
-	})
-
-	// The repo↔site mapping from webstats.json — non-secret, so unlike the
-	// analytics proxies below it answers (an empty list) even with no
-	// credentials configured.
-	mux.HandleFunc("GET /api/webstats/sites", func(w http.ResponseWriter, r *http.Request) {
-		if sites == nil {
-			writeJSON(w, []WebSite{})
-			return
-		}
-		writeJSON(w, sites)
-	})
-
-	// Web analytics (/service/*) — read proxies over the Cloudflare GraphQL API
-	// and the Search Console API, so the browser never sees a token. 503 when
-	// webstats.json is absent (the view renders setup hints instead), 502 when
-	// the upstream rejects every section.
-	mux.HandleFunc("GET /api/cloudflare/analytics", func(w http.ResponseWriter, r *http.Request) {
-		if !cf.Enabled() {
-			writeJSONError(w, http.StatusServiceUnavailable, "cloudflare analytics not configured")
-			return
-		}
-		rng := strings.TrimSpace(r.URL.Query().Get("range"))
-		if rng == "" {
-			rng = "24h"
-		}
-		if !validCFRange[rng] {
-			writeJSONError(w, http.StatusBadRequest, "invalid range (want 24h, 72h or 30d)")
-			return
-		}
-		host := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("host")))
-		if host != "" && !hostRe.MatchString(host) {
-			writeJSONError(w, http.StatusBadRequest, "invalid host")
-			return
-		}
-		res, err := cf.Fetch(r.Context(), cfanalytics.Query{Range: rng, Host: host})
-		if err != nil {
-			// Log the real reason; the body stays generic so token/config
-			// details never leak to the client.
-			log.Printf("[cf-analytics] %s: %v", r.URL.RequestURI(), err)
-			writeJSONError(w, http.StatusBadGateway, "cloudflare API error")
-			return
-		}
-		writeJSON(w, res)
-	})
-
-	mux.HandleFunc("GET /api/gsc/analytics", func(w http.ResponseWriter, r *http.Request) {
-		if !gs.Enabled() {
-			writeJSONError(w, http.StatusServiceUnavailable, "search console analytics not configured")
-			return
-		}
-		rng := strings.TrimSpace(r.URL.Query().Get("range"))
-		if rng == "" {
-			rng = "28d"
-		}
-		if !validGSCRange[rng] {
-			writeJSONError(w, http.StatusBadRequest, "invalid range (want 7d, 28d or 90d)")
-			return
-		}
-		res, err := gs.Fetch(r.Context(), gsc.Query{Range: rng})
-		if err != nil {
-			log.Printf("[gsc-analytics] %s: %v", r.URL.RequestURI(), err)
-			writeJSONError(w, http.StatusBadGateway, "search console API error")
-			return
-		}
-		writeJSON(w, res)
 	})
 
 	// Claude Code hooks POST their event JSON here for instant live updates —

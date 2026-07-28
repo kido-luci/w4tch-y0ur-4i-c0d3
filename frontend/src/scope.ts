@@ -84,7 +84,7 @@ let knownGroups: ProjectGroup[] = [];
 let knownProjects: Project[] = [];
 
 // The route lives in the real path (History API), shaped family/scope/tab[/detail]:
-//   /project/<scope>/git , /claude/<scope>/sessions , /service/cloudflare (no scope).
+//   /project/<scope>/git , /claude/<scope>/sessions.
 // The tab sets let parseLocation tell a scope-less transient path (/project/git,
 // before syncScopeToURL injects the scope) apart from a scoped one (/project/x/git):
 // if the segment after the family names a known tab, there's no scope segment.
@@ -92,8 +92,8 @@ const PROJECT_TABS = new Set(["board", "design", "docs", "ships", "codegraph", "
 const CLAUDE_TABS = new Set(["sessions", "insights", "search", "session"]);
 
 export interface Loc {
-  family: "claude" | "project" | "service" | "";
-  scope: string; // "" when the family carries none (service) or it's the transient scope-less form
+  family: "claude" | "project" | "";
+  scope: string; // "" when it's the transient scope-less form
   tab: string;
   detail: string;
 }
@@ -102,9 +102,6 @@ export interface Loc {
 export function parseLocation(pathname: string): Loc {
   const segs = pathname.split("/").filter(Boolean).map(decodeURIComponent);
   const family = segs[0] ?? "";
-  if (family === "service") {
-    return { family: "service", scope: "", tab: segs[1] ?? "", detail: "" };
-  }
   if (family === "project" || family === "claude") {
     const tabs = family === "project" ? PROJECT_TABS : CLAUDE_TABS;
     if (segs[1] && tabs.has(segs[1])) {
@@ -115,8 +112,8 @@ export function parseLocation(pathname: string): Loc {
   return { family: "", scope: "", tab: "", detail: "" };
 }
 
-/** Build a canonical path from its parts; the scope segment is dropped for the
-    service family (which ignores scope) and when there's no scope yet. */
+/** Build a canonical path from its parts; the scope segment is dropped when
+    there's no scope yet. */
 export function buildPath(family: string, scope: string, tab: string, detail: string): string {
   const segs = [family];
   if ((family === "project" || family === "claude") && scope) segs.push(encodeURIComponent(scope));
@@ -240,9 +237,9 @@ export function setScope(label: string, replace = false): void {
   saveScope(label);
   const loc = parseLocation(window.location.pathname);
   let { family, tab, detail } = loc;
-  if (family === "" || family === "service") {
-    // No scoped path to rewrite (root or the scope-ignoring service tab) — the
-    // next scoped navigation will carry the persisted scope.
+  if (family === "") {
+    // No scoped path to rewrite — the next scoped navigation will carry the
+    // persisted scope.
     return;
   }
   if (family === "claude" && tab === "") tab = "sessions";
@@ -269,7 +266,6 @@ export function syncScopeToURL(): void {
     family = "claude";
     tab = "sessions";
   }
-  if (family === "service") return; // service ignores scope, leave its path alone
   if (family === "claude" && tab === "") tab = "sessions";
   const label = getScope();
   saveScope(label);
