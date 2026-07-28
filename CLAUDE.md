@@ -82,6 +82,39 @@ tree, CHANGELOG entry) → full check → cross-compiles 4 platforms → tag pus
 SQLite index uses pure-Go `modernc.org/sqlite`, and a CGO dependency would take
 the whole release flow down with it.
 
+**Publishing has TWO paths, and the second one fires on its own.** Reading the
+Makefile alone tells you `make release` publishes. `.github/workflows/release.yml`
+also does, on `push: tags: ['v*']` — so **pushing any `v*` tag publishes a
+release**, with no `make release` involved. It checks out the tagged commit,
+builds the frontend and the same 4 platform binaries, then:
+
+- release for that tag exists (i.e. `make release` just made it) → `gh release
+  upload --clobber`. That is the normal path, and it means every release is
+  built twice, once locally and once in CI. Harmless, and `make release` is now
+  largely redundant with CI.
+- it does not exist → `gh release create --generate-notes` with the tarballs.
+
+The second branch is the trap, because a bare `git push origin <tag>` reaches it.
+Two consequences, both of which have bitten:
+
+- **The body is auto-generated** — a lone "Full Changelog" link, not the
+  CHANGELOG entry. Trying to `gh release create` afterwards fails 422
+  (`tag_name already exists`); use `gh release edit <tag> --notes-file` instead.
+- **GitHub marks the newly published release "Latest"**, so tagging an OLD
+  version demotes the real one on a public repo. Tagging `v1.0.0` retroactively
+  did exactly that to `v2.0.1`. Fix with `gh release edit <current> --latest`,
+  and check `gh api repos/<owner>/<repo>/releases/latest`.
+
+So a tag is never "just a tag" here. If you want one without publishing, there
+is no such thing while this trigger exists — say so rather than promising it.
+
+**CI is NOT the same gate as `make check`.** `ci.yml` runs on `pull_request`
+only (never on push to main) and does npm ci, `npm run build` (tsc + vite),
+gofmt, go vet, go test, go build. It does **not** run the frontend vitest suite,
+and it does **not** do the served-vs-disk embed check. `make check` does both, so
+a green PR is weaker evidence than a green `make check` — keep running the local
+one before you release.
+
 **The everyday instance — delivering.** Under the optional launchd agent
 (`launchd/com.luci.watch-your-ai-code.plist`, `KeepAlive=true`), restart it
 AFTER `make build`:
