@@ -88,7 +88,7 @@ let knownProjects: Project[] = [];
 // The tab sets let parseLocation tell a scope-less transient path (/project/git,
 // before syncScopeToURL injects the scope) apart from a scoped one (/project/x/git):
 // if the segment after the family names a known tab, there's no scope segment.
-const PROJECT_TABS = new Set(["board", "design", "docs", "ships", "codegraph", "git"]);
+const PROJECT_TABS = new Set(["board", "cycles", "design", "docs", "ships", "codegraph", "git"]);
 const CLAUDE_TABS = new Set(["sessions", "insights", "search", "session"]);
 
 export interface Loc {

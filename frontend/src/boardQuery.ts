@@ -6,7 +6,7 @@
 // here rather than reimplementing "does this card match".
 
 import type { BoardQuery, Cycle, Todo, TodoState } from "./api";
-import { escapeHtml } from "./format";
+import { escapeHtml, formatDay } from "./format";
 
 /** Does one card survive the filter? An absent field filters nothing. */
 export function matchesQuery(t: Todo, q: BoardQuery): boolean {
@@ -85,8 +85,8 @@ export function renderTimeline(todos: Todo[], cycles: Cycle[], states: TodoState
             <div class="tl-name">${escapeHtml(c.name)}${
               c.closedAt ? `<span class="tl-closed">closed</span>` : ""
             }</div>
-            <div class="tl-dates">${escapeHtml(c.startsAt.slice(0, 10))} → ${escapeHtml(
-              c.endsAt.slice(0, 10),
+            <div class="tl-dates">${escapeHtml(formatDay(c.startsAt))} → ${escapeHtml(
+              formatDay(c.endsAt),
             )}</div>
             <div class="tl-progress" title="${done}/${cards.length} cards done">
               <span style="width:${pct}%"></span>
