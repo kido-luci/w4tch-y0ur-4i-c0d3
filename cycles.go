@@ -128,14 +128,15 @@ func (cs *CycleStore) List() []Cycle {
 	return out
 }
 
-// ListFor returns the cycles one scope sees: the shared ones plus that
-// project's own — the same union rule the workflow columns use.
-func (cs *CycleStore) ListFor(repo string) []Cycle {
+// ListForScope returns the cycles one scope sees: the shared ones plus those
+// owned by any project the scope covers — the same resolved rule the columns
+// and the saved views use (scope.go).
+func (cs *CycleStore) ListForScope(in scopeSet) []Cycle {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	out := make([]Cycle, 0, len(cs.cycles))
 	for _, c := range cs.cycles {
-		if c.Repo == "" || c.Repo == repo {
+		if in.coversOwner(c.Repo) {
 			out = append(out, *c)
 		}
 	}
@@ -347,10 +348,17 @@ func startOfDay(t time.Time) time.Time {
 // Cards deleted since are absent from the live board and therefore invisible
 // here — their events reference an id nothing can reconstruct. That is a known
 // and deliberate hole: it is better than inventing a card from its event trail.
-func ComputeBurndown(c Cycle, todos *TodoStore, events *EventStore, now time.Time) (Burndown, error) {
+// `in` narrows the chart to the cards one scope covers, so a cross-project
+// cycle viewed from one project charts THAT project's slice. Without it the
+// chart counted board-wide while the activity feed beside it counted by scope,
+// and one screen told two stories.
+func ComputeBurndown(c Cycle, todos *TodoStore, events *EventStore, now time.Time, in scopeSet) (Burndown, error) {
 	out := Burndown{CycleID: c.ID}
 	cur := map[string]*cardAt{}
 	for _, t := range todos.List() {
+		if !in.covers(t.Repo) {
+			continue // out of scope: absent from the replay, so absent from every total
+		}
 		if t.CycleID == c.ID {
 			out.Cards++
 			if todos.IsDoneStatus(t.Status) {
@@ -455,7 +463,9 @@ type CycleReport struct {
 // state rather than replaying history on purpose: a closed cycle's cards do
 // not move again, and for an open one "where it stands now" is the honest
 // answer to what the row is asking.
-func Velocity(cycles []Cycle, todos *TodoStore) []CycleReport {
+// `in` narrows every row to the cards one scope covers — the same set the
+// burndown and the board itself use, so the numbers on one screen agree.
+func Velocity(cycles []Cycle, todos *TodoStore, in scopeSet) []CycleReport {
 	byCycle := map[string]*CycleReport{}
 	out := make([]CycleReport, 0, len(cycles))
 	for i := range cycles {
@@ -464,7 +474,7 @@ func Velocity(cycles []Cycle, todos *TodoStore) []CycleReport {
 	}
 	for _, t := range todos.List() {
 		r := byCycle[t.CycleID]
-		if r == nil {
+		if r == nil || !in.covers(t.Repo) {
 			continue
 		}
 		r.Cards++

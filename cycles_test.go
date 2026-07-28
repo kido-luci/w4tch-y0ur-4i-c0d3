@@ -190,7 +190,7 @@ func TestVelocityTotalsCommittedAndLanded(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rows := Velocity(cs.List(), ts)
+	rows := Velocity(cs.List(), ts, allScopes())
 	if len(rows) != 1 {
 		t.Fatalf("want one row, got %d", len(rows))
 	}
@@ -258,7 +258,7 @@ func TestBurndownReplaysHistory(t *testing.T) {
 		}
 	}
 
-	bd, err := ComputeBurndown(c, ts, es, now)
+	bd, err := ComputeBurndown(c, ts, es, now, allScopes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestBurndownIgnoresCardsNotYetCreated(t *testing.T) {
 		card.ID, timeToNano(startOfDay(now).Add(time.Hour)), "created", "", "backlog"); err != nil {
 		t.Fatal(err)
 	}
-	bd, err := ComputeBurndown(c, ts, es, now)
+	bd, err := ComputeBurndown(c, ts, es, now, allScopes())
 	if err != nil {
 		t.Fatal(err)
 	}

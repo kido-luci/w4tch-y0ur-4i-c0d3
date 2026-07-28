@@ -34,6 +34,24 @@ All notable changes to this project are documented here. Versions follow
     `update_todo` take the new fields — a session can file a sized epic with
     children in one pass.
 
+### Fixed
+- **One definition of scope, server-side.** The rail's scope label can name a
+  project, a group standing for several, or a parent with children nested under
+  it — and the client has always expanded it into a set. Three stores added with
+  the deep board (columns, cycles, saved views) compared the raw label to a
+  stored project name instead, so anything created while the rail sat on a group
+  became invisible the moment you narrowed to one of its members: a column would
+  disappear, taking its cards' status with it. MCP's `list_todos` had the same
+  fault and answered a group name with zero cards. Everything now resolves
+  through one function, which walks the tree in both directions — an ancestor's
+  configuration governs the cards below it, and a descendant's holds cards the
+  view shows.
+- **The burndown and velocity respect scope.** Both counted the whole board
+  regardless, so a scoped cycles tab showed a stats row disagreeing with the
+  activity feed beside it. The burndown also validates its cycle against the
+  scope now, like the git tab's drill-downs, instead of charting one the same
+  scope reports as absent.
+
 ### Changed
 - Adding and renaming a workflow **column**, and saving, renaming or updating a
   **view**, all use inline forms instead of `prompt()` dialogs — and a saved
