@@ -386,3 +386,37 @@ func TestDrawingStoreTopics(t *testing.T) {
 		t.Fatalf("topics should persist across reload, got %+v", byID)
 	}
 }
+
+func TestMarkPublished(t *testing.T) {
+	ds := NewDrawingStore(newTestDataDB(t))
+	d, err := ds.Create("login screen", "")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if _, err := ds.MarkPublished(d.ID, time.Time{}); err == nil {
+		t.Error("zero base must be rejected")
+	}
+	if _, err := ds.MarkPublished("nope", d.UpdatedAt); err == nil {
+		t.Error("unknown id must be rejected")
+	}
+
+	out, err := ds.MarkPublished(d.ID, d.UpdatedAt)
+	if err != nil {
+		t.Fatalf("mark published: %v", err)
+	}
+	if !out.PublishedAt.Equal(d.UpdatedAt) {
+		t.Errorf("PublishedAt = %v, want %v", out.PublishedAt, d.UpdatedAt)
+	}
+
+	// A later content write bumps UpdatedAt — the published copy goes stale
+	// without MarkPublished being touched (the ThumbUpdatedAt idiom).
+	time.Sleep(2 * time.Millisecond)
+	upd, err := ds.SetContent(d.ID, []byte(`{"elements":[1]}`), time.Time{})
+	if err != nil {
+		t.Fatalf("set content: %v", err)
+	}
+	if upd.PublishedAt.Equal(upd.UpdatedAt) {
+		t.Error("publish must go stale after a content write")
+	}
+}

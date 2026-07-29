@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"watch-your-ai-code/internal/httpx"
 )
 
 // ghPath resolves the gh binary by absolute path: LookPath first (covers `make
@@ -325,7 +327,7 @@ func registerGitHubAPI(mux *http.ServeMux, rr *repoResolver) {
 	slugFor := func(w http.ResponseWriter, r *http.Request) (string, bool, bool) {
 		root := r.URL.Query().Get("repo")
 		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
-			writeJSONError(w, http.StatusNotFound, "unknown repo for this scope")
+			httpx.WriteJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false, false
 		}
 		slug, ok := ghSlug(root)
@@ -338,7 +340,7 @@ func registerGitHubAPI(mux *http.ServeMux, rr *repoResolver) {
 			return
 		}
 		if !isGH {
-			writeJSON(w, struct {
+			httpx.WriteJSON(w, struct {
 				Supported bool   `json:"supported"`
 				PRs       []ghPR `json:"prs"`
 			}{Supported: false})
@@ -346,10 +348,10 @@ func registerGitHubAPI(mux *http.ServeMux, rr *repoResolver) {
 		}
 		v, ok := prCache.get(slug, time.Now(), func() (any, bool) { return ghPRs(slug) })
 		if !ok {
-			writeJSONError(w, http.StatusBadGateway, "gh unavailable")
+			httpx.WriteJSONError(w, http.StatusBadGateway, "gh unavailable")
 			return
 		}
-		writeJSON(w, struct {
+		httpx.WriteJSON(w, struct {
 			Supported bool   `json:"supported"`
 			PRs       []ghPR `json:"prs"`
 		}{Supported: true, PRs: v.([]ghPR)})
@@ -361,7 +363,7 @@ func registerGitHubAPI(mux *http.ServeMux, rr *repoResolver) {
 			return
 		}
 		if !isGH {
-			writeJSON(w, struct {
+			httpx.WriteJSON(w, struct {
 				Supported bool `json:"supported"`
 				ghActivity
 			}{Supported: false})
@@ -369,11 +371,11 @@ func registerGitHubAPI(mux *http.ServeMux, rr *repoResolver) {
 		}
 		v, ok := actCache.get(slug, time.Now(), func() (any, bool) { return ghActivityFor(slug) })
 		if !ok {
-			writeJSONError(w, http.StatusBadGateway, "gh unavailable")
+			httpx.WriteJSONError(w, http.StatusBadGateway, "gh unavailable")
 			return
 		}
 		act := v.(ghActivity)
-		writeJSON(w, struct {
+		httpx.WriteJSON(w, struct {
 			Supported bool `json:"supported"`
 			ghActivity
 		}{Supported: true, ghActivity: act})

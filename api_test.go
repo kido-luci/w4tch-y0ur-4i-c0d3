@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"watch-your-ai-code/internal/httpx"
 )
 
 // A burst of kicks while a rescan runs must fold into exactly ONE follow-up:
@@ -54,7 +56,7 @@ func TestHostGuard(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	guard := hostGuard("127.0.0.1:4777", ok)
+	guard := httpx.HostGuard("127.0.0.1:4777", ok)
 
 	cases := []struct {
 		name   string
@@ -96,7 +98,7 @@ func TestHostGuardCustomAddr(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	guard := hostGuard("192.168.1.5:4779", ok)
+	guard := httpx.HostGuard("192.168.1.5:4779", ok)
 
 	r := httptest.NewRequest("GET", "/api/todos", nil)
 	r.Host = "192.168.1.5:4779"

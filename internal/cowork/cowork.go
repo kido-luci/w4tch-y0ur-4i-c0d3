@@ -1,4 +1,4 @@
-package main
+package cowork
 
 // Publishing a drawing pushes its .excalidraw scene to a review backend's
 // /designs/{id} endpoint, where allowlisted teammates open it read-only and
@@ -21,13 +21,13 @@ import (
 	"time"
 )
 
-// errPublishNotConfigured means COWORK_API or DESIGN_INGEST_SECRET is unset —
+// ErrPublishNotConfigured means COWORK_API or DESIGN_INGEST_SECRET is unset —
 // publishing is opt-in, so a fresh install fails soft with instructions rather
 // than a broken button, and has nowhere to send to until you name a backend.
-var errPublishNotConfigured = errors.New("publishing not configured: set COWORK_API and DESIGN_INGEST_SECRET (and optionally COWORK_URL for review links)")
+var ErrPublishNotConfigured = errors.New("publishing not configured: set COWORK_API and DESIGN_INGEST_SECRET (and optionally COWORK_URL for review links)")
 
 // Publisher pushes scenes to the review backend. Zero value is unusable; build
-// with newPublisherFromEnv.
+// with NewPublisherFromEnv.
 type Publisher struct {
 	api    string // backend origin, no trailing slash
 	site   string // cowork viewer origin, for review links
@@ -35,13 +35,13 @@ type Publisher struct {
 	client *http.Client
 }
 
-// newPublisherFromEnv reads COWORK_API / COWORK_URL / DESIGN_INGEST_SECRET.
+// NewPublisherFromEnv reads COWORK_API / COWORK_URL / DESIGN_INGEST_SECRET.
 // There is no default backend: an unset COWORK_API leaves api empty, which
 // Publish reports as not-configured. COWORK_URL is only the viewer origin for
 // review links; unset, it falls back to the API origin. The secret is read live
 // per publish (not cached here) so the launchd environment can be fixed without
 // rebuilding mental state about ordering.
-func newPublisherFromEnv() *Publisher {
+func NewPublisherFromEnv() *Publisher {
 	api := strings.TrimRight(strings.TrimSpace(os.Getenv("COWORK_API")), "/")
 	site := strings.TrimRight(strings.TrimSpace(os.Getenv("COWORK_URL")), "/")
 	if site == "" {
@@ -65,7 +65,7 @@ func (p *Publisher) Publish(id, name string, scene []byte) error {
 	// No backend and no secret are the same failure to the user: nothing to
 	// send to, or nothing to authenticate with — either way, don't send.
 	if p.api == "" || secret == "" {
-		return errPublishNotConfigured
+		return ErrPublishNotConfigured
 	}
 	body, err := json.Marshal(struct {
 		Name  string          `json:"name"`

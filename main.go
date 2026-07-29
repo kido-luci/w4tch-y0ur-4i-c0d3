@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"watch-your-ai-code/internal/httpx"
+	"watch-your-ai-code/internal/sse"
 )
 
 //go:embed all:frontend/dist
@@ -62,7 +65,7 @@ func main() {
 		log.Printf("ships: %d records ingested", n)
 	}
 
-	hub := newSSEHub()
+	hub := sse.New()
 	if err := watch(ix, hub); err != nil {
 		log.Printf("file watch disabled: %v", err)
 	}
@@ -85,7 +88,7 @@ func main() {
 			if ids, err := ix.Rescan(); err == nil {
 				for _, id := range ids {
 					if s := ix.Session(id); s != nil {
-						hub.broadcast("session-updated", s)
+						hub.Broadcast("session-updated", s)
 					}
 				}
 			}
@@ -135,7 +138,7 @@ func main() {
 	go func() {
 		for range time.Tick(5 * time.Minute) {
 			if seedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0 {
-				hub.broadcast("projects-updated", projectStore.List())
+				hub.Broadcast("projects-updated", projectStore.List())
 			}
 		}
 	}()
@@ -164,7 +167,7 @@ func main() {
 		}
 		if _, err := fs.Stat(dist, name); err != nil {
 			if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" {
-				writeJSONError(w, http.StatusNotFound, "no such endpoint")
+				httpx.WriteJSONError(w, http.StatusNotFound, "no such endpoint")
 				return
 			}
 			if strings.HasPrefix(r.URL.Path, "/assets/") || strings.HasPrefix(r.URL.Path, "/excalidraw-assets/") {
@@ -186,7 +189,7 @@ func main() {
 	log.Printf("watch-your-ai-code on http://%s (root: %s, config: %s)", *addr, *root, cfgDir)
 	// hostGuard wraps EVERYTHING (API, MCP, static): loopback alone doesn't
 	// stop DNS rebinding or blind cross-origin POSTs — see api.go.
-	log.Fatal(http.ListenAndServe(*addr, hostGuard(*addr, mux)))
+	log.Fatal(http.ListenAndServe(*addr, httpx.HostGuard(*addr, mux)))
 }
 
 // defaultConfigDir is where the board and design library (data.db) live unless

@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"watch-your-ai-code/internal/sse"
 )
 
 // maxShipFile bounds one drop record; the writer tails its log to ~200 lines,
@@ -254,7 +256,7 @@ func (st *shipStore) joinSessions(ships []ShipRecord) {
 // watchShips ingests new drop records as they land and broadcasts each over
 // SSE. The dir is flat, so this stays much simpler than the transcript
 // watcher; deletions reconcile on the periodic ScanShips, not here.
-func watchShips(st *shipStore, hub *sseHub, dir string) error {
+func watchShips(st *shipStore, hub *sse.Hub, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -295,7 +297,7 @@ func watchShips(st *shipStore, hub *sseHub, dir string) error {
 					delete(pending, name)
 					mu.Unlock()
 					if r := st.ingest(dir, name); r != nil {
-						hub.broadcast("ship-recorded", r)
+						hub.Broadcast("ship-recorded", r)
 					}
 				})
 				mu.Unlock()

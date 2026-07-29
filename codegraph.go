@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"watch-your-ai-code/internal/httpx"
 )
 
 // cgRepo is one repo a scope resolves to: where it lives, whether it carries
@@ -479,12 +481,12 @@ func registerCodegraphAPI(mux *http.ServeMux, rr *repoResolver) {
 			}
 		}
 		if !ok {
-			writeJSONError(w, http.StatusNotFound, "no code graph for that repo")
+			httpx.WriteJSONError(w, http.StatusNotFound, "no code graph for that repo")
 			return nil
 		}
 		db, err := cgOpen(root)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			httpx.WriteJSONError(w, http.StatusInternalServerError, err.Error())
 			return nil
 		}
 		return db
@@ -521,7 +523,7 @@ func registerCodegraphAPI(mux *http.ServeMux, rr *repoResolver) {
 				}
 			}
 		}
-		writeJSON(w, resp)
+		httpx.WriteJSON(w, resp)
 	})
 
 	// One file's symbols (the click-a-node drill-down).
@@ -533,10 +535,10 @@ func registerCodegraphAPI(mux *http.ServeMux, rr *repoResolver) {
 		defer db.Close()
 		syms, err := cgFileSymbols(db, r.URL.Query().Get("path"))
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			httpx.WriteJSONError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, syms)
+		httpx.WriteJSON(w, syms)
 	})
 
 	// Symbol lookup: ?id= → detail with callers/callees, else ?q= → FTS hits.
@@ -549,26 +551,26 @@ func registerCodegraphAPI(mux *http.ServeMux, rr *repoResolver) {
 		if id := r.URL.Query().Get("id"); id != "" {
 			d, err := cgSymbolByID(db, id)
 			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, err.Error())
+				httpx.WriteJSONError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
 			if d == nil {
-				writeJSONError(w, http.StatusNotFound, "no such symbol")
+				httpx.WriteJSONError(w, http.StatusNotFound, "no such symbol")
 				return
 			}
-			writeJSON(w, d)
+			httpx.WriteJSON(w, d)
 			return
 		}
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
 		if q == "" {
-			writeJSONError(w, http.StatusBadRequest, "q or id required")
+			httpx.WriteJSONError(w, http.StatusBadRequest, "q or id required")
 			return
 		}
 		syms, err := cgSearch(db, q)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			httpx.WriteJSONError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		writeJSON(w, syms)
+		httpx.WriteJSON(w, syms)
 	})
 }

@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"watch-your-ai-code/internal/sse"
 )
 
 type drawingIDInput struct {
@@ -162,7 +164,7 @@ type listShipsInput struct {
 
 // newMCPServer builds the "wyac" MCP server over the drawing, todo and doc
 // stores. ix is read-only here — it backs the done snapshot.
-func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ships *shipStore, sessions todoSessions, hub *sseHub) *mcp.Server {
+func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ships *shipStore, sessions todoSessions, hub *sse.Hub) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "wyac",
 		Title:   "W4tch y0ur 4I c0d3",
@@ -203,7 +205,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		}
 		// The drawing exists from here on — broadcast even if tagging fails,
 		// or open tabs wouldn't see it until some unrelated refresh.
-		defer hub.broadcast("drawings-updated", drawings.List())
+		defer hub.Broadcast("drawings-updated", drawings.List())
 		if len(in.Topics) > 0 {
 			tagged, terr := drawings.SetTopics(d.ID, in.Topics)
 			if terr != nil {
@@ -222,7 +224,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, Drawing{}, err
 		}
-		hub.broadcast("drawings-updated", drawings.List())
+		hub.Broadcast("drawings-updated", drawings.List())
 		return nil, d, nil
 	})
 
@@ -234,7 +236,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, Drawing{}, err
 		}
-		hub.broadcast("drawings-updated", drawings.List())
+		hub.Broadcast("drawings-updated", drawings.List())
 		return nil, d, nil
 	})
 
@@ -256,7 +258,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, Drawing{}, err
 		}
-		hub.broadcast("drawings-updated", drawings.List())
+		hub.Broadcast("drawings-updated", drawings.List())
 		return nil, d, nil
 	})
 
@@ -298,7 +300,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, Todo{}, err
 		}
-		hub.broadcast("todos-updated", todos.List())
+		hub.Broadcast("todos-updated", todos.List())
 		return nil, t, nil
 	})
 
@@ -357,7 +359,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if in.Status != nil {
 			t = refreezeTodo(todos, sessions, t, *in.Status)
 		}
-		hub.broadcast("todos-updated", todos.List())
+		hub.Broadcast("todos-updated", todos.List())
 		return nil, t, nil
 	})
 
@@ -393,7 +395,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, Doc{}, err
 		}
-		hub.broadcast("docs-updated", docs.List())
+		hub.Broadcast("docs-updated", docs.List())
 		return nil, d, nil
 	})
 
@@ -415,7 +417,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, Doc{}, err
 		}
-		hub.broadcast("docs-updated", docs.List())
+		hub.Broadcast("docs-updated", docs.List())
 		return nil, d, nil
 	})
 
@@ -430,7 +432,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, Doc{}, err
 		}
-		hub.broadcast("docs-updated", docs.List())
+		hub.Broadcast("docs-updated", docs.List())
 		return nil, d, nil
 	})
 
@@ -456,7 +458,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if err != nil {
 			return nil, ProjectGroup{}, err
 		}
-		hub.broadcast("groups-updated", groups.List())
+		hub.Broadcast("groups-updated", groups.List())
 		return nil, g, nil
 	})
 
@@ -464,7 +466,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 }
 
 // newMCPHandler serves the MCP server on a streamable HTTP endpoint.
-func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ships *shipStore, sessions todoSessions, hub *sseHub) http.Handler {
+func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ships *shipStore, sessions todoSessions, hub *sse.Hub) http.Handler {
 	server := newMCPServer(drawings, todos, states, cycles, docs, groups, projects, ships, sessions, hub)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 }

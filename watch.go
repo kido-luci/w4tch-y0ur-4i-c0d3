@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,53 +9,14 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"watch-your-ai-code/internal/sse"
 )
-
-// sseHub fans session-update events out to connected /api/events clients.
-type sseHub struct {
-	mu      sync.Mutex
-	clients map[chan []byte]bool
-}
-
-func newSSEHub() *sseHub {
-	return &sseHub{clients: map[chan []byte]bool{}}
-}
-
-func (h *sseHub) subscribe() chan []byte {
-	ch := make(chan []byte, 16)
-	h.mu.Lock()
-	h.clients[ch] = true
-	h.mu.Unlock()
-	return ch
-}
-
-func (h *sseHub) unsubscribe(ch chan []byte) {
-	h.mu.Lock()
-	delete(h.clients, ch)
-	h.mu.Unlock()
-	close(ch)
-}
-
-func (h *sseHub) broadcast(event string, payload any) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	msg := []byte("event: " + event + "\ndata: " + string(data) + "\n\n")
-	h.mu.Lock()
-	for ch := range h.clients {
-		select {
-		case ch <- msg:
-		default: // slow client: drop rather than block the watcher
-		}
-	}
-	h.mu.Unlock()
-}
 
 // watch re-parses sessions whose files change and broadcasts the refreshed
 // summary (with agent runs) over SSE. fsnotify is not recursive, so every
 // directory level is watched and new directories are added on Create.
-func watch(ix *Index, hub *sseHub) error {
+func watch(ix *Index, hub *sse.Hub) error {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
@@ -81,7 +41,7 @@ func watch(ix *Index, hub *sseHub) error {
 		if s == nil {
 			return
 		}
-		hub.broadcast("session-updated", ix.withStatus(s, time.Now()))
+		hub.Broadcast("session-updated", ix.withStatus(s, time.Now()))
 	}
 
 	go func() {

@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"watch-your-ai-code/internal/httpx"
 )
 
 // gitCommit is one row of the recent-commits list.
@@ -482,14 +484,14 @@ func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
 	scoped := func(w http.ResponseWriter, r *http.Request) (string, bool) {
 		root := r.URL.Query().Get("repo")
 		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
-			writeJSONError(w, http.StatusNotFound, "unknown repo for this scope")
+			httpx.WriteJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false
 		}
 		return root, true
 	}
 
 	mux.HandleFunc("GET /api/git", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, struct {
+		httpx.WriteJSON(w, struct {
 			Repos []gitRepo `json:"repos"`
 		}{Repos: gitRepos(rr, r.URL.Query().Get("project"))})
 	})
@@ -501,10 +503,10 @@ func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
 		}
 		d, ok := gitShow(root, r.URL.Query().Get("hash"))
 		if !ok {
-			writeJSONError(w, http.StatusNotFound, "unknown commit")
+			httpx.WriteJSONError(w, http.StatusNotFound, "unknown commit")
 			return
 		}
-		writeJSON(w, d)
+		httpx.WriteJSON(w, d)
 	})
 
 	mux.HandleFunc("GET /api/git/diff", func(w http.ResponseWriter, r *http.Request) {
@@ -512,7 +514,7 @@ func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
 		if !ok {
 			return
 		}
-		writeJSON(w, gitWorktreeDiff(root))
+		httpx.WriteJSON(w, gitWorktreeDiff(root))
 	})
 
 	// One page of history past the snapshot's first gitLogLimit commits — the
@@ -547,7 +549,7 @@ func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
 		if skip == 0 {
 			resp.Authors = gitAuthors(root)
 		}
-		writeJSON(w, resp)
+		httpx.WriteJSON(w, resp)
 	})
 
 	mux.HandleFunc("GET /api/git/branches", func(w http.ResponseWriter, r *http.Request) {
@@ -555,7 +557,7 @@ func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
 		if !ok {
 			return
 		}
-		writeJSON(w, struct {
+		httpx.WriteJSON(w, struct {
 			Branches []gitBranch `json:"branches"`
 		}{Branches: gitBranches(root)})
 	})

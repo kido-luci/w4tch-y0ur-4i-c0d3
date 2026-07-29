@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"watch-your-ai-code/internal/sse"
 )
 
 // dialMCP connects an in-process MCP client session to a server over fresh
@@ -22,7 +24,7 @@ func dialMCP(t *testing.T) (*mcp.ClientSession, *DrawingStore, *TodoStore, *DocS
 	ts.UseEvents(NewEventStore(db))
 	dcs := NewDocStore(db)
 	ixEmpty := NewIndex(t.TempDir())
-	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewProjectStore(db), newShipStore(nil, ixEmpty), ixEmpty, newSSEHub())
+	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewProjectStore(db), newShipStore(nil, ixEmpty), ixEmpty, sse.New())
 
 	ctx := context.Background()
 	clientTr, serverTr := mcp.NewInMemoryTransports()
