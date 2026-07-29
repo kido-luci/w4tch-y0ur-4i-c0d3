@@ -11,14 +11,14 @@ import {
   linesBadgeHtml,
   modelBadgeHtml,
   truncate,
-} from "../format";
-import { showError } from "../live";
-import { renderModelDistribution } from "../distribution";
-import { renderActivityHeatmap } from "../heatmap";
-import { createTokensOverTime } from "../tokensOverTime";
-import { loadFilters, renderFilterBar, saveFilters } from "../filters";
-import type { FilterState, StatusFilter } from "../filters";
-import { isNotifyOn, notifySupported, toggleNotify } from "../notify";
+} from "../domain/format";
+import { showError } from "../app/live";
+import { renderModelDistribution } from "../domain/distribution";
+import { renderActivityHeatmap } from "../ui/heatmap";
+import { createTokensOverTime } from "../ui/tokensOverTime";
+import { loadFilters, renderFilterBar, saveFilters } from "../domain/filters";
+import type { FilterState, StatusFilter } from "../domain/filters";
+import { isNotifyOn, notifySupported, toggleNotify } from "../app/notify";
 import { getScopeParam, getScopeSet, labelForFolder, navigate, scopeChipHtml } from "../scope";
 
 // The heatmap uses its own fixed window, independent of the day filter.

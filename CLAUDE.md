@@ -4,6 +4,60 @@ Single Go binary serving a Vite/TypeScript frontend on `127.0.0.1:4777` by
 default (read-only viewer over `~/.claude/projects`). Build/run details:
 `README.md`, `Makefile`. Design notes: `docs/spec.md`.
 
+## Where the code lives, and which way the arrows point
+
+Both halves are layered, and in both the rule is the same: **nothing imports a
+layer above it.** If an import looks like it points upward, it is wrong.
+
+**Go — `main.go` at the root, everything else under `internal/`.** `main.go`
+stays at the root because it carries `//go:embed all:frontend/dist`, and
+`go:embed` cannot reach a parent directory; it is otherwise pure wiring (flags,
+construction, the SPA fallback). The composition root is the only place that
+knows about every package.
+
+    main -> {httpapi, mcpserver} -> board -> index
+
+- `index` — transcript scan/parse, the `index.db` cache, session types, the file
+  watcher. Everything reads it; it reads nothing. Its schema covers `sessions`,
+  the `messages` FTS table and `ships` together, under one generation stamp.
+- `repos` — resolves a scope to on-disk repo roots, and owns `ResolveRoot`, the
+  whitelist every git/GitHub drill-down validates `?repo` against.
+- `git`, `github`, `codegraph` — the three read-only repo views, each with its
+  own handlers. `search`, `ships` — query layers over `index.db`'s handle.
+- `board` — the nine stores plus `data.db`'s schema and migrations, plus scope
+  resolution. They share one database, so they share one package.
+- `httpapi` / `mcpserver` — the two transports, siblings. Neither imports the
+  other; `main` mounts both. `httpx`, `sse`, `cowork`, `summarize` are leaves.
+
+Packages take **narrow interfaces, not the whole index** — `Snapshot()`,
+`SessionRef(id)`, `Session(id)`. That is what lets git, ships and search live
+outside `index` at all: a method must sit with its receiver's type, a function
+needn't. `Index.Snapshot` hands out stored pointers, which is sound only because
+a `*Session` in the map is never mutated in place (rescan replaces the entry).
+Mutating a stored session would make every reader a data race.
+
+**Frontend — `frontend/src/`, layered the same way:**
+
+    api -> domain -> {scope, app} -> ui -> views -> main.ts
+
+- `api/` — the typed client, one module per domain behind an `index.ts` barrel.
+  `api/events.ts` holds the SSE transport and its module-level state; it must
+  stay one module, or the Web Lock leader election breaks (see its comment).
+- `domain/` — pure logic: format, filters, markdown, board queries.
+- `scope/` — `location.ts` is the pure path grammar and **imports nothing**;
+  `scope.ts` is the stateful half. `navigate` lives with the state, not the
+  grammar, because its replace branch calls `syncScopeToURL`.
+- `ui/` — reusable rendering. Note `sessionRail.ts` (the detail view's session
+  switcher) and `scopeRail.ts` (the project rail) are different rails.
+- `views/` — one module per route.
+
+Two files are deliberately still large: `views/board.ts` (~1.5k lines) and
+`style.css` (~6.2k). `renderBoardView` is one closure over 19 mutable variables
+and that closure IS the per-mount state isolation, so splitting it means
+redesigning state on the busiest screen, untested. Splitting `style.css`
+reorders the cascade with no visual regression test. Both were left on purpose;
+don't "fix" either in passing.
+
 ## Three jobs, three ways to run it — don't collapse them
 
 Iterating, verifying, and delivering are separate. The trap is assuming the last
@@ -144,8 +198,11 @@ leaves it identical, so check the behaviour too, not just the hash.
 Routes are real paths (History API), not `#/`: **`family/scope/tab[/detail]`** —
 `/project/<scope>/git/<repo>`, `/claude/<scope>/session/<id>` (`/` canonicalises
 to `/claude/<scope>/sessions`). `main.go` holds the SPA fallback that lets a deep
-path reload instead of 404; `scope.ts` owns `parseLocation` / `buildPath` /
-`navigate` / `syncScopeToURL`.
+path reload instead of 404. On the client the grammar and the state are separate
+modules: `scope/location.ts` owns `parseLocation` / `buildPath` and imports
+nothing, `scope/scope.ts` owns `navigate` / `setScope` / `syncScopeToURL`.
+`scope/routing.test.ts` pins both rules below — it is mutation-checked, so if you
+change routing and it stays green, suspect the change, not the tests.
 
 The scope SEGMENT is the source of truth; localStorage is only the fallback that
 remembers your last one and seeds a bare path. Internal links deliberately stay
@@ -169,7 +226,7 @@ Two rules that exist because breaking them shipped bugs:
   that. A link copied in that window resolves against the READER's remembered
   scope, not yours. So the replace branch canonicalises itself.
 
-## The git tab — read-only, and it borrows the code graph's repo resolution
+## The git tab — read-only, and it shares the code graph's repo resolution
 
 Two views over the scope's repos. Both are strictly **READ-ONLY**: the server
 shells `git log` / `status` / `branch` / `show` / `for-each-ref`, and `gh` for
@@ -187,8 +244,8 @@ that without asking; it's a deliberate property, not an oversight.
   routing and the Go SPA fallback in `main.go`; a deep path that 404s means that
   fallback broke.)
 
-**Repo resolution is shared with the code graph** — `git.go` calls `cgRepos`
-(codegraph.go), so both tabs always list the same repos, resolved through each
+**Repo resolution is shared with the code graph** — both go through
+`internal/repos`, so both tabs always list the same repos, resolved through each
 folder's most recent session cwd. Every drill-down endpoint
 (`/api/git/{commit,diff,branches,commits,prs,activity}`) validates `?repo`
 against that resolved set; an arbitrary path is a 404. That guard is *why* these
@@ -215,8 +272,11 @@ Two things about them that look like needless complexity but aren't:
 
 Traps, each of which cost a debugging cycle:
 
-- **`runGit`, not `gitCmd`** — `gitCmd` is already a regex const in parse.go.
-- **`gh` is found by ABSOLUTE path** (github.go): launchd's PATH has no
+- **`runGit`, not `gitCmd`** — `gitCmd` is already a regex const in
+  `internal/index/parse.go`. `runGit` is unexported; `internal/github` gets the
+  one thing it needs via `git.RemoteURL`, deliberately narrow so "read-only"
+  stays a property of the surface rather than a convention.
+- **`gh` is found by ABSOLUTE path** (`internal/github`): launchd's PATH has no
   `/opt/homebrew/bin`, so a bare `exec.Command("gh", …)` works under `make dev`
   and silently returns nothing under launchd. Auth itself is fine headless.
 - **Merge commits need `--first-parent`** or `git show` hands back an empty diff

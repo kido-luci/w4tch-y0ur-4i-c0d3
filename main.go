@@ -12,6 +12,15 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"watch-your-ai-code/internal/board"
+	"watch-your-ai-code/internal/httpapi"
+	"watch-your-ai-code/internal/httpx"
+	"watch-your-ai-code/internal/index"
+	"watch-your-ai-code/internal/mcpserver"
+	"watch-your-ai-code/internal/ships"
+	"watch-your-ai-code/internal/sse"
+	"watch-your-ai-code/internal/summarize"
 )
 
 //go:embed all:frontend/dist
@@ -36,14 +45,14 @@ func main() {
 		cfgDir = defaultConfigDir()
 	}
 
-	ix := NewIndex(*root)
-	if db, err := openIndexDB(cfgDir, *root); err != nil {
+	ix := index.New(*root)
+	if db, err := index.OpenDB(cfgDir, *root); err != nil {
 		// No cache is a slower boot and an empty search, never a dead viewer.
 		log.Printf("index cache disabled: %v", err)
 	} else {
-		ix.db = db
+		ix.UseCache(db)
 	}
-	ix.refreshArchived()
+	ix.RefreshArchived()
 	start := time.Now()
 	updated, err := ix.Rescan()
 	if err != nil {
@@ -51,21 +60,22 @@ func main() {
 	}
 	log.Printf("indexed %d sessions in %s", len(updated), time.Since(start).Round(time.Millisecond))
 
-	// Ship records (make check / make release drops — see ships.go). Scanned
+	// Ship records (make check / make release drops — see internal/ships). Scanned
 	// after the index DB is open, watched alongside the transcripts.
 	sd := *shipsDir
 	if sd == "" {
-		sd = defaultShipsDir()
+		sd = ships.DefaultDir()
 	}
-	if n := ix.ScanShips(sd); n > 0 {
+	shipStore := ships.New(ix.DB(), ix)
+	if n := shipStore.Scan(sd); n > 0 {
 		log.Printf("ships: %d records ingested", n)
 	}
 
-	hub := newSSEHub()
-	if err := watch(ix, hub); err != nil {
+	hub := sse.New()
+	if err := index.Watch(ix, func(s *index.Session) { hub.Broadcast("session-updated", s) }); err != nil {
 		log.Printf("file watch disabled: %v", err)
 	}
-	if err := watchShips(ix, hub, sd); err != nil {
+	if err := ships.Watch(shipStore, sd, func(r *ships.ShipRecord) { hub.Broadcast("ship-recorded", r) }); err != nil {
 		log.Printf("ships watch disabled: %v", err)
 	}
 
@@ -73,7 +83,7 @@ func main() {
 	// session store on its own cadence to keep active/archived status fresh.
 	go func() {
 		for range time.Tick(45 * time.Second) {
-			ix.refreshArchived()
+			ix.RefreshArchived()
 		}
 	}()
 
@@ -84,57 +94,58 @@ func main() {
 			if ids, err := ix.Rescan(); err == nil {
 				for _, id := range ids {
 					if s := ix.Session(id); s != nil {
-						hub.broadcast("session-updated", s)
+						hub.Broadcast("session-updated", s)
 					}
 				}
 			}
 			// Reconcile ship records too: deletions, and any drop the
 			// watcher missed.
-			ix.ScanShips(sd)
+			shipStore.Scan(sd)
 		}
 	}()
 
 	// data.db: the durable half — board + design library. A failure here is
 	// fatal on purpose: refusing to start beats starting over the user's data.
-	dataDB, err := openDataDB(cfgDir)
+	dataDB, err := board.OpenDB(cfgDir)
 	if err != nil {
 		log.Fatalf("data.db: %v", err)
 	}
-	importDataOnce(dataDB, cfgDir)
-	go backupDataDB(dataDB, cfgDir)
+	board.ImportOnce(dataDB, cfgDir)
+	go board.Backup(dataDB, cfgDir)
 
-	todoStore := NewTodoStore(dataDB)
-	stateStore := NewStateStore(dataDB)
-	cycleStore := NewCycleStore(dataDB)
-	eventStore := NewEventStore(dataDB)
-	viewStore := NewViewStore(dataDB)
+	todoStore := board.NewTodoStore(dataDB)
+	stateStore := board.NewStateStore(dataDB)
+	cycleStore := board.NewCycleStore(dataDB)
+	eventStore := board.NewEventStore(dataDB)
+	viewStore := board.NewViewStore(dataDB)
 	// The board's columns and its history are injected rather than constructed
 	// inside TodoStore: each store keeps its own serving copy of one table, and
 	// a second instance would be a second writer over it.
 	todoStore.UseStates(stateStore)
 	todoStore.UseEvents(eventStore)
-	drawingStore := NewDrawingStore(dataDB)
-	docStore := NewDocStore(dataDB)
-	groupStore := NewGroupStore(dataDB)
-	projectStore := NewProjectStore(dataDB)
+	drawingStore := board.NewDrawingStore(dataDB)
+	docStore := board.NewDocStore(dataDB)
+	groupStore := board.NewGroupStore(dataDB)
+	projectStore := board.NewProjectStore(dataDB)
 	// Seed the project registry from the content taxonomy (add-only, keeps
 	// names): every label the board / docs / design actually carry. The Claude
 	// session scan is NOT a source — which folders sessions ran in doesn't
 	// invent projects; nothing is renamed or rewritten.
-	if n := seedProjects(projectStore, groupStore, todoStore, docStore, drawingStore); n > 0 {
+	if n := board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore); n > 0 {
 		log.Printf("projects: seeded %d registry entries", n)
 	}
 
 	mux := http.NewServeMux()
-	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore)
+	httpapi.Register(mux, ix, hub, summarize.New(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore)
+	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, shipStore, ix, hub))
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
 	// under an unselectable scope for long. Add-only; broadcast only on change.
 	go func() {
 		for range time.Tick(5 * time.Minute) {
-			if seedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0 {
-				hub.broadcast("projects-updated", projectStore.List())
+			if board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0 {
+				hub.Broadcast("projects-updated", projectStore.List())
 			}
 		}
 	}()
@@ -163,7 +174,7 @@ func main() {
 		}
 		if _, err := fs.Stat(dist, name); err != nil {
 			if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" {
-				writeJSONError(w, http.StatusNotFound, "no such endpoint")
+				httpx.WriteJSONError(w, http.StatusNotFound, "no such endpoint")
 				return
 			}
 			if strings.HasPrefix(r.URL.Path, "/assets/") || strings.HasPrefix(r.URL.Path, "/excalidraw-assets/") {
@@ -184,8 +195,8 @@ func main() {
 
 	log.Printf("watch-your-ai-code on http://%s (root: %s, config: %s)", *addr, *root, cfgDir)
 	// hostGuard wraps EVERYTHING (API, MCP, static): loopback alone doesn't
-	// stop DNS rebinding or blind cross-origin POSTs — see api.go.
-	log.Fatal(http.ListenAndServe(*addr, hostGuard(*addr, mux)))
+	// stop DNS rebinding or blind cross-origin POSTs — see internal/httpx.
+	log.Fatal(http.ListenAndServe(*addr, httpx.HostGuard(*addr, mux)))
 }
 
 // defaultConfigDir is where the board and design library (data.db) live unless

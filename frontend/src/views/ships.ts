@@ -6,8 +6,8 @@
 
 import { getShips, subscribeRawEvents } from "../api";
 import type { ShipRecord } from "../api";
-import { chipAttrs, escapeHtml, formatDuration, formatRelativeTime, truncate } from "../format";
-import { showError } from "../live";
+import { chipAttrs, escapeHtml, formatDuration, formatRelativeTime, truncate } from "../domain/format";
+import { showError } from "../app/live";
 import { getScope, getScopeSet, labelForFolder, scopeChipHtml } from "../scope";
 
 const DAY_OPTS: { v: number; label: string }[] = [

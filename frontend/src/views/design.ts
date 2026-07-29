@@ -1,7 +1,7 @@
 // View 4 — design library (routes `/project/design` and `/project/design/<id>`): local
 // Excalidraw wireframes. The library is a plain grid over /api/drawings
 // metadata (SSE-synced like the board); opening a drawing lazy-loads the
-// React/Excalidraw island (see excalidrawIsland.ts) so the rest of the app
+// React/Excalidraw island (see ui/excalidrawIsland.ts) so the rest of the app
 // never pays for it. Saves are debounced last-writer-wins PUTs of the whole
 // .excalidraw document.
 
@@ -26,11 +26,11 @@ import {
   subscribeRawEvents,
 } from "../api";
 import type { Drawing, Todo } from "../api";
-import { escapeHtml, formatRelativeTime, truncate } from "../format";
-import { announce, showError } from "../live";
+import { escapeHtml, formatRelativeTime, truncate } from "../domain/format";
+import { announce, showError } from "../app/live";
 import { getScope, getScopeSet, navigate } from "../scope";
-import { getTheme } from "../theme";
-import type { ExcalidrawIsland } from "../excalidrawIsland";
+import { getTheme } from "../app/theme";
+import type { ExcalidrawIsland } from "../ui/excalidrawIsland";
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -188,7 +188,7 @@ export function renderDesignView(container: HTMLElement): () => void {
     const stale = drawings.filter((d) => !hasFreshThumbnail(d));
     if (stale.length === 0) return;
     void (async () => {
-      const { generateThumbnail } = await import("../thumbs");
+      const { generateThumbnail } = await import("../ui/thumbs");
       for (const d of stale) {
         try {
           await generateThumbnail(d.id, d.updatedAt);
@@ -506,7 +506,7 @@ export function renderDesignEditorView(container: HTMLElement, id: string): () =
       const [scene, list, mod] = await Promise.all([
         getDrawingContent(id),
         getDrawings(),
-        import("../excalidrawIsland"),
+        import("../ui/excalidrawIsland"),
       ]);
       if (disposed) return;
       const meta = list.find((d) => d.id === id);

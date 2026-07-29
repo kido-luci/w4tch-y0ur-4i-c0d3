@@ -15,7 +15,7 @@ import {
   getGitPRs,
 } from "../api";
 import type { GitBranch, GitCommit, GitCommitDetail, GitFileChange, GitPR, GitRepo } from "../api";
-import { chipAttrs, escapeHtml, formatRelativeTime } from "../format";
+import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
 import { getScopeParam } from "../scope";
 
 type TabKey = "commits" | "changes" | "branches" | "prs" | "activity";

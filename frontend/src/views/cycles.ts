@@ -24,9 +24,9 @@ import {
   subscribeRawEvents,
 } from "../api";
 import type { Burndown, CycleReport, Todo, TodoEvent, TodoState } from "../api";
-import { describeEventOrCreated } from "../boardEvents";
-import { escapeHtml, formatDay, formatRelativeTime } from "../format";
-import { showError } from "../live";
+import { describeEventOrCreated } from "../domain/boardEvents";
+import { escapeHtml, formatDay, formatRelativeTime } from "../domain/format";
+import { showError } from "../app/live";
 import { getScope, getScopeSet, scopeChipHtml } from "../scope";
 
 function points(v: number): string {
@@ -366,7 +366,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
       rows = v;
       todos = t;
       states = st;
-      events = ev ?? []; // nil Go slice arrives as null — the api.ts convention
+      events = ev ?? []; // nil Go slice arrives as null — the api/ convention
       // A cycle deleted elsewhere must not leave a dead selection behind.
       if (selectedId && !rows.some((r) => r.cycle.id === selectedId)) {
         selectedId = null;

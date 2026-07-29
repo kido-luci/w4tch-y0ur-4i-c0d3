@@ -23,9 +23,6 @@ import {
   getDrawings,
   getProjects,
   getSession,
-  getSessions,
-  getShips,
-  getTodoEvents,
   getTodos,
   patchBoardState,
   patchBoardView,
@@ -45,63 +42,23 @@ import type {
   TodoStatus,
   ViewKind,
 } from "../api";
-import { mountBoardTable } from "../boardTableIsland";
-import { describeEvent } from "../boardEvents";
-import { matchesQuery, renderTimeline } from "../boardQuery";
+import { mountBoardTable } from "../ui/boardTableIsland";
+import { matchesQuery, renderTimeline } from "../domain/boardQuery";
 import {
   chipAttrs,
   escapeHtml,
   formatCost,
-  formatDuration,
   formatRelativeTime,
   formatTokens,
   truncate,
-} from "../format";
-import { showError } from "../live";
-import { renderInlineMarkdown, renderMarkdown } from "../markdown";
+} from "../domain/format";
+import { showError } from "../app/live";
+import { renderInlineMarkdown, renderMarkdown } from "../domain/markdown";
 import { getScope, getScopeSet, labelForFolder, navigate } from "../scope";
 
-// The columns are data now (data.db v12), not a const: the board renders
-// whatever todo_states holds for this scope. FALLBACK_COLUMNS only covers the
-// gap before the first fetch lands — the three ids it names are seeded by the
-// migration, so it is never wrong, only incomplete.
-const FALLBACK_COLUMNS: TodoState[] = [
-  { id: "backlog", name: "backlog", category: "todo", order: 0, builtin: true },
-  { id: "doing", name: "doing", category: "started", order: 1, builtin: true },
-  { id: "done", name: "done", category: "done", order: 2, builtin: true },
-];
-
-const KIND_ICON: Record<string, string> = {
-  epic: "◈",
-  story: "▢",
-  task: "▪",
-  bug: "▲",
-};
-
-const PRIORITY_LABEL = ["none", "low", "medium", "high", "urgent"];
-
-/** Points render trimmed: 3 not 3.0, 2.5 stays 2.5. */
-function formatPoints(v: number): string {
-  return Number.isInteger(v) ? String(v) : v.toFixed(1);
-}
-
-/** Deterministic palette slot for a label name. */
-function labelClass(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return `lbl-${h % 6}`;
-}
-
-function labelChipsHtml(t: Todo, removable: boolean): string {
-  return (t.labels ?? [])
-    .map(
-      (l) =>
-        `<span class="todo-label ${labelClass(l)}" data-label="${escapeHtml(l)}">${escapeHtml(l)}${
-          removable ? `<button type="button" class="label-remove" title="remove">✕</button>` : ""
-        }</span>`,
-    )
-    .join("");
-}
+import { FALLBACK_COLUMNS, KIND_ICON, PRIORITY_LABEL, formatPoints, labelChipsHtml } from "./board/format";
+import { panelSessHtml, sessionCandidates, sessLinksHtml, sessMetricsHtml } from "./board/sessionLinks";
+import { fillJourney, panelJourneyHtml } from "./board/journey";
 
 /** Renders the board view into `container`; returns a cleanup callback. */
 export function renderBoardView(container: HTMLElement, initialCardId?: string): () => void {
@@ -216,73 +173,6 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     return selectedId ? todos.find((t) => t.id === selectedId) : undefined;
   }
 
-  /** The card's linked sessions we've cached so far, in link order. */
-  function linkedSessions(t: Todo): Session[] {
-    const out: Session[] = [];
-    for (const id of t.linkedSessionIds ?? []) {
-      const s = sessCache.get(id);
-      if (s) out.push(s);
-    }
-    return out;
-  }
-
-  /**
-   * Tokens/cost strip for a linked card: the frozen snapshot once the card is
-   * done, otherwise the cached sessions' live numbers summed — a ticket
-   * routinely spans several sessions, and only the total is meaningful.
-   */
-  function sessMetricsHtml(t: Todo): string {
-    if (t.snapshot) {
-      const tok = formatTokens(t.snapshot.tokens);
-      const cost = formatCost(t.snapshot.costUsd);
-      const over = t.snapshot.sessions > 1 ? ` over ${t.snapshot.sessions} sessions` : "";
-      return `<div class="todo-sess todo-sess-frozen" title="frozen when done${over}">✓ ${escapeHtml(tok)} tok · ${escapeHtml(cost)}</div>`;
-    }
-    const linked = linkedSessions(t);
-    if (!linked.length) return "";
-    const tok = formatTokens(linked.reduce((n, s) => n + s.totalTokens + s.agentTokens, 0));
-    const cost = formatCost(linked.reduce((n, s) => n + s.costUsd + s.agentCostUsd, 0));
-    const dot = linked.some((s) => s.running) ? `<span class="live-dot live-dot-inline"></span>` : "";
-    const n =
-      linked.length > 1
-        ? `<span class="todo-sess-n" title="${linked.length} linked sessions">×${linked.length}</span>`
-        : "";
-    return `<div class="todo-sess">${dot}<span>${escapeHtml(tok)} tok · ${escapeHtml(cost)}</span>${n}</div>`;
-  }
-
-  /** `https://github.com/o/r/pull/123` → `PR #123`, falling back to "PR". */
-  function prLabel(url: string): string {
-    const n = /\/pull\/(\d+)/.exec(url)?.[1];
-    return n ? `PR #${n}` : "PR";
-  }
-
-  /**
-   * The review end of the loop: once a linked session opens a PR, the card
-   * carries a chip straight to it, so the board alone answers "what's waiting
-   * on me". Before that, it shows the branch the work is on — but never the
-   * base branch, which is just noise.
-   */
-  function sessLinksHtml(t: Todo): string {
-    const linked = linkedSessions(t);
-    const prs = [...new Set(linked.map((s) => s.prUrl).filter(Boolean))] as string[];
-    if (prs.length) {
-      return `<div class="todo-links">${prs
-        .map(
-          (url) =>
-            `<a class="todo-pr" href="${escapeHtml(url)}" target="_blank" rel="noreferrer"
-               title="${escapeHtml(url)}">${escapeHtml(prLabel(url))}</a>`,
-        )
-        .join("")}</div>`;
-    }
-    const branches = [
-      ...new Set(linked.map((s) => s.gitBranch).filter((b) => b && b !== "main" && b !== "master")),
-    ];
-    if (branches.length !== 1) return ""; // 0 = nothing to say; >1 = noise
-    return `<div class="todo-links"><span class="todo-branch" title="branch">⑂ ${escapeHtml(
-      truncate(branches[0]!, 28),
-    )}</span></div>`;
-  }
-
   function cardHtml(t: Todo): string {
     const labels = t.labels?.length ? `<div class="todo-labels">${labelChipsHtml(t, false)}</div>` : "";
     const repo = t.repo ? `<span class="todo-repo">${escapeHtml(t.repo)}</span>` : "";
@@ -328,8 +218,8 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         ${labels}
         <div class="todo-title md-inline">${kindInd}${prio}${renderInlineMarkdown(t.title)}</div>
         ${roll}
-        ${sessLinksHtml(t)}
-        ${sessMetricsHtml(t)}
+        ${sessLinksHtml(t, sessCache)}
+        ${sessMetricsHtml(t, sessCache)}
         <div class="todo-meta">
           <span class="todo-seq">#${t.seq}</span>
           ${parentInd}
@@ -545,59 +435,6 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
 
   // --- right panel -----------------------------------------------------------
 
-  /** One linked-session row: live numbers, its PR, and an unlink button. */
-  function panelSessRowHtml(id: string): string {
-    const s = sessCache.get(id);
-    const dot = s?.running ? `<span class="live-dot live-dot-inline"></span>` : "";
-    const inner = s
-      ? `${dot}<span class="cand-title">${escapeHtml(truncate(s.title || "untitled session", 30))}</span>
-         <span class="cand-meta">${escapeHtml(labelForFolder(s.project))} · ${escapeHtml(
-           formatTokens(s.totalTokens + s.agentTokens),
-         )} tok · ${escapeHtml(formatCost(s.costUsd + s.agentCostUsd))}</span>`
-      : `<span class="cand-meta">session ${escapeHtml(id.slice(0, 8))}…</span>`;
-    const pr = s?.prUrl
-      ? `<a class="panel-sess-pr" href="${escapeHtml(s.prUrl)}" target="_blank" rel="noreferrer"
-           title="${escapeHtml(s.prUrl)}">${escapeHtml(prLabel(s.prUrl))}</a>`
-      : "";
-    return `
-      <div class="panel-sess-row">
-        <a class="panel-sess" href="/claude/session/${encodeURIComponent(id)}">${inner}</a>
-        ${pr}
-        <button type="button" class="panel-sess-unlink" data-sid="${escapeHtml(id)}" title="unlink">✕</button>
-      </div>`;
-  }
-
-  /**
-   * Panel block: every linked session as a row, plus a pick-list to link
-   * another — a ticket that spans sessions is the norm, not the exception.
-   */
-  function panelSessHtml(t: Todo): string {
-    const ids = t.linkedSessionIds ?? [];
-    return `
-      <div class="panel-field">
-        <div class="panel-label">${ids.length ? "sessions" : "link a session"}</div>
-        ${ids.map(panelSessRowHtml).join("")}
-        <div class="panel-sess-list"><div class="panel-sess-empty">loading…</div></div>
-      </div>`;
-  }
-
-  /** Running-first recent sessions in the todo's repo (all repos if unset).
-   *  A card can carry a scope label rather than a real repo — an umbrella
-   *  group name covering several repos — so an empty filtered list falls back
-   *  to all repos instead of offering nothing to link. */
-  async function sessionCandidates(repo?: string): Promise<Session[]> {
-    let sessions = await getSessions(7, repo || undefined, "active");
-    if (repo && sessions.length === 0) {
-      sessions = await getSessions(7, undefined, "active");
-    }
-    return sessions
-      .sort(
-        (a, b) =>
-          Number(b.running) - Number(a.running) || Date.parse(b.startedAt) - Date.parse(a.startedAt),
-      )
-      .slice(0, 8);
-  }
-
   function fillCandidates(t: Todo): void {
     const listEl = panelEl.querySelector<HTMLElement>(".panel-sess-list");
     if (!listEl) return;
@@ -699,34 +536,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       </div>`;
   }
 
-  /** Journey block shell: the card's whole story as one chronological stream —
-   *  created → sessions (PR riding its session) → check/release runs → done.
-   *  fillJourney builds the rows; the shell only decides the hint. */
-  function panelJourneyHtml(t: Todo): string {
-    // A card with no linked session still has a journey now — every column
-    // move, estimate and cycle change is in the event log — so the hint only
-    // speaks to what linking would ADD.
-    const hint = (t.linkedSessionIds ?? []).length
-      ? ""
-      : `<div class="panel-sess-empty">link a session to add its cost and runs to the journey</div>`;
-    return `
-      <div class="panel-field">
-        <div class="panel-label">journey</div>
-        <div class="panel-journey"><div class="panel-sess-empty">loading…</div></div>
-        ${hint}
-      </div>`;
-  }
-
-  /** One timeline entry: relative time, then whatever the event is. */
-  function journeyRow(ts: string, body: string, cls = ""): string {
-    return `
-      <div class="panel-journey-row${cls}" title="${escapeHtml(ts)}">
-        <span class="panel-journey-when">${escapeHtml(formatRelativeTime(ts))}</span>
-        ${body}
-      </div>`;
-  }
-
-  /** Name tables for the shared event renderer (boardEvents.ts). */
+  /** Name tables for the shared event renderer (domain/boardEvents.ts). */
   const eventNames = {
     state: (id: string): string => stateById(id)?.name ?? id ?? "—",
     cycle: (id: string): string => (id ? (cycleById(id)?.name ?? id) : "no cycle"),
@@ -735,133 +545,6 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       return c ? `#${c.seq}` : "a card";
     },
   };
-
-  // A run's record can land moments after a session's last transcript line —
-  // widen the match window past both ends so it isn't missed.
-  const SHIP_WINDOW_PAD_MS = 5 * 60 * 1000;
-
-  /** Fills the journey: created and done render from the card alone; linked
-   *  sessions anchor the middle (their PR chips ride along — the data has no
-   *  PR-opened timestamp, so a separate event would be an invented position),
-   *  and the repo's runs inside the sessions' window slot in between, newest
-   *  8 kept with a link into ships for the rest. */
-  function fillJourney(t: Todo): void {
-    const listEl = panelEl.querySelector<HTMLElement>(".panel-journey");
-    if (!listEl) return;
-    const linked = t.linkedSessionIds ?? [];
-
-    const events: { ts: number; html: string }[] = [
-      { ts: Date.parse(t.createdAt), html: journeyRow(t.createdAt, `<span>created</span>`) },
-    ];
-    if (t.snapshot) {
-      const s = t.snapshot;
-      events.push({
-        ts: Date.parse(s.takenAt),
-        html: journeyRow(
-          s.takenAt,
-          `<span class="panel-journey-done">✓ done</span><span>${escapeHtml(formatTokens(s.tokens))} tok · ${escapeHtml(
-            formatCost(s.costUsd),
-          )} · ${escapeHtml(formatDuration(s.durationMs))}</span>`,
-          " panel-journey-row--done",
-        ),
-      });
-    }
-    // Board history is fetched for EVERY card, linked or not: a column move is
-    // part of the story even when no session was ever attached.
-    const historyPromise = getTodoEvents(t.id)
-      .then((evs) =>
-        (evs ?? [])
-          .map((e) => {
-            const body = describeEvent(e, eventNames);
-            return body ? { ts: Date.parse(e.ts), html: journeyRow(e.ts, body) } : null;
-          })
-          .filter((r): r is { ts: number; html: string } => r !== null),
-      )
-      .catch((): { ts: number; html: string }[] => []); // history is an extra, never the section
-
-    const finish = (extra: { ts: number; html: string }[], footer = ""): void => {
-      if (!listEl.isConnected) return;
-      void historyPromise.then((hist) => {
-        if (!listEl.isConnected) return;
-        const all = [...events, ...hist, ...extra].sort((a, b) => a.ts - b.ts);
-        listEl.innerHTML = all.length
-          ? all.map((e) => e.html).join("") + footer
-          : `<div class="panel-sess-empty">nothing has happened to this card yet</div>`;
-      });
-    };
-    if (!linked.length) {
-      finish([]);
-      return;
-    }
-
-    Promise.all(
-      linked.map((id): Promise<Session | null> => {
-        const cached = sessCache.get(id);
-        if (cached) return Promise.resolve(cached);
-        return getSession(id)
-          .then((s) => {
-            sessCache.set(id, s);
-            return s;
-          })
-          .catch(() => null); // gone from disk — skipped, not fatal
-      }),
-    )
-      .then((results) => {
-        const sessions = results.filter((s): s is Session => s !== null);
-        const sessEvents = sessions.map((s) => ({
-          ts: Date.parse(s.startedAt),
-          html: journeyRow(
-            s.startedAt,
-            `<a class="panel-journey-sess" href="/claude/session/${encodeURIComponent(s.id)}">${escapeHtml(
-              truncate(s.title || "untitled session", 26),
-            )}</a><span>${escapeHtml(formatDuration(s.durationMs))}</span>${
-              s.prUrl
-                ? `<a class="panel-sess-pr" href="${escapeHtml(s.prUrl)}" target="_blank" rel="noreferrer"
-                     title="${escapeHtml(s.prUrl)}">${escapeHtml(prLabel(s.prUrl))}</a>`
-                : ""
-            }`,
-          ),
-        }));
-        if (!t.repo || !sessions.length) {
-          finish(sessEvents);
-          return undefined;
-        }
-        const start = Math.min(...sessions.map((s) => Date.parse(s.startedAt))) - SHIP_WINDOW_PAD_MS;
-        const end =
-          (t.snapshot ? Date.parse(t.snapshot.takenAt) : Date.now()) + SHIP_WINDOW_PAD_MS;
-        return getShips(0, t.repo, 200).then((res) => {
-          const inWindow = res.ships.filter((r) => {
-            const ts = Date.parse(r.ts);
-            return ts >= start && ts <= end;
-          });
-          const shipEvents = inWindow.slice(0, 8).map((r) => {
-            const exitBadge =
-              r.exit === 0
-                ? `<span class="ship-exit ship-exit--ok">green</span>`
-                : `<span class="ship-exit ship-exit--fail">exit ${r.exit}</span>`;
-            return {
-              ts: Date.parse(r.ts),
-              html: journeyRow(
-                r.ts,
-                `<span class="ship-kind">${escapeHtml(r.kind)}</span>${
-                  r.version ? `<span>${escapeHtml(r.version)}</span>` : ""
-                }${exitBadge}`,
-              ),
-            };
-          });
-          const footer =
-            inWindow.length > 8
-              ? `<a class="panel-ships-more" href="/project/ships">${inWindow.length - 8} earlier runs in ships →</a>`
-              : "";
-          finish([...sessEvents, ...shipEvents], footer);
-        });
-      })
-      .catch(() => {
-        if (listEl.isConnected) {
-          listEl.innerHTML = `<div class="panel-sess-empty">failed to load the journey</div>`;
-        }
-      });
-  }
 
   /** Note block: markdown-rendered view by default, textarea while editing. */
   function panelNoteHtml(t: Todo): string {
@@ -998,7 +681,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       </div>
       ${panelPlanningHtml(t)}
       ${panelParentHtml(t)}
-      ${panelSessHtml(t)}
+      ${panelSessHtml(t, sessCache)}
       ${panelDrawingsHtml(t)}
       ${panelDocsHtml(t)}
       ${panelJourneyHtml(t)}
@@ -1170,7 +853,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       });
     });
     fillCandidates(t);
-    fillJourney(t);
+    fillJourney(t, panelEl, sessCache, eventNames);
 
     panelEl.querySelector<HTMLSelectElement>(".panel-draw-add")?.addEventListener("change", (e) => {
       const did = (e.target as HTMLSelectElement).value;
@@ -1762,7 +1445,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
     }
     if (type === "ship-recorded") {
       const t = selected();
-      if (t) fillJourney(t);
+      if (t) fillJourney(t, panelEl, sessCache, eventNames);
       return;
     }
     // The columns, cycles and saved views each carry their whole list in the
