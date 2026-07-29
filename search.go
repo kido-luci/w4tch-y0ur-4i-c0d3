@@ -13,6 +13,7 @@ package main
 // them would bury "where did we discuss X" under everything ever read.
 
 import (
+	"database/sql"
 	"log"
 	"strings"
 	"time"
@@ -22,11 +23,30 @@ import (
 // newest first, at most limit hits. Matching is FTS5 token matching — every
 // term must appear, the last term also matches as a prefix ("tok" finds
 // "token") — not substring: a mid-word fragment no longer matches.
-func (ix *Index) Search(q string, days int, project string, limit int) SearchResult {
+// searchSessions is the slice of the session index search reads: the title
+// and project of the session a hit belongs to. SessionRef rather than Session
+// so labelling a hit doesn't copy the whole parse, agent runs included.
+type searchSessions interface {
+	SessionRef(id string) *Session
+}
+
+// searcher queries the message FTS table of index.db (whose schema the index
+// owns, see db.go). A nil db means the cache is disabled — an empty result,
+// never an error.
+type searcher struct {
+	db       *sql.DB
+	sessions searchSessions
+}
+
+func newSearcher(db *sql.DB, ss searchSessions) *searcher {
+	return &searcher{db: db, sessions: ss}
+}
+
+func (se *searcher) Search(q string, days int, project string, limit int) SearchResult {
 	start := time.Now()
 	res := SearchResult{Hits: []SearchHit{}}
 	match := ftsQuery(q)
-	if match == "" || ix.db == nil {
+	if match == "" || se.db == nil {
 		return res
 	}
 	var cutoff int64
@@ -54,7 +74,7 @@ func (ix *Index) Search(q string, days int, project string, limit int) SearchRes
 	// list must never read as the whole answer. The window filter is now
 	// per-message (the grep filtered whole sessions by EndedAt), so with days
 	// set, undated lines drop out instead of riding along.
-	err := ix.db.QueryRow(`
+	err := se.db.QueryRow(`
 		SELECT COUNT(*), COUNT(DISTINCT session_id) FROM messages
 		WHERE messages MATCH ? AND ts >= ?`+projFilter,
 		args...).Scan(&res.Matched, &res.Files)
@@ -63,7 +83,7 @@ func (ix *Index) Search(q string, days int, project string, limit int) SearchRes
 		return res
 	}
 
-	rows, err := ix.db.Query(`
+	rows, err := se.db.Query(`
 		SELECT session_id, role, ts, snippet(messages, 0, '', '', '…', 24)
 		FROM messages
 		WHERE messages MATCH ? AND ts >= ?`+projFilter+`
@@ -89,9 +109,8 @@ func (ix *Index) Search(q string, days int, project string, limit int) SearchRes
 
 	// Title/Project come from the in-memory index; a row whose session is gone
 	// (pruned between write and read) is dropped rather than served half-blank.
-	ix.mu.RLock()
 	for _, h := range raw {
-		s := ix.sessions[h.sid]
+		s := se.sessions.SessionRef(h.sid)
 		if s == nil {
 			continue
 		}
@@ -107,7 +126,6 @@ func (ix *Index) Search(q string, days int, project string, limit int) SearchRes
 		}
 		res.Hits = append(res.Hits, hit)
 	}
-	ix.mu.RUnlock()
 
 	res.Truncated = res.Matched > len(res.Hits)
 	res.TookMs = time.Since(start).Milliseconds()

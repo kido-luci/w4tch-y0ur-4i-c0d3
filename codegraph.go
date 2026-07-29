@@ -86,7 +86,22 @@ func cgDBPath(root string) string {
 	return filepath.Join(root, ".codegraph", "codegraph.db")
 }
 
-// cgRepos maps the scope's folders to on-disk repo roots. For each folder the
+// repoSessions is the slice of the session index that repo resolution reads:
+// the working directories sessions ran in, and when. Taking this rather than
+// the whole *Index is what lets resolution live outside the index's package.
+type repoSessions interface {
+	Snapshot() []*Session
+}
+
+// repoResolver maps a scope to on-disk repo roots. The git tab and the code
+// graph both go through it, so the two always list the same repo set — and
+// every drill-down endpoint validates its ?repo against ResolveRoot, which is
+// why those endpoints are safe to expose at all.
+type repoResolver struct{ sessions repoSessions }
+
+func newRepoResolver(ss repoSessions) *repoResolver { return &repoResolver{sessions: ss} }
+
+// Repos maps the scope's folders to on-disk repo roots. For each folder the
 // candidates are its sessions' cwds, newest first; the first one that still
 // exists wins, preferring one that carries an index — so a leftover worktree
 // path or a since-moved checkout can't shadow the real repo. A folder with no
@@ -94,7 +109,7 @@ func cgDBPath(root string) string {
 // of that name near a known workspace cwd (see findIndexedDir), so an infra
 // sub-repo you've indexed surfaces without ever opening Claude in it. Roots are
 // deduped across folders, indexed repos sort first.
-func (ix *Index) cgRepos(project string) []cgRepo {
+func (rr *repoResolver) Repos(project string) []cgRepo {
 	var want map[string]bool
 	if list := splitProjects(project); list != nil {
 		want = make(map[string]bool, len(list))
@@ -107,14 +122,12 @@ func (ix *Index) cgRepos(project string) []cgRepo {
 		at  time.Time
 	}
 	byFolder := map[string][]cand{}
-	ix.mu.RLock()
-	for _, s := range ix.sessions {
+	for _, s := range rr.sessions.Snapshot() {
 		if s.CWD == "" || (want != nil && !want[s.Project]) {
 			continue
 		}
 		byFolder[s.Project] = append(byFolder[s.Project], cand{s.CWD, s.EndedAt})
 	}
-	ix.mu.RUnlock()
 
 	out := []cgRepo{}
 	seen := map[string]bool{}
@@ -159,7 +172,7 @@ func (ix *Index) cgRepos(project string) []cgRepo {
 			}
 		}
 		if len(missing) > 0 {
-			anchors := ix.sessionDirs()
+			anchors := rr.Dirs()
 			for _, folder := range missing {
 				root := findIndexedDir(folder, anchors)
 				if root != "" && !seen[root] {
@@ -179,17 +192,15 @@ func (ix *Index) cgRepos(project string) []cgRepo {
 	return out
 }
 
-// sessionDirs is the distinct set of session working directories that still
-// exist on disk — the anchors the fallback resolution searches from.
-func (ix *Index) sessionDirs() []string {
+// Dirs is the distinct set of session working directories that still exist on
+// disk — the anchors the fallback resolution searches from.
+func (rr *repoResolver) Dirs() []string {
 	uniq := map[string]bool{}
-	ix.mu.RLock()
-	for _, s := range ix.sessions {
+	for _, s := range rr.sessions.Snapshot() {
 		if s.CWD != "" {
 			uniq[s.CWD] = true
 		}
 	}
-	ix.mu.RUnlock()
 	out := make([]string, 0, len(uniq))
 	for d := range uniq {
 		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
@@ -197,6 +208,23 @@ func (ix *Index) sessionDirs() []string {
 		}
 	}
 	return out
+}
+
+// ResolveRoot reports whether root is one of the scope's resolved repo roots.
+// Every git and GitHub drill-down endpoint validates its ?repo through here,
+// so it can only ever touch a repo the scope already surfaced, never an
+// arbitrary path. It lives beside the resolution rather than in git.go so the
+// guard and the list it guards cannot drift apart.
+func (rr *repoResolver) ResolveRoot(project, root string) bool {
+	if root == "" {
+		return false
+	}
+	for _, rp := range rr.Repos(project) {
+		if rp.Root == root {
+			return true
+		}
+	}
+	return false
 }
 
 // findIndexedDir looks for a directory named `folder` that carries its own
@@ -438,13 +466,13 @@ ORDER BY n.file_path, n.start_line LIMIT 50`, id)
 }
 
 // registerCodegraphAPI wires the three code-graph read endpoints.
-func registerCodegraphAPI(mux *http.ServeMux, ix *Index) {
+func registerCodegraphAPI(mux *http.ServeMux, rr *repoResolver) {
 	// openScoped validates ?repo against the scope's resolved roots and opens
 	// its DB; nil means the response was already written.
 	openScoped := func(w http.ResponseWriter, r *http.Request) *sql.DB {
 		root := r.URL.Query().Get("repo")
 		ok := false
-		for _, rp := range ix.cgRepos(r.URL.Query().Get("project")) {
+		for _, rp := range rr.Repos(r.URL.Query().Get("project")) {
 			if rp.Root == root && rp.HasIndex {
 				ok = true
 				break
@@ -465,7 +493,7 @@ func registerCodegraphAPI(mux *http.ServeMux, ix *Index) {
 	// The page load: the scope's repos with their summaries, plus the file
 	// graph of ?repo (or the first indexed repo when unset).
 	mux.HandleFunc("GET /api/codegraph", func(w http.ResponseWriter, r *http.Request) {
-		repos := ix.cgRepos(r.URL.Query().Get("project"))
+		repos := rr.Repos(r.URL.Query().Get("project"))
 		for i := range repos {
 			if repos[i].HasIndex {
 				cgFillSummary(&repos[i])

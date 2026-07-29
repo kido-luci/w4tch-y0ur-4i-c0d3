@@ -14,6 +14,7 @@ package main
 // Not to be confused with the cost-per-outcome insights at /api/ledger.
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"os"
@@ -63,11 +64,31 @@ func defaultShipsDir() string {
 	return filepath.Join(os.Getenv("HOME"), ".wyac", "ships")
 }
 
-// ScanShips reconciles the ships table with dir: new *.json files are
-// ingested, rows whose file is gone are pruned. Returns how many records were
-// ingested. Safe to call repeatedly — known files are skipped by name.
-func (ix *Index) ScanShips(dir string) int {
-	if ix.db == nil {
+// shipSessions is the slice of the session index that ship records join
+// against — which session was running a project when a run happened. Taking
+// this rather than the whole *Index lets ship records live outside the
+// index's package.
+type shipSessions interface {
+	Snapshot() []*Session
+}
+
+// shipStore is the ships table of index.db (whose schema the index owns, see
+// db.go) plus the session join. A nil db means the index cache is disabled:
+// every method then answers "no rows" rather than failing.
+type shipStore struct {
+	db       *sql.DB
+	sessions shipSessions
+}
+
+func newShipStore(db *sql.DB, ss shipSessions) *shipStore {
+	return &shipStore{db: db, sessions: ss}
+}
+
+// Scan reconciles the ships table with dir: new *.json files are ingested,
+// rows whose file is gone are pruned. Returns how many records were ingested.
+// Safe to call repeatedly — known files are skipped by name.
+func (st *shipStore) Scan(dir string) int {
+	if st.db == nil {
 		return 0
 	}
 	entries, err := os.ReadDir(dir)
@@ -84,7 +105,7 @@ func (ix *Index) ScanShips(dir string) int {
 	}
 
 	known := map[string]bool{}
-	if rows, err := ix.db.Query(`SELECT file FROM ships`); err == nil {
+	if rows, err := st.db.Query(`SELECT file FROM ships`); err == nil {
 		for rows.Next() {
 			var f string
 			if rows.Scan(&f) == nil {
@@ -99,13 +120,13 @@ func (ix *Index) ScanShips(dir string) int {
 		if known[name] {
 			continue
 		}
-		if ix.ingestShip(dir, name) != nil {
+		if st.ingest(dir, name) != nil {
 			ingested++
 		}
 	}
 	for f := range known {
 		if !onDisk[f] {
-			ix.db.Exec(`DELETE FROM ships WHERE file=?`, f)
+			st.db.Exec(`DELETE FROM ships WHERE file=?`, f)
 		}
 	}
 	return ingested
@@ -114,8 +135,8 @@ func (ix *Index) ScanShips(dir string) int {
 // ingestShip reads one drop file into the ships table. A file that isn't a
 // valid record (foreign JSON, missing fields, oversized) is skipped with a
 // log line — one bad drop must never sink the scan.
-func (ix *Index) ingestShip(dir, name string) *ShipRecord {
-	if ix.db == nil {
+func (st *shipStore) ingest(dir, name string) *ShipRecord {
+	if st.db == nil {
 		return nil
 	}
 	fi, err := os.Stat(filepath.Join(dir, name))
@@ -132,7 +153,7 @@ func (ix *Index) ingestShip(dir, name string) *ShipRecord {
 		return nil
 	}
 	r.File = name
-	if _, err := ix.db.Exec(
+	if _, err := st.db.Exec(
 		`INSERT OR REPLACE INTO ships(file,project,kind,version,sha,exit,duration_ms,ts,log) VALUES(?,?,?,?,?,?,?,?,?)`,
 		r.File, r.Project, r.Kind, r.Version, r.SHA, r.Exit, r.DurationMs, r.Ts.UnixNano(), r.Log); err != nil {
 		log.Printf("ships: ingest %s: %v", name, err)
@@ -147,9 +168,9 @@ func (ix *Index) ingestShip(dir, name string) *ShipRecord {
 // out of the capped newest-first slice by other projects' volume (which is
 // what client-side scope filtering over that slice did).
 // Logs ride along only when withLog asks — they are the payload's whole weight.
-func (ix *Index) Ships(project string, days, limit int, withLog bool) ShipsResult {
+func (st *shipStore) List(project string, days, limit int, withLog bool) ShipsResult {
 	res := ShipsResult{Ships: []ShipRecord{}}
-	if ix.db == nil {
+	if st.db == nil {
 		return res
 	}
 	var cutoff int64
@@ -171,11 +192,11 @@ func (ix *Index) Ships(project string, days, limit int, withLog bool) ShipsResul
 		where = `project IN (?` + strings.Repeat(`,?`, len(names)-1) + `) AND ` + where
 		args = append(append([]any{}, names...), args...)
 	}
-	if err := ix.db.QueryRow(
+	if err := st.db.QueryRow(
 		`SELECT COUNT(*) FROM ships WHERE `+where, args...).Scan(&res.Total); err != nil {
 		return res
 	}
-	rows, err := ix.db.Query(
+	rows, err := st.db.Query(
 		`SELECT file,project,kind,version,sha,exit,duration_ms,ts,log FROM ships
 		 WHERE `+where+` ORDER BY ts DESC LIMIT ?`,
 		append(append([]any{}, args...), limit)...)
@@ -197,7 +218,7 @@ func (ix *Index) Ships(project string, days, limit int, withLog bool) ShipsResul
 		}
 		res.Ships = append(res.Ships, r)
 	}
-	ix.joinShipSessions(res.Ships)
+	st.joinSessions(res.Ships)
 	return res
 }
 
@@ -206,17 +227,16 @@ func (ix *Index) Ships(project string, days, limit int, withLog bool) ShipsResul
 // a small slack, since the drop file lands moments after the transcript's
 // last line. Overlapping sessions on one repo resolve to the latest-started —
 // in practice the one that actually ran the command.
-func (ix *Index) joinShipSessions(ships []ShipRecord) {
+func (st *shipStore) joinSessions(ships []ShipRecord) {
 	const slack = 5 * time.Minute
-	ix.mu.RLock()
-	defer ix.mu.RUnlock()
+	sessions := st.sessions.Snapshot()
 	for i := range ships {
 		r := &ships[i]
 		if r.Ts.IsZero() {
 			continue
 		}
 		var best *Session
-		for _, s := range ix.sessions {
+		for _, s := range sessions {
 			if s.Project != r.Project || r.Ts.Before(s.StartedAt) || r.Ts.After(s.EndedAt.Add(slack)) {
 				continue
 			}
@@ -234,7 +254,7 @@ func (ix *Index) joinShipSessions(ships []ShipRecord) {
 // watchShips ingests new drop records as they land and broadcasts each over
 // SSE. The dir is flat, so this stays much simpler than the transcript
 // watcher; deletions reconcile on the periodic ScanShips, not here.
-func watchShips(ix *Index, hub *sseHub, dir string) error {
+func watchShips(st *shipStore, hub *sseHub, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -274,7 +294,7 @@ func watchShips(ix *Index, hub *sseHub, dir string) error {
 					mu.Lock()
 					delete(pending, name)
 					mu.Unlock()
-					if r := ix.ingestShip(dir, name); r != nil {
+					if r := st.ingest(dir, name); r != nil {
 						hub.broadcast("ship-recorded", r)
 					}
 				})

@@ -395,6 +395,44 @@ func (ix *Index) Session(id string) *Session {
 	return ix.withStatus(s, time.Now())
 }
 
+// The three accessors below are what lets repo resolution, search and the ship
+// records live outside this package: a method must sit with its receiver's
+// type, a plain function needn't. Each consumer declares the one-method
+// interface it needs and takes that instead of the whole index.
+//
+// They hand out STORED pointers, which is only safe because a *Session in the
+// map is never mutated in place — Rescan and RescanSession replace the entry
+// with a freshly parsed value. Keep it that way: mutating a stored session
+// would turn every reader here into a data race.
+
+// Snapshot returns the parsed sessions as of now, safe to read after the index
+// lock is released.
+func (ix *Index) Snapshot() []*Session {
+	ix.mu.RLock()
+	defer ix.mu.RUnlock()
+	out := make([]*Session, 0, len(ix.sessions))
+	for _, s := range ix.sessions {
+		out = append(out, s)
+	}
+	return out
+}
+
+// SessionRef returns the raw parse for id, without the live-status decoration
+// Session applies. For callers that only need a session's identifying fields
+// and would otherwise pay to copy the whole thing (agent runs included) per
+// lookup. nil when there is no such session.
+func (ix *Index) SessionRef(id string) *Session {
+	ix.mu.RLock()
+	defer ix.mu.RUnlock()
+	return ix.sessions[id]
+}
+
+// DB is the index-cache handle (index.db, see db.go), whose schema this
+// package owns. The query layers built over it — search, ship records — take
+// it rather than reaching into the index. nil when the cache is disabled,
+// which every caller treats as "no rows", never as an error.
+func (ix *Index) DB() *sql.DB { return ix.db }
+
 // Churn pivots the index by file instead of by session: which files were
 // edited across how many sessions, and the lines those edits moved. Like the
 // heatmap it ignores the archived flag — an archived session's edits still

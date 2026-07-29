@@ -248,8 +248,8 @@ func parseGitLog(s string) []gitCommit {
 // snapshots run concurrently — the unscoped case can resolve to many repos, and
 // each carries up to a handful of ×3s-timeout git calls — bounded so a large
 // scope doesn't fork one goroutine per repo unbounded.
-func (ix *Index) gitRepos(project string) []gitRepo {
-	roots := ix.cgRepos(project)
+func gitRepos(rr *repoResolver, project string) []gitRepo {
+	roots := rr.Repos(project)
 	out := make([]gitRepo, len(roots))
 	const workers = 6
 	sem := make(chan struct{}, workers)
@@ -274,21 +274,6 @@ func (ix *Index) gitRepos(project string) []gitRepo {
 		return out[i].Folder < out[j].Folder
 	})
 	return out
-}
-
-// gitResolveRoot reports whether root is one of the scope's resolved repo roots
-// — the same whitelist the code graph uses, so a drill-down endpoint can only
-// ever touch a repo the scope already surfaced, never an arbitrary path.
-func (ix *Index) gitResolveRoot(project, root string) bool {
-	if root == "" {
-		return false
-	}
-	for _, rp := range ix.cgRepos(project) {
-		if rp.Root == root {
-			return true
-		}
-	}
-	return false
 }
 
 // capDiff limits a patch to gitDiffMax so a huge commit can't bloat the
@@ -491,12 +476,12 @@ func gitBranches(root string) []gitBranch {
 	return branches
 }
 
-func registerGitAPI(mux *http.ServeMux, ix *Index) {
+func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
 	// scoped validates ?repo against the scope's resolved roots and returns the
 	// root; on a miss it writes the 404 and returns ok=false.
 	scoped := func(w http.ResponseWriter, r *http.Request) (string, bool) {
 		root := r.URL.Query().Get("repo")
-		if !ix.gitResolveRoot(r.URL.Query().Get("project"), root) {
+		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
 			writeJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false
 		}
@@ -506,7 +491,7 @@ func registerGitAPI(mux *http.ServeMux, ix *Index) {
 	mux.HandleFunc("GET /api/git", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, struct {
 			Repos []gitRepo `json:"repos"`
-		}{Repos: ix.gitRepos(r.URL.Query().Get("project"))})
+		}{Repos: gitRepos(rr, r.URL.Query().Get("project"))})
 	})
 
 	mux.HandleFunc("GET /api/git/commit", func(w http.ResponseWriter, r *http.Request) {
@@ -575,5 +560,5 @@ func registerGitAPI(mux *http.ServeMux, ix *Index) {
 		}{Branches: gitBranches(root)})
 	})
 
-	registerGitHubAPI(mux, ix)
+	registerGitHubAPI(mux, rr)
 }

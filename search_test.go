@@ -51,10 +51,18 @@ func searchRoot(t *testing.T) string {
 	return root
 }
 
-func TestSearchMatchesConversationNotTooling(t *testing.T) {
-	ix := newSearchIndex(t, searchRoot(t))
+// newSearchFixture is newSearchIndex plus the searcher built over it — what the
+// search tests actually exercise.
+func newSearchFixture(t *testing.T, root string) *searcher {
+	t.Helper()
+	ix := newSearchIndex(t, root)
+	return newSearcher(ix.DB(), ix)
+}
 
-	res := ix.Search("postgres", 0, "", 10)
+func TestSearchMatchesConversationNotTooling(t *testing.T) {
+	se := newSearchFixture(t, searchRoot(t))
+
+	res := se.Search("postgres", 0, "", 10)
 
 	// The user's question and the assistant's reply — not the Bash command
 	// that ran it, nor the output it printed.
@@ -88,51 +96,51 @@ func TestSearchMatchesConversationNotTooling(t *testing.T) {
 }
 
 func TestSearchFoldsVietnameseDiacritics(t *testing.T) {
-	ix := newSearchIndex(t, searchRoot(t))
+	se := newSearchFixture(t, searchRoot(t))
 
 	// Typing without diacritics must find the accented text …
-	res := ix.Search("loi", 0, "", 10)
+	res := se.Search("loi", 0, "", 10)
 	if len(res.Hits) != 1 || !strings.Contains(res.Hits[0].Snippet, "lỗi") {
 		t.Fatalf("Search(loi) = %+v, want the 'gặp lỗi' line", res.Hits)
 	}
 	// … and so must the accented text itself, in any case.
-	if res := ix.Search("LỖI", 0, "", 10); len(res.Hits) != 1 {
+	if res := se.Search("LỖI", 0, "", 10); len(res.Hits) != 1 {
 		t.Errorf("Search(LỖI) = %d hits, want 1", len(res.Hits))
 	}
 }
 
 func TestSearchPrefixOnLastToken(t *testing.T) {
-	ix := newSearchIndex(t, searchRoot(t))
-	if res := ix.Search("postg", 0, "", 10); len(res.Hits) != 2 {
+	se := newSearchFixture(t, searchRoot(t))
+	if res := se.Search("postg", 0, "", 10); len(res.Hits) != 2 {
 		t.Errorf("half-typed word should prefix-match: got %d hits, want 2", len(res.Hits))
 	}
 }
 
 func TestSearchFiltersAndHostileInput(t *testing.T) {
-	ix := newSearchIndex(t, searchRoot(t))
+	se := newSearchFixture(t, searchRoot(t))
 
-	if res := ix.Search("postgres", 0, "proj-s", 10); len(res.Hits) != 2 {
+	if res := se.Search("postgres", 0, "proj-s", 10); len(res.Hits) != 2 {
 		t.Errorf("project filter dropped its own project: %d hits", len(res.Hits))
 	}
-	if res := ix.Search("postgres", 0, "other-proj", 10); len(res.Hits) != 0 || res.Matched != 0 {
+	if res := se.Search("postgres", 0, "other-proj", 10); len(res.Hits) != 0 || res.Matched != 0 {
 		t.Errorf("project filter leaked: %+v", res)
 	}
 	// A group scope sends several comma-separated names — any member matches.
-	if res := ix.Search("postgres", 0, "other-proj,proj-s", 10); len(res.Hits) != 2 {
+	if res := se.Search("postgres", 0, "other-proj,proj-s", 10); len(res.Hits) != 2 {
 		t.Errorf("multi-project filter dropped a member's hits: %d hits", len(res.Hits))
 	}
-	if res := ix.Search("postgres", 0, "other-a,other-b", 10); len(res.Hits) != 0 || res.Matched != 0 {
+	if res := se.Search("postgres", 0, "other-a,other-b", 10); len(res.Hits) != 0 || res.Matched != 0 {
 		t.Errorf("multi-project filter leaked: %+v", res)
 	}
-	if res := ix.Search("mysql", 0, "", 10); len(res.Hits) != 0 {
+	if res := se.Search("mysql", 0, "", 10); len(res.Hits) != 0 {
 		t.Errorf("want no hits, got %+v", res.Hits)
 	}
-	if res := ix.Search("", 0, "", 10); len(res.Hits) != 0 {
+	if res := se.Search("", 0, "", 10); len(res.Hits) != 0 {
 		t.Errorf("empty query must return nothing, got %+v", res.Hits)
 	}
 	// FTS5 operators and stray quotes must reach the parser quoted, not raw.
 	for _, hostile := range []string{`AND OR NOT NEAR(`, `"unbalanced`, `a*b (c)`} {
-		if res := ix.Search(hostile, 0, "", 10); res.Hits == nil {
+		if res := se.Search(hostile, 0, "", 10); res.Hits == nil {
 			t.Errorf("hostile input %q must yield an empty result, not an error", hostile)
 		}
 	}
@@ -140,7 +148,8 @@ func TestSearchFiltersAndHostileInput(t *testing.T) {
 
 func TestSearchWithoutDB(t *testing.T) {
 	ix := NewIndex(t.TempDir())
-	if res := ix.Search("anything", 0, "", 10); len(res.Hits) != 0 {
+	se := newSearcher(ix.DB(), ix)
+	if res := se.Search("anything", 0, "", 10); len(res.Hits) != 0 {
 		t.Errorf("nil db must mean empty search, got %+v", res.Hits)
 	}
 }

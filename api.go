@@ -171,6 +171,12 @@ func unknownDocID(docs *DocStore, ids []string) string {
 	return ""
 }
 
+// todoSessions is the slice of the session index the board reads when it
+// freezes a card's cost snapshot: the totals of the sessions linked to it.
+type todoSessions interface {
+	Session(id string) *Session
+}
+
 // refreezeTodo keeps a card's cost snapshot in step with the status it just
 // moved to: landing in a done-category column freezes its linked sessions'
 // summed numbers onto the card, leaving one thaws it (the numbers re-freeze on
@@ -180,7 +186,7 @@ func unknownDocID(docs *DocStore, ids []string) string {
 //
 // Since data.db v12 the test is the column's category, not the literal string
 // "done" — a workflow whose last column is "Shipped" freezes just the same.
-func refreezeTodo(todos *TodoStore, ix *Index, todo Todo, status string) Todo {
+func refreezeTodo(todos *TodoStore, sessions todoSessions, todo Todo, status string) Todo {
 	if !todos.IsDoneStatus(status) {
 		if todo.Snapshot == nil {
 			return todo
@@ -195,7 +201,7 @@ func refreezeTodo(todos *TodoStore, ix *Index, todo Todo, status string) Todo {
 	}
 	snap := TodoSnapshot{TakenAt: time.Now()}
 	for _, sid := range todo.LinkedSessionIDs {
-		s := ix.Session(sid)
+		s := sessions.Session(sid)
 		if s == nil {
 			continue
 		}
@@ -215,6 +221,13 @@ func refreezeTodo(todos *TodoStore, ix *Index, todo Todo, status string) Todo {
 }
 
 func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
+	// Repo resolution, ship records and transcript search read the index but are
+	// not part of it — each takes the narrow slice of it that it needs, so none
+	// of them (nor the handlers below, nor MCP) depends on the whole index.
+	repos := newRepoResolver(ix)
+	ships := newShipStore(ix.DB(), ix)
+	search := newSearcher(ix.DB(), ix)
+
 	// Every scope question below goes through here, so a group label expands the
 	// same way the rail expands it — see scope.go.
 	scopeOf := func(r *http.Request) scopeSet {
@@ -1154,10 +1167,10 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	registerCodegraphAPI(mux, ix)
-	registerGitAPI(mux, ix)
+	registerCodegraphAPI(mux, repos)
+	registerGitAPI(mux, repos)
 
-	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, projects, ix, hub))
+	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, projects, ships, ix, hub))
 
 	// Per-day activity buckets for the last `weeks` weeks (default 26), bucketed
 	// by the local calendar day of each session's start. Powers the heatmap; its
@@ -1272,7 +1285,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 		if limit > 500 {
 			limit = 500
 		}
-		writeJSON(w, ix.Ships(q.Get("project"), days, limit, q.Get("log") == "1"))
+		writeJSON(w, ships.List(q.Get("project"), days, limit, q.Get("log") == "1"))
 	})
 
 	// Transcript search over the FTS5 index (see search.go). `limit` (default
@@ -1287,7 +1300,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sseHub, su *Summarizer, tod
 		if limit > 500 {
 			limit = 500
 		}
-		writeJSON(w, ix.Search(q.Get("q"), days, q.Get("project"), limit))
+		writeJSON(w, search.Search(q.Get("q"), days, q.Get("project"), limit))
 	})
 
 	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {

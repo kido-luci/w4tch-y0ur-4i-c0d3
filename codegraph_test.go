@@ -201,7 +201,7 @@ func TestCGRepos(t *testing.T) {
 		// Out of scope.
 		"s4": {ID: "s4", Project: "other", CWD: plain, EndedAt: now},
 	}
-	repos := ix.cgRepos("proj,gone")
+	repos := newRepoResolver(ix).Repos("proj,gone")
 	if len(repos) != 1 {
 		t.Fatalf("repos = %+v", repos)
 	}
@@ -209,7 +209,7 @@ func TestCGRepos(t *testing.T) {
 		t.Errorf("repo = %+v", repos[0])
 	}
 	// Unscoped resolves every folder; "other" has no index but a live dir.
-	all := ix.cgRepos("")
+	all := newRepoResolver(ix).Repos("")
 	if len(all) != 2 {
 		t.Fatalf("all = %+v", all)
 	}
@@ -233,7 +233,7 @@ func TestCGReposFallback(t *testing.T) {
 		// Only the workspace root has a session; "admin-frontend" has none.
 		"s1": {ID: "s1", Project: filepath.Base(ws), CWD: ws, EndedAt: time.Now()},
 	}
-	repos := ix.cgRepos("admin-frontend")
+	repos := newRepoResolver(ix).Repos("admin-frontend")
 	if len(repos) != 1 {
 		t.Fatalf("fallback repos = %+v", repos)
 	}
@@ -241,7 +241,7 @@ func TestCGReposFallback(t *testing.T) {
 		t.Errorf("repo = %+v, want indexed %s", repos[0], sub)
 	}
 	// A folder with no matching indexed dir stays unresolved.
-	if got := ix.cgRepos("nonesuch"); len(got) != 0 {
+	if got := newRepoResolver(ix).Repos("nonesuch"); len(got) != 0 {
 		t.Errorf("nonesuch resolved unexpectedly: %+v", got)
 	}
 }

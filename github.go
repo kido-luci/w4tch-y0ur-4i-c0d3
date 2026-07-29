@@ -318,13 +318,13 @@ func ghActivityFor(slug string) (ghActivity, bool) {
 // validates ?repo against the scope's resolved roots, derives the github slug
 // from its origin, and returns {supported:false} for a non-GitHub repo so the UI
 // shows an honest "no GitHub remote" state instead of an error.
-func registerGitHubAPI(mux *http.ServeMux, ix *Index) {
+func registerGitHubAPI(mux *http.ServeMux, rr *repoResolver) {
 	prCache := newGHCache(60 * time.Second)
 	actCache := newGHCache(60 * time.Second)
 
 	slugFor := func(w http.ResponseWriter, r *http.Request) (string, bool, bool) {
 		root := r.URL.Query().Get("repo")
-		if !ix.gitResolveRoot(r.URL.Query().Get("project"), root) {
+		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
 			writeJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false, false
 		}

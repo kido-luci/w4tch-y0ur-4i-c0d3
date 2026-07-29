@@ -57,7 +57,8 @@ func main() {
 	if sd == "" {
 		sd = defaultShipsDir()
 	}
-	if n := ix.ScanShips(sd); n > 0 {
+	shipStore := newShipStore(ix.DB(), ix)
+	if n := shipStore.Scan(sd); n > 0 {
 		log.Printf("ships: %d records ingested", n)
 	}
 
@@ -65,7 +66,7 @@ func main() {
 	if err := watch(ix, hub); err != nil {
 		log.Printf("file watch disabled: %v", err)
 	}
-	if err := watchShips(ix, hub, sd); err != nil {
+	if err := watchShips(shipStore, hub, sd); err != nil {
 		log.Printf("ships watch disabled: %v", err)
 	}
 
@@ -90,7 +91,7 @@ func main() {
 			}
 			// Reconcile ship records too: deletions, and any drop the
 			// watcher missed.
-			ix.ScanShips(sd)
+			shipStore.Scan(sd)
 		}
 	}()
 

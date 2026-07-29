@@ -8,9 +8,10 @@ import (
 	"time"
 )
 
-// newShipsIndex builds an Index whose only job is the ships table — an empty
-// transcript root, a real index.db.
-func newShipsIndex(t *testing.T) *Index {
+// newShipsStore builds a ship store over an Index whose only job is the ships
+// table — an empty transcript root, a real index.db. The index comes back too,
+// for the one test that needs sessions to join against.
+func newShipsStore(t *testing.T) (*shipStore, *Index) {
 	t.Helper()
 	root := t.TempDir()
 	db, err := openIndexDB(filepath.Join(t.TempDir(), "cfg"), root)
@@ -20,7 +21,7 @@ func newShipsIndex(t *testing.T) *Index {
 	t.Cleanup(func() { db.Close() })
 	ix := NewIndex(root)
 	ix.db = db
-	return ix
+	return newShipStore(ix.DB(), ix), ix
 }
 
 func writeShip(t *testing.T, dir, name string, r ShipRecord) {
@@ -35,7 +36,7 @@ func writeShip(t *testing.T, dir, name string, r ShipRecord) {
 }
 
 func TestShipsLifecycle(t *testing.T) {
-	ix := newShipsIndex(t)
+	sh, _ := newShipsStore(t)
 	dir := t.TempDir()
 	now := time.Now()
 	writeShip(t, dir, "100-1-proj-a-release.json", ShipRecord{
@@ -47,14 +48,14 @@ func TestShipsLifecycle(t *testing.T) {
 		Ts: now.Add(-30 * time.Minute), Log: "gofmt failed",
 	})
 
-	if n := ix.ScanShips(dir); n != 2 {
+	if n := sh.Scan(dir); n != 2 {
 		t.Fatalf("ingested = %d, want 2", n)
 	}
-	if n := ix.ScanShips(dir); n != 0 {
+	if n := sh.Scan(dir); n != 0 {
 		t.Errorf("re-scan ingested %d, want 0 (dedupe by file name)", n)
 	}
 
-	res := ix.Ships("", 0, 10, false)
+	res := sh.List("", 0, 10, false)
 	if res.Total != 2 || len(res.Ships) != 2 {
 		t.Fatalf("Total=%d len=%d, want 2/2", res.Total, len(res.Ships))
 	}
@@ -68,7 +69,7 @@ func TestShipsLifecycle(t *testing.T) {
 	if res.Ships[0].Log != "" {
 		t.Error("logs must not ride along unless asked")
 	}
-	if withLog := ix.Ships("", 0, 10, true); withLog.Ships[0].Log != "gofmt failed" {
+	if withLog := sh.List("", 0, 10, true); withLog.Ships[0].Log != "gofmt failed" {
 		t.Errorf("withLog lost the log: %+v", withLog.Ships[0])
 	}
 
@@ -76,30 +77,30 @@ func TestShipsLifecycle(t *testing.T) {
 	if err := os.Remove(filepath.Join(dir, "100-1-proj-a-release.json")); err != nil {
 		t.Fatal(err)
 	}
-	ix.ScanShips(dir)
-	if res := ix.Ships("", 0, 10, false); res.Total != 1 {
+	sh.Scan(dir)
+	if res := sh.List("", 0, 10, false); res.Total != 1 {
 		t.Errorf("after prune Total=%d, want 1", res.Total)
 	}
 }
 
 func TestShipsSkipsForeignFiles(t *testing.T) {
-	ix := newShipsIndex(t)
+	sh, _ := newShipsStore(t)
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "broken.json"), []byte("{not json"), 0o644)
 	os.WriteFile(filepath.Join(dir, "foreign.json"), []byte(`{"hello":"world"}`), 0o644)
 	os.WriteFile(filepath.Join(dir, ".tmp.hidden.json"), []byte(`{}`), 0o644)
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("not a record"), 0o644)
 
-	if n := ix.ScanShips(dir); n != 0 {
+	if n := sh.Scan(dir); n != 0 {
 		t.Errorf("ingested %d foreign files, want 0", n)
 	}
-	if res := ix.Ships("", 0, 10, false); res.Total != 0 {
+	if res := sh.List("", 0, 10, false); res.Total != 0 {
 		t.Errorf("Total=%d, want 0", res.Total)
 	}
 }
 
 func TestShipsFilters(t *testing.T) {
-	ix := newShipsIndex(t)
+	sh, _ := newShipsStore(t)
 	dir := t.TempDir()
 	now := time.Now()
 	writeShip(t, dir, "1-1-proj-a-release.json", ShipRecord{
@@ -108,29 +109,29 @@ func TestShipsFilters(t *testing.T) {
 	writeShip(t, dir, "2-1-proj-b-release.json", ShipRecord{
 		Project: "proj-b", Kind: "release", Version: "v2.0.0", Ts: now.Add(-time.Minute),
 	})
-	ix.ScanShips(dir)
+	sh.Scan(dir)
 
-	if res := ix.Ships("proj-a", 0, 10, false); res.Total != 1 || res.Ships[0].Version != "v1.0.0" {
+	if res := sh.List("proj-a", 0, 10, false); res.Total != 1 || res.Ships[0].Version != "v1.0.0" {
 		t.Errorf("project filter: %+v", res)
 	}
-	if res := ix.Ships("", 1, 10, false); res.Total != 1 || res.Ships[0].Project != "proj-b" {
+	if res := sh.List("", 1, 10, false); res.Total != 1 || res.Ships[0].Project != "proj-b" {
 		t.Errorf("days filter should keep only the recent record: %+v", res)
 	}
-	if res := ix.Ships("", 0, 1, false); res.Total != 2 || len(res.Ships) != 1 {
+	if res := sh.List("", 0, 1, false); res.Total != 2 || len(res.Ships) != 1 {
 		t.Errorf("limit must cap Ships but not Total: Total=%d len=%d", res.Total, len(res.Ships))
 	}
 	// A comma-separated project list matches any of its names (the scoped
 	// ships tab sends its whole scope set); unknown names and blanks are inert.
-	if res := ix.Ships("proj-a, proj-b", 0, 10, false); res.Total != 2 {
+	if res := sh.List("proj-a, proj-b", 0, 10, false); res.Total != 2 {
 		t.Errorf("multi-project filter should match both: %+v", res)
 	}
-	if res := ix.Ships("proj-a,,nope ", 0, 10, false); res.Total != 1 || res.Ships[0].Project != "proj-a" {
+	if res := sh.List("proj-a,,nope ", 0, 10, false); res.Total != 1 || res.Ships[0].Project != "proj-a" {
 		t.Errorf("multi-project filter with junk names: %+v", res)
 	}
 }
 
 func TestShipsJoinSessions(t *testing.T) {
-	ix := newShipsIndex(t)
+	sh, ix := newShipsStore(t)
 	dir := t.TempDir()
 	now := time.Now()
 	// Ran mid-session: joined. Ran an hour after any session ended: not.
@@ -146,7 +147,7 @@ func TestShipsJoinSessions(t *testing.T) {
 		Project: "proj-b", Kind: "check", Exit: 0, DurationMs: 1000,
 		Ts: now.Add(-time.Hour),
 	})
-	ix.ScanShips(dir)
+	sh.Scan(dir)
 
 	// Two overlapping proj-a sessions cover the release; the later-started one
 	// must win. Both ended well before the second record's ts.
@@ -159,7 +160,7 @@ func TestShipsJoinSessions(t *testing.T) {
 		StartedAt: now.Add(-2 * time.Hour), EndedAt: now.Add(-50 * time.Minute),
 	}
 
-	res := ix.Ships("", 0, 10, false)
+	res := sh.List("", 0, 10, false)
 	byFile := map[string]ShipRecord{}
 	for _, r := range res.Ships {
 		byFile[r.File] = r
