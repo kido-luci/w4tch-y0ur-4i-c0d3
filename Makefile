@@ -59,7 +59,11 @@ release-guards:
 release:
 	@scripts/wyac-ship watch-your-ai-code release "$(VERSION)" $(MAKE) release-run VERSION="$(VERSION)"
 
-release-run: release-guards check-run
+# The build half, factored out so `release` and `release-dry` run the SAME
+# cross-compile. A dry run with its own copy of this loop stops covering the
+# real path the moment either is edited — which would defeat the only reason it
+# exists.
+release-build:
 	@set -e; mkdir -p dist; \
 	rm -f dist/*.tar.gz; \
 	for platform in $(PLATFORMS); do \
@@ -71,6 +75,8 @@ release-run: release-guards check-run
 		tar -czf "dist/$$name.tar.gz" -C dist "$$name"; \
 		rm "dist/$$name"; \
 	done
+
+release-run: release-guards check-run release-build
 	git tag "$(VERSION)" 2>/dev/null || echo "tag $(VERSION) already exists locally, reusing"
 	git push origin "$(VERSION)"
 	@if gh release view "$(VERSION)" >/dev/null 2>&1; then \
@@ -78,6 +84,57 @@ release-run: release-guards check-run
 	else \
 		gh release create "$(VERSION)" --title "$(VERSION)" --generate-notes dist/*.tar.gz; \
 	fi
+
+# `make release-dry` — everything `make release` does except the two steps that
+# publish, plus one it cannot do: unpack the tarball built for THIS host and
+# actually run it.
+#
+# There is no way to rehearse the real thing with a throwaway tag. release-run
+# ends in `git push origin <tag>`, release.yml fires on `v*`, and GitHub hands
+# "Latest" to whatever published last — so a test tag would publish a release
+# and demote the real one on a public repo.
+#
+# It earns its keep because the release path is the one path nothing else
+# covers: CI runs on pull_request and never cross-compiles. A
+# `GOOS=... (cd backend && ...)` line — an outright shell syntax error — lived
+# here and would have surfaced only during an actual release.
+#
+# VERSION defaults to the newest CHANGELOG entry, so it takes no argument and
+# still passes the same guards a real release does.
+DRY_VERSION ?= $(shell grep -m1 '^\#\# ' CHANGELOG.md | awk '{print $$2}')
+DRY_PORT ?= 4799
+
+release-dry:
+	@$(MAKE) --no-print-directory release-dry-run VERSION="$(DRY_VERSION)"
+
+release-dry-run: release-guards check-run release-build
+	@set -e; \
+	host="watch-your-ai-code_$(VERSION)_$$(go env GOOS)_$$(go env GOARCH)"; \
+	tgz="dist/$$host.tar.gz"; \
+	[ -f "$$tgz" ] || { echo "release-dry: no tarball for this host ($$tgz)"; exit 1; }; \
+	work="$(CURDIR)/.dev/relcheck"; rm -rf "$$work"; mkdir -p "$$work/cfg"; \
+	tar -xzf "$$tgz" -C "$$work"; \
+	bin="$$work/$$host"; chmod +x "$$bin"; \
+	"$$bin" -addr 127.0.0.1:$(DRY_PORT) -config-dir "$$work/cfg" > "$$work/run.log" 2>&1 & \
+	pid=$$!; \
+	trap 'kill $$pid 2>/dev/null || true; rm -rf "$$work"' EXIT; \
+	for i in $$(seq 1 90); do \
+		curl -sf -o /dev/null "http://127.0.0.1:$(DRY_PORT)/" && break; \
+		kill -0 $$pid 2>/dev/null || { echo "release-dry: the binary exited early:"; cat "$$work/run.log"; exit 1; }; \
+		sleep 1; \
+	done; \
+	served=$$(curl -s "http://127.0.0.1:$(DRY_PORT)/" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1); \
+	disk=$$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' backend/internal/web/dist/index.html | head -1); \
+	[ -n "$$served" ] && [ "$$served" = "$$disk" ] || { \
+		echo "release-dry: the tarball serves '$$served', the bundle on disk is '$$disk'"; exit 1; }; \
+	for path in /api/todos /api/sessions /api/stats /project/git "/$$served"; do \
+		code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(DRY_PORT)$$path"); \
+		[ "$$code" = "200" ] || { echo "release-dry: $$path -> $$code, want 200"; exit 1; }; \
+	done; \
+	code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(DRY_PORT)/api/nope"); \
+	[ "$$code" = "404" ] || { echo "release-dry: /api/nope -> $$code, want 404"; exit 1; }; \
+	rm -f dist/*.tar.gz; \
+	echo "release-dry: $(VERSION) — 4 platforms built; the $$(go env GOOS)/$$(go env GOARCH) tarball was unpacked and served. Nothing tagged, nothing published."
 
 # --- dev loop -----------------------------------------------------------------
 # Two servers, neither of them the one on 4777. Vite serves the frontend with
@@ -106,4 +163,5 @@ dev:
 	$(MAKE) dev-web & \
 	wait
 
-.PHONY: build test run check check-run release-guards release release-run dev dev-api dev-web
+.PHONY: build test run check check-run release-guards release release-build release-run \
+	release-dry release-dry-run dev dev-api dev-web
