@@ -27,6 +27,12 @@ jobs:
       - name: Build (tsc typecheck + vite)
         working-directory: frontend
         run: npm run build
+      # The frontend suite covers things tsc cannot: the two routing rules that
+      # each shipped as a bug once, and the summaries-fetch gate. It ran only in
+      # `make check` until now, so every PR was green without it.
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm test
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
