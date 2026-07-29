@@ -1,4 +1,4 @@
-package main
+package board
 
 // Custom workflow states — the board's columns. Until data.db v12 the three
 // columns were an enum baked into the binary (`todoStatusRank`); a board that
@@ -13,7 +13,7 @@ package main
 // `backlog`, and the cost snapshot still needs a done state to freeze against.
 //
 // CATEGORY, not name, is what the rest of the server reads: `done` freezes the
-// snapshot (refreezeTodo in api.go) and the burndown counts everything outside
+// snapshot (RefreezeTodo in todos.go) and the burndown counts everything outside
 // it as remaining (cycles.go). Rename "Done" to "Shipped" and both keep working.
 
 import (
@@ -41,15 +41,15 @@ type TodoState struct {
 	Builtin  bool    `json:"builtin,omitempty"` // derived on read, never stored
 }
 
-// builtinStates are the three ids the pre-v12 enum used. Undeletable: the
+// BuiltinStates are the three ids the pre-v12 enum used. Undeletable: the
 // create-with-no-status default and the snapshot freeze both name them.
-var builtinStates = map[string]bool{"backlog": true, "doing": true, "done": true}
+var BuiltinStates = map[string]bool{"backlog": true, "doing": true, "done": true}
 
 func validStateCategory(c string) bool {
 	return c == "todo" || c == "started" || c == "done"
 }
 
-var errStateNotFound = errors.New("state not found")
+var ErrStateNotFound = errors.New("state not found")
 
 // StateStore persists the board columns to data.db (todo_states). Same write
 // model as the other stores: single writer, in-memory slice behind a mutex as
@@ -81,7 +81,7 @@ func (ss *StateStore) loadDB() {
 			log.Printf("states: load row: %v", err)
 			continue
 		}
-		s.Builtin = builtinStates[s.ID]
+		s.Builtin = BuiltinStates[s.ID]
 		ss.states = append(ss.states, s)
 	}
 }
@@ -129,16 +129,16 @@ func (ss *StateStore) List() []TodoState {
 // ListForScope returns the columns one scope sees: the shared ones plus those
 // owned by any project the scope covers.
 //
-// Takes a resolved scopeSet, not a label: a label can name a GROUP, and a
+// Takes a resolved ScopeSet, not a label: a label can name a GROUP, and a
 // column created under that group must stay visible when the rail narrows to a
 // member project. Comparing the label to s.Repo made it disappear instead —
 // see scope.go.
-func (ss *StateStore) ListForScope(in scopeSet) []TodoState {
+func (ss *StateStore) ListForScope(in ScopeSet) []TodoState {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 	out := make([]TodoState, 0, len(ss.states))
 	for _, s := range ss.states {
-		if in.coversOwner(s.Repo) {
+		if in.CoversOwner(s.Repo) {
 			out = append(out, *s)
 		}
 	}
@@ -269,8 +269,8 @@ func (ss *StateStore) Create(name, category, repo string, wip int) (TodoState, e
 	return *st, nil
 }
 
-// statePatch is a partial column update; nil fields stay untouched.
-type statePatch struct {
+// StatePatch is a partial column update; nil fields stay untouched.
+type StatePatch struct {
 	Name     *string  `json:"name"`
 	Category *string  `json:"category"`
 	Order    *float64 `json:"order"`
@@ -279,7 +279,7 @@ type statePatch struct {
 
 // Update renames, recategorises, reorders or re-caps one column. A builtin's
 // name and position are editable — only its id and its existence are fixed.
-func (ss *StateStore) Update(id string, p statePatch) (TodoState, error) {
+func (ss *StateStore) Update(id string, p StatePatch) (TodoState, error) {
 	if p.Name != nil && strings.TrimSpace(*p.Name) == "" {
 		return TodoState{}, fmt.Errorf("name is required")
 	}
@@ -314,13 +314,13 @@ func (ss *StateStore) Update(id string, p statePatch) (TodoState, error) {
 		*s = next
 		return next, nil
 	}
-	return TodoState{}, errStateNotFound
+	return TodoState{}, ErrStateNotFound
 }
 
 // Delete removes one column. Builtins are refused outright; a column still
 // holding cards is refused by the caller, which is the side that can see them.
 func (ss *StateStore) Delete(id string) error {
-	if builtinStates[id] {
+	if BuiltinStates[id] {
 		return fmt.Errorf("%q is a builtin column and cannot be deleted", id)
 	}
 	ss.mu.Lock()
@@ -335,7 +335,7 @@ func (ss *StateStore) Delete(id string) error {
 		ss.states = append(ss.states[:i], ss.states[i+1:]...)
 		return nil
 	}
-	return errStateNotFound
+	return ErrStateNotFound
 }
 
 // RenameRepo re-points a project's own columns at its new name — the states

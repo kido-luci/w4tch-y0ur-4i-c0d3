@@ -1,4 +1,4 @@
-package main
+package board
 
 // data.db: the durable half of the storage story. index.db (db.go) is a
 // disposable cache over files that can always be re-read; data.db holds the
@@ -35,10 +35,10 @@ import (
 
 const dataSchemaVersion = 12
 
-// openDataDB opens (creating if needed) <cfgDir>/data.db and migrates its
+// OpenDB opens (creating if needed) <cfgDir>/data.db and migrates its
 // schema forward. Unlike the index cache, an error here is fatal to the
 // caller: refusing to start beats starting over the user's board.
-func openDataDB(cfgDir string) (*sql.DB, error) {
+func OpenDB(cfgDir string) (*sql.DB, error) {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		return nil, err
 	}
@@ -447,10 +447,10 @@ func columnExists(db *sql.DB, table, col string) (bool, error) {
 	return false, rows.Err()
 }
 
-// backupDataDB snapshots data.db to data.db.bak, rotating the two previous
+// Backup snapshots data.db to data.db.bak, rotating the two previous
 // snapshots to .bak.2/.bak.3 (oldest dropped) — three boots of history instead
 // of one, so a bad state can't clobber the only good copy on the next boot.
-func backupDataDB(db *sql.DB, cfgDir string) {
+func Backup(db *sql.DB, cfgDir string) {
 	bak := filepath.Join(cfgDir, "data.db.bak")
 	tmp := bak + ".tmp"
 	_ = os.Remove(tmp)
@@ -480,11 +480,11 @@ func vacuumInto(db *sql.DB, dst string) error {
 	return os.Rename(tmp, dst)
 }
 
-// importDataOnce moves the pre-v0.45 file stores into data.db, exactly once.
+// ImportOnce moves the pre-v0.45 file stores into data.db, exactly once.
 // Empty table + file present = import then rename the file away; non-empty
 // table + file present = an old binary ran and wrote a fresh file — report
 // loudly, merge nothing.
-func importDataOnce(db *sql.DB, cfgDir string) {
+func ImportOnce(db *sql.DB, cfgDir string) {
 	importTodosOnce(db, cfgDir)
 	importDrawingsOnce(db, cfgDir)
 }

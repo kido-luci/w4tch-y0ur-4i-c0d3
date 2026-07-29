@@ -1,4 +1,4 @@
-package main
+package board
 
 // Cycles — the board's sprints. A named window with a start and an end that
 // cards are planned into, plus the two reports that make planning worth the
@@ -44,7 +44,7 @@ type Cycle struct {
 	ClosedAt *time.Time `json:"closedAt,omitempty"`
 }
 
-var errCycleNotFound = errors.New("cycle not found")
+var ErrCycleNotFound = errors.New("cycle not found")
 
 // CycleStore persists the cycles to data.db (cycles). Same write model as the
 // other stores: single writer, in-memory serving copy, DB-first.
@@ -131,12 +131,12 @@ func (cs *CycleStore) List() []Cycle {
 // ListForScope returns the cycles one scope sees: the shared ones plus those
 // owned by any project the scope covers — the same resolved rule the columns
 // and the saved views use (scope.go).
-func (cs *CycleStore) ListForScope(in scopeSet) []Cycle {
+func (cs *CycleStore) ListForScope(in ScopeSet) []Cycle {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	out := make([]Cycle, 0, len(cs.cycles))
 	for _, c := range cs.cycles {
-		if in.coversOwner(c.Repo) {
+		if in.CoversOwner(c.Repo) {
 			out = append(out, *c)
 		}
 	}
@@ -186,9 +186,9 @@ func (cs *CycleStore) Create(name, repo, goal string, starts, ends time.Time) (C
 	return *c, nil
 }
 
-// cyclePatch is a partial cycle update; nil fields stay untouched. Closed is a
+// CyclePatch is a partial cycle update; nil fields stay untouched. Closed is a
 // bool rather than a timestamp so the client never picks the close moment.
-type cyclePatch struct {
+type CyclePatch struct {
 	Name     *string    `json:"name"`
 	Goal     *string    `json:"goal"`
 	Repo     *string    `json:"repo"`
@@ -197,7 +197,7 @@ type cyclePatch struct {
 	Closed   *bool      `json:"closed"`
 }
 
-func (cs *CycleStore) Update(id string, p cyclePatch) (Cycle, error) {
+func (cs *CycleStore) Update(id string, p CyclePatch) (Cycle, error) {
 	if p.Name != nil && strings.TrimSpace(*p.Name) == "" {
 		return Cycle{}, fmt.Errorf("name is required")
 	}
@@ -240,7 +240,7 @@ func (cs *CycleStore) Update(id string, p cyclePatch) (Cycle, error) {
 		*c = next
 		return next, nil
 	}
-	return Cycle{}, errCycleNotFound
+	return Cycle{}, ErrCycleNotFound
 }
 
 // Delete removes one cycle. Its cards keep existing — the caller clears their
@@ -258,7 +258,7 @@ func (cs *CycleStore) Delete(id string) error {
 		cs.cycles = append(cs.cycles[:i], cs.cycles[i+1:]...)
 		return nil
 	}
-	return errCycleNotFound
+	return ErrCycleNotFound
 }
 
 // RenameRepo re-points a project's cycles at its new name.
@@ -352,11 +352,11 @@ func startOfDay(t time.Time) time.Time {
 // cycle viewed from one project charts THAT project's slice. Without it the
 // chart counted board-wide while the activity feed beside it counted by scope,
 // and one screen told two stories.
-func ComputeBurndown(c Cycle, todos *TodoStore, events *EventStore, now time.Time, in scopeSet) (Burndown, error) {
+func ComputeBurndown(c Cycle, todos *TodoStore, events *EventStore, now time.Time, in ScopeSet) (Burndown, error) {
 	out := Burndown{CycleID: c.ID}
 	cur := map[string]*cardAt{}
 	for _, t := range todos.List() {
-		if !in.covers(t.Repo) {
+		if !in.Covers(t.Repo) {
 			continue // out of scope: absent from the replay, so absent from every total
 		}
 		if t.CycleID == c.ID {
@@ -465,7 +465,7 @@ type CycleReport struct {
 // answer to what the row is asking.
 // `in` narrows every row to the cards one scope covers — the same set the
 // burndown and the board itself use, so the numbers on one screen agree.
-func Velocity(cycles []Cycle, todos *TodoStore, in scopeSet) []CycleReport {
+func Velocity(cycles []Cycle, todos *TodoStore, in ScopeSet) []CycleReport {
 	byCycle := map[string]*CycleReport{}
 	out := make([]CycleReport, 0, len(cycles))
 	for i := range cycles {
@@ -474,7 +474,7 @@ func Velocity(cycles []Cycle, todos *TodoStore, in scopeSet) []CycleReport {
 	}
 	for _, t := range todos.List() {
 		r := byCycle[t.CycleID]
-		if r == nil || !in.covers(t.Repo) {
+		if r == nil || !in.Covers(t.Repo) {
 			continue
 		}
 		r.Cards++

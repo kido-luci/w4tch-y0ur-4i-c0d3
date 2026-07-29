@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 // untouched — a success whose state exists only in memory would evaporate on
 // restart (the DB-first rule the other stores follow).
 func TestTodoWriteFailureLeavesServingCopyUntouched(t *testing.T) {
-	db, err := openDataDB(t.TempDir())
+	db, err := OpenDB(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestTodoWriteFailureLeavesServingCopyUntouched(t *testing.T) {
 	db.Close() // every write from here on fails
 
 	title := "renamed"
-	if _, err := ts.Update(card.ID, todoPatch{Title: &title}); err == nil {
+	if _, err := ts.Update(card.ID, TodoPatch{Title: &title}); err == nil {
 		t.Fatal("update over a dead db must error, not report success")
 	}
 	if got := ts.List()[0].Title; got != "card" {
@@ -66,7 +66,7 @@ func TestTodoStoreCRUDAndPersistence(t *testing.T) {
 	}
 
 	labels := []string{" api ", "", "ui", "api"}
-	relabeled, err := ts.Update(a.ID, todoPatch{Labels: &labels})
+	relabeled, err := ts.Update(a.ID, TodoPatch{Labels: &labels})
 	if err != nil {
 		t.Fatalf("update labels: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestTodoStoreCRUDAndPersistence(t *testing.T) {
 	}
 
 	status, order := "doing", 1.0
-	moved, err := ts.Update(b.ID, todoPatch{Status: &status, Order: &order})
+	moved, err := ts.Update(b.ID, TodoPatch{Status: &status, Order: &order})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestTodoStoreCRUDAndPersistence(t *testing.T) {
 	}
 
 	links := []string{" session-123 ", "session-456", "session-123", "  "}
-	linked, err := ts.Update(b.ID, todoPatch{LinkedSessionIDs: &links})
+	linked, err := ts.Update(b.ID, TodoPatch{LinkedSessionIDs: &links})
 	if err != nil {
 		t.Fatalf("link: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestTodoStoreCRUDAndPersistence(t *testing.T) {
 		t.Fatalf("session links should be trimmed, deduped and ordered, got %#v", linked.LinkedSessionIDs)
 	}
 	unlink := []string{}
-	if unlinked, _ := ts.Update(b.ID, todoPatch{LinkedSessionIDs: &unlink}); len(unlinked.LinkedSessionIDs) != 0 {
+	if unlinked, _ := ts.Update(b.ID, TodoPatch{LinkedSessionIDs: &unlink}); len(unlinked.LinkedSessionIDs) != 0 {
 		t.Fatalf("empty patch should unlink all, got %#v", unlinked.LinkedSessionIDs)
 	}
 
@@ -108,8 +108,8 @@ func TestTodoStoreCRUDAndPersistence(t *testing.T) {
 	if thawed, _ := ts.SetSnapshot(b.ID, nil); thawed.Snapshot != nil {
 		t.Fatal("nil should clear the snapshot")
 	}
-	if _, err := ts.SetSnapshot("nope", nil); err != errTodoNotFound {
-		t.Fatalf("want errTodoNotFound, got %v", err)
+	if _, err := ts.SetSnapshot("nope", nil); err != ErrTodoNotFound {
+		t.Fatalf("want ErrTodoNotFound, got %v", err)
 	}
 
 	// Reload: a fresh store over the same db is a restart, column-ordered.
@@ -151,19 +151,19 @@ func TestTodoStoreValidation(t *testing.T) {
 		t.Fatalf("create should honor the given column, got %s", todo.Status)
 	}
 	bad := "shipped"
-	if _, err := ts.Update(todo.ID, todoPatch{Status: &bad}); err == nil {
+	if _, err := ts.Update(todo.ID, TodoPatch{Status: &bad}); err == nil {
 		t.Fatal("unknown status should be rejected")
 	}
 	empty := " "
-	if _, err := ts.Update(todo.ID, todoPatch{Title: &empty}); err == nil {
+	if _, err := ts.Update(todo.ID, TodoPatch{Title: &empty}); err == nil {
 		t.Fatal("blank title patch should be rejected")
 	}
 
-	if _, err := ts.Update("nope", todoPatch{}); err != errTodoNotFound {
-		t.Fatalf("want errTodoNotFound, got %v", err)
+	if _, err := ts.Update("nope", TodoPatch{}); err != ErrTodoNotFound {
+		t.Fatalf("want ErrTodoNotFound, got %v", err)
 	}
-	if err := ts.Delete("nope"); err != errTodoNotFound {
-		t.Fatalf("want errTodoNotFound, got %v", err)
+	if err := ts.Delete("nope"); err != ErrTodoNotFound {
+		t.Fatalf("want ErrTodoNotFound, got %v", err)
 	}
 }
 
@@ -182,14 +182,14 @@ func TestTodoStoreLinkedDrawings(t *testing.T) {
 
 	// Linking trims + dedupes, keeping order.
 	ids := []string{" d1 ", "d2", "", "d1"}
-	linked, err := ts.Update(a.ID, todoPatch{LinkedDrawingIDs: &ids})
+	linked, err := ts.Update(a.ID, TodoPatch{LinkedDrawingIDs: &ids})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	if len(linked.LinkedDrawingIDs) != 2 || linked.LinkedDrawingIDs[0] != "d1" || linked.LinkedDrawingIDs[1] != "d2" {
 		t.Fatalf("want [d1 d2], got %v", linked.LinkedDrawingIDs)
 	}
-	if _, err := ts.Update(b.ID, todoPatch{LinkedDrawingIDs: &[]string{"d2"}}); err != nil {
+	if _, err := ts.Update(b.ID, TodoPatch{LinkedDrawingIDs: &[]string{"d2"}}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
@@ -213,7 +213,7 @@ func TestTodoStoreLinkedDrawings(t *testing.T) {
 	}
 
 	// An empty list unlinks everything.
-	cleared, err := ts2.Update(a.ID, todoPatch{LinkedDrawingIDs: &[]string{}})
+	cleared, err := ts2.Update(a.ID, TodoPatch{LinkedDrawingIDs: &[]string{}})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -237,11 +237,11 @@ func TestTodoStoreLinkedDocs(t *testing.T) {
 
 	// Linking trims + dedupes, keeping order — and it is independent of the
 	// wireframe link list on the same card.
-	if _, err := ts.Update(a.ID, todoPatch{LinkedDrawingIDs: &[]string{"draw1"}}); err != nil {
+	if _, err := ts.Update(a.ID, TodoPatch{LinkedDrawingIDs: &[]string{"draw1"}}); err != nil {
 		t.Fatalf("update drawings: %v", err)
 	}
 	ids := []string{" doc1 ", "doc2", "", "doc1"}
-	linked, err := ts.Update(a.ID, todoPatch{LinkedDocIDs: &ids})
+	linked, err := ts.Update(a.ID, TodoPatch{LinkedDocIDs: &ids})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestTodoStoreLinkedDocs(t *testing.T) {
 	if len(linked.LinkedDrawingIDs) != 1 || linked.LinkedDrawingIDs[0] != "draw1" {
 		t.Fatalf("linking docs must not disturb the wireframe list, got %v", linked.LinkedDrawingIDs)
 	}
-	if _, err := ts.Update(b.ID, todoPatch{LinkedDocIDs: &[]string{"doc2"}}); err != nil {
+	if _, err := ts.Update(b.ID, TodoPatch{LinkedDocIDs: &[]string{"doc2"}}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
@@ -281,7 +281,7 @@ func TestTodoStoreLinkedDocs(t *testing.T) {
 	}
 
 	// An empty list unlinks everything.
-	cleared, err := ts2.Update(a.ID, todoPatch{LinkedDocIDs: &[]string{}})
+	cleared, err := ts2.Update(a.ID, TodoPatch{LinkedDocIDs: &[]string{}})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}

@@ -1,4 +1,4 @@
-package main
+package board
 
 // Docs wiki (route `#/docs`): a tree of markdown pages, Confluence-style. Lives
 // in data.db (docs + doc_backups) with the same write model as the drawing and
@@ -42,14 +42,14 @@ type Doc struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-var errDocNotFound = errors.New("doc not found")
+var ErrDocNotFound = errors.New("doc not found")
 
-// errDocConflict means a conditional body write's base version no longer
+// ErrDocConflict means a conditional body write's base version no longer
 // matches: someone else (the editor, another tab, an MCP client) saved since.
-var errDocConflict = errors.New("doc changed since base version")
+var ErrDocConflict = errors.New("doc changed since base version")
 
-// errDocCycle means a move would make a page its own ancestor.
-var errDocCycle = errors.New("a page cannot be moved under itself or its descendants")
+// ErrDocCycle means a move would make a page its own ancestor.
+var ErrDocCycle = errors.New("a page cannot be moved under itself or its descendants")
 
 // maxDocBackups is how many previous body versions are kept per page (slot 1 =
 // newest). Every overwrite rotates them, so a bad write — human or MCP — is
@@ -170,7 +170,7 @@ func (ds *DocStore) Get(id string) (Doc, error) {
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Doc{}, errDocNotFound
+		return Doc{}, ErrDocNotFound
 	}
 	return *d, nil
 }
@@ -190,7 +190,7 @@ func (ds *DocStore) Content(id string) (string, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	if ds.find(id) == nil {
-		return "", errDocNotFound
+		return "", ErrDocNotFound
 	}
 	return ds.bodyLocked(id), nil
 }
@@ -213,17 +213,17 @@ func rotateDocBackupsTx(tx *sql.Tx, id, prev string) error {
 // SetContent replaces one page's markdown body, keeping the previous body as a
 // rotated backup — body, backup rotation and the UpdatedAt bump are one
 // transaction. A non-zero base makes the write conditional: it fails with
-// errDocConflict unless base still equals the page's UpdatedAt (optimistic
+// ErrDocConflict unless base still equals the page's UpdatedAt (optimistic
 // concurrency for the editor and MCP writers).
 func (ds *DocStore) SetContent(id, body string, base time.Time) (Doc, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Doc{}, errDocNotFound
+		return Doc{}, ErrDocNotFound
 	}
 	if !base.IsZero() && !base.Equal(d.UpdatedAt) {
-		return Doc{}, errDocConflict
+		return Doc{}, ErrDocConflict
 	}
 	tx, err := ds.db.Begin()
 	if err != nil {
@@ -248,10 +248,10 @@ func (ds *DocStore) SetContent(id, body string, base time.Time) (Doc, error) {
 	return *d, nil
 }
 
-// docPatch is a partial metadata update; nil fields stay untouched. Body is not
+// DocPatch is a partial metadata update; nil fields stay untouched. Body is not
 // here — it goes through SetContent so metadata edits never move the conflict
 // base a body save depends on.
-type docPatch struct {
+type DocPatch struct {
 	Title    *string  `json:"title"`
 	ParentID *string  `json:"parentId"`
 	Group    *string  `json:"group"` // "" is a real value — back to unscoped — distinct from "not provided"
@@ -277,7 +277,7 @@ func (ds *DocStore) isDescendantLocked(ancestorID, nodeID string) bool {
 // Update applies the non-nil metadata fields to one page. Reparenting is
 // cycle-checked (a page can't move under itself or a descendant) and, unless an
 // explicit Order comes with it, drops the page at the end of its new siblings.
-func (ds *DocStore) Update(id string, p docPatch) (Doc, error) {
+func (ds *DocStore) Update(id string, p DocPatch) (Doc, error) {
 	if p.Title != nil && strings.TrimSpace(*p.Title) == "" {
 		return Doc{}, fmt.Errorf("title is required")
 	}
@@ -285,7 +285,7 @@ func (ds *DocStore) Update(id string, p docPatch) (Doc, error) {
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Doc{}, errDocNotFound
+		return Doc{}, ErrDocNotFound
 	}
 	// Compute the new values into locals and mutate the in-memory doc only after
 	// the DB write succeeds — the DB-first rule the other mutators follow, so a
@@ -304,7 +304,7 @@ func (ds *DocStore) Update(id string, p docPatch) (Doc, error) {
 				return Doc{}, fmt.Errorf("parent %q does not exist", np)
 			}
 			if ds.isDescendantLocked(id, np) {
-				return Doc{}, errDocCycle
+				return Doc{}, ErrDocCycle
 			}
 			newParent = np
 			// d still sits under its old parent here, so maxSiblingOrder can't
@@ -353,7 +353,7 @@ func (ds *DocStore) Delete(id string) error {
 	defer ds.mu.Unlock()
 	victim := ds.find(id)
 	if victim == nil {
-		return errDocNotFound
+		return ErrDocNotFound
 	}
 	tx, err := ds.db.Begin()
 	if err != nil {

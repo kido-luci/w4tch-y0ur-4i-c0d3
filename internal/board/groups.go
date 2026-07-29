@@ -1,4 +1,4 @@
-package main
+package board
 
 // Project groups (the nav's global scope, phase 2): a named set of project
 // names, so one scope entry can cover several repos — a product that spans a

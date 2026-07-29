@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"database/sql"
@@ -27,7 +27,7 @@ CREATE TABLE drawings(
 // runs over the same engine the app ships.
 func newTestDataDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := openDataDB(t.TempDir())
+	db, err := OpenDB(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,12 +52,12 @@ func TestImportTodosLegacyAndReappearance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	importDataOnce(db, cfg)
+	ImportOnce(db, cfg)
 
 	byID := map[string]Todo{}
 	for _, todo := range NewTodoStore(db).List() {
@@ -87,7 +87,7 @@ func TestImportTodosLegacyAndReappearance(t *testing.T) {
 		[]byte(`[{"id":"zzz","seq":9,"title":"stray write","status":"backlog","order":1,"createdAt":"2026-07-02T10:00:00Z"}]`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	importDataOnce(db, cfg)
+	ImportOnce(db, cfg)
 	if got := len(NewTodoStore(db).List()); got != 2 {
 		t.Fatalf("reappeared file must not merge: want 2 todos, got %d", got)
 	}
@@ -111,12 +111,12 @@ func TestImportDrawingsWithScenesThumbsBackups(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "d1.thumb.png"), []byte("png-bytes"), 0o644)
 	os.WriteFile(filepath.Join(dir, "d1.excalidraw.bak.1"), []byte(`{"v":"prev"}`), 0o644)
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	importDataOnce(db, cfg)
+	ImportOnce(db, cfg)
 
 	ds := NewDrawingStore(db)
 	list := ds.List()
@@ -144,7 +144,7 @@ func TestImportDrawingsWithScenesThumbsBackups(t *testing.T) {
 
 func TestBackupDataDB(t *testing.T) {
 	cfg := t.TempDir()
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestBackupDataDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	backupDataDB(db, cfg)
+	Backup(db, cfg)
 
 	bak, err := sql.Open("sqlite", "file:"+filepath.Join(cfg, "data.db.bak"))
 	if err != nil {
@@ -171,7 +171,7 @@ func TestBackupDataDB(t *testing.T) {
 // boot.
 func TestBackupDataDBRotates(t *testing.T) {
 	cfg := t.TempDir()
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestBackupDataDBRotates(t *testing.T) {
 		if _, err := ts.Create(fmt.Sprintf("card %d", i), "", "", ""); err != nil {
 			t.Fatal(err)
 		}
-		backupDataDB(db, cfg)
+		Backup(db, cfg)
 	}
 	for name, want := range map[string]int{"data.db.bak": 3, "data.db.bak.2": 2, "data.db.bak.3": 1} {
 		bak, err := sql.Open("sqlite", "file:"+filepath.Join(cfg, name))
@@ -200,7 +200,7 @@ func TestBackupDataDBRotates(t *testing.T) {
 	if _, err := ts.Create("card 4", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	backupDataDB(db, cfg)
+	Backup(db, cfg)
 	bak, err := sql.Open("sqlite", "file:"+filepath.Join(cfg, "data.db.bak.3"))
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +231,7 @@ PRAGMA user_version = 5;`); err != nil {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ PRAGMA user_version = 5;`); err != nil {
 	}
 
 	fresh := t.TempDir()
-	db2, err := openDataDB(fresh)
+	db2, err := OpenDB(fresh)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ PRAGMA user_version = 2;`); err != nil {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open should migrate v2 forward: %v", err)
 	}
@@ -317,7 +317,7 @@ PRAGMA user_version = 2;`); err != nil {
 		t.Fatalf("migrated card should read back with no linked docs, got %v", list[0].LinkedDocIDs)
 	}
 	// The new column is writable and persists across a reload.
-	linked, err := ts.Update("old", todoPatch{LinkedDocIDs: &[]string{"docX"}})
+	linked, err := ts.Update("old", TodoPatch{LinkedDocIDs: &[]string{"docX"}})
 	if err != nil {
 		t.Fatalf("link doc after migration: %v", err)
 	}
@@ -367,7 +367,7 @@ PRAGMA user_version = 2;`); err != nil {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open must recover from a partial v3 migration, got: %v", err)
 	}
@@ -385,7 +385,7 @@ PRAGMA user_version = 2;`); err != nil {
 // A data.db written by a NEWER schema must be refused, never "migrated" down.
 func TestDataDBRefusesNewerSchema(t *testing.T) {
 	cfg := t.TempDir()
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestDataDBRefusesNewerSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Close()
-	if _, err := openDataDB(cfg); err == nil {
+	if _, err := OpenDB(cfg); err == nil {
 		t.Fatal("newer-schema data.db must refuse to open, not migrate down")
 	}
 }
@@ -427,7 +427,7 @@ PRAGMA user_version = 3;`); err != nil {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open should migrate v3→v4: %v", err)
 	}
@@ -479,7 +479,7 @@ PRAGMA user_version = 3;`); err != nil {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open must recover from a partial v4 migration, got: %v", err)
 	}
@@ -516,7 +516,7 @@ PRAGMA user_version = 4;`); err != nil {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open should migrate v4→v5: %v", err)
 	}
@@ -532,7 +532,7 @@ PRAGMA user_version = 4;`); err != nil {
 		t.Fatalf("pre-v5 page should survive with empty group, got %+v", list)
 	}
 	g := "shop"
-	if _, err := ds.Update("p", docPatch{Group: &g}); err != nil {
+	if _, err := ds.Update("p", DocPatch{Group: &g}); err != nil {
 		t.Fatalf("set group after migration: %v", err)
 	}
 	if got := NewDocStore(db).List()[0].Group; got != "shop" {
@@ -566,7 +566,7 @@ PRAGMA user_version = 4;`); err != nil {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open must recover from a partial v5 migration, got: %v", err)
 	}
@@ -597,7 +597,7 @@ func TestMigrateAddsProjectGroupsTable(t *testing.T) {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open should migrate v5→v6: %v", err)
 	}

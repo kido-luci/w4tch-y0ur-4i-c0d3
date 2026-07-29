@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"database/sql"
@@ -93,8 +93,8 @@ func TestProjectStoreValidation(t *testing.T) {
 	if _, err := ps.Upsert("a/b", nil, false, 0, ""); err == nil {
 		t.Fatal("a name with '/' should be rejected")
 	}
-	if err := ps.Delete("nope"); err != errProjectNotFound {
-		t.Fatalf("want errProjectNotFound, got %v", err)
+	if err := ps.Delete("nope"); err != ErrProjectNotFound {
+		t.Fatalf("want ErrProjectNotFound, got %v", err)
 	}
 	// An empty folder set is legal (a project with no Claude sessions yet).
 	p, err := ps.Upsert("empty", nil, false, 0, "")
@@ -142,8 +142,8 @@ func TestProjectRenameValidation(t *testing.T) {
 	ps := NewProjectStore(db)
 	ps.Seed([]string{"old", "taken"})
 
-	if err := ps.Rename("nope", "x"); err != errProjectNotFound {
-		t.Fatalf("want errProjectNotFound, got %v", err)
+	if err := ps.Rename("nope", "x"); err != ErrProjectNotFound {
+		t.Fatalf("want ErrProjectNotFound, got %v", err)
 	}
 	if err := ps.Rename("old", "taken"); err == nil {
 		t.Fatal("rename onto an existing project should be rejected")
@@ -298,8 +298,8 @@ func TestProjectLogo(t *testing.T) {
 	ps := NewProjectStore(db)
 	ps.Seed([]string{"p"})
 
-	if err := ps.SetLogo("nope", []byte("x"), "image/png", 5); err != errProjectNotFound {
-		t.Fatalf("set on missing project: want errProjectNotFound, got %v", err)
+	if err := ps.SetLogo("nope", []byte("x"), "image/png", 5); err != ErrProjectNotFound {
+		t.Fatalf("set on missing project: want ErrProjectNotFound, got %v", err)
 	}
 	if _, _, err := ps.Logo("p"); err != errNoLogo {
 		t.Fatalf("no logo yet: want errNoLogo, got %v", err)
@@ -355,7 +355,7 @@ func TestMigrateAddsProjectsTable(t *testing.T) {
 	}
 	raw.Close()
 
-	db, err := openDataDB(cfg)
+	db, err := OpenDB(cfg)
 	if err != nil {
 		t.Fatalf("open should migrate v6→v7: %v", err)
 	}

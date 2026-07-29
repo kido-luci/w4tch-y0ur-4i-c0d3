@@ -1,4 +1,4 @@
-package main
+package board
 
 // Design library (route `#/design`): local Excalidraw wireframes. Since v0.45
 // everything lives in data.db — metadata, scene, thumbnail and the rotated
@@ -47,12 +47,12 @@ type Drawing struct {
 	PublishedAt time.Time `json:"publishedAt"`
 }
 
-var errDrawingNotFound = errors.New("drawing not found")
+var ErrDrawingNotFound = errors.New("drawing not found")
 
-// errDrawingConflict means a conditional write's base version no longer
+// ErrDrawingConflict means a conditional write's base version no longer
 // matches: someone else (the editor, another tab, an MCP client) saved since
 // the caller last read the drawing.
-var errDrawingConflict = errors.New("drawing changed since base version")
+var ErrDrawingConflict = errors.New("drawing changed since base version")
 
 // maxSceneBackups is how many previous scene versions are kept per drawing
 // (slot 1 = newest). Every content overwrite rotates them, so a bad write —
@@ -80,7 +80,7 @@ type DrawingStore struct {
 }
 
 // NewDrawingStore opens the design library over data.db (import from the
-// pre-v0.45 files has already run by then — see importDataOnce).
+// pre-v0.45 files has already run by then — see ImportOnce).
 func NewDrawingStore(db *sql.DB) *DrawingStore {
 	ds := &DrawingStore{db: db}
 	ds.loadDB()
@@ -167,7 +167,7 @@ func (ds *DrawingStore) Get(id string) (Drawing, error) {
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	return *d, nil
 }
@@ -180,7 +180,7 @@ func (ds *DrawingStore) Duplicate(id string) (Drawing, error) {
 	defer ds.mu.Unlock()
 	src := ds.find(id)
 	if src == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	content := ds.sceneLocked(id)
 	now := time.Now()
@@ -214,7 +214,7 @@ func (ds *DrawingStore) Content(id string) ([]byte, error) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 	if ds.find(id) == nil {
-		return nil, errDrawingNotFound
+		return nil, ErrDrawingNotFound
 	}
 	return ds.sceneLocked(id), nil
 }
@@ -235,7 +235,7 @@ func (ds *DrawingStore) SetThumbnail(id string, data []byte, base time.Time) (Dr
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	if _, err := ds.db.Exec(`UPDATE drawings SET thumb=?, thumb_updated_at=? WHERE id=?`,
 		data, timeToNano(base), id); err != nil {
@@ -252,7 +252,7 @@ func (ds *DrawingStore) Thumbnail(id string) ([]byte, error) {
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return nil, errDrawingNotFound
+		return nil, ErrDrawingNotFound
 	}
 	if d.ThumbUpdatedAt.IsZero() || !d.ThumbUpdatedAt.Equal(d.UpdatedAt) {
 		return nil, errThumbnailStale
@@ -283,7 +283,7 @@ func rotateBackupsTx(tx *sql.Tx, id string, prev []byte) error {
 // rotated backup — scene, backup rotation and the UpdatedAt bump are one
 // transaction (in the file store these were separate writes that could
 // drift). A non-zero base makes the write conditional: it fails with
-// errDrawingConflict unless base still equals the drawing's UpdatedAt
+// ErrDrawingConflict unless base still equals the drawing's UpdatedAt
 // (optimistic concurrency for the editor and MCP writers).
 func (ds *DrawingStore) SetContent(id string, content []byte, base time.Time) (Drawing, error) {
 	if !json.Valid(content) {
@@ -293,10 +293,10 @@ func (ds *DrawingStore) SetContent(id string, content []byte, base time.Time) (D
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	if !base.IsZero() && !base.Equal(d.UpdatedAt) {
-		return Drawing{}, errDrawingConflict
+		return Drawing{}, ErrDrawingConflict
 	}
 	tx, err := ds.db.Begin()
 	if err != nil {
@@ -334,7 +334,7 @@ func (ds *DrawingStore) MarkPublished(id string, base time.Time) (Drawing, error
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	if _, err := ds.db.Exec(`UPDATE drawings SET published_at=? WHERE id=?`, base.UnixNano(), id); err != nil {
 		return Drawing{}, fmt.Errorf("mark published: %w", err)
@@ -353,7 +353,7 @@ func (ds *DrawingStore) Rename(id, name string) (Drawing, error) {
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	if _, err := ds.db.Exec(`UPDATE drawings SET name=? WHERE id=?`, name, id); err != nil {
 		return Drawing{}, fmt.Errorf("rename: %w", err)
@@ -371,7 +371,7 @@ func (ds *DrawingStore) SetGroup(id, group string) (Drawing, error) {
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	if _, err := ds.db.Exec(`UPDATE drawings SET group_name=? WHERE id=?`, group, id); err != nil {
 		return Drawing{}, fmt.Errorf("set group: %w", err)
@@ -403,7 +403,7 @@ func (ds *DrawingStore) SetTopics(id string, topics []string) (Drawing, error) {
 	defer ds.mu.Unlock()
 	d := ds.find(id)
 	if d == nil {
-		return Drawing{}, errDrawingNotFound
+		return Drawing{}, ErrDrawingNotFound
 	}
 	if _, err := ds.db.Exec(`UPDATE drawings SET topics=? WHERE id=?`, string(raw), id); err != nil {
 		return Drawing{}, fmt.Errorf("set topics: %w", err)
@@ -457,5 +457,5 @@ func (ds *DrawingStore) Delete(id string) error {
 			return nil
 		}
 	}
-	return errDrawingNotFound
+	return ErrDrawingNotFound
 }

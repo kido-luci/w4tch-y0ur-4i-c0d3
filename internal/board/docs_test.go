@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"fmt"
@@ -39,7 +39,7 @@ func TestDocStoreCRUDAndPersistence(t *testing.T) {
 		t.Fatalf("want [home guide] by order, got %+v", list)
 	}
 
-	renamed, err := ds.Update(guide.ID, docPatch{Title: strptr("  Guide v2  ")})
+	renamed, err := ds.Update(guide.ID, DocPatch{Title: strptr("  Guide v2  ")})
 	if err != nil || renamed.Title != "Guide v2" {
 		t.Fatalf("rename should trim + apply, got %q (%v)", renamed.Title, err)
 	}
@@ -80,21 +80,21 @@ func TestDocStoreValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := ds.Update(d.ID, docPatch{Title: strptr(" ")}); err == nil {
+	if _, err := ds.Update(d.ID, DocPatch{Title: strptr(" ")}); err == nil {
 		t.Fatal("blank rename should be rejected")
 	}
 
-	if _, err := ds.Content("nope"); err != errDocNotFound {
-		t.Fatalf("want errDocNotFound, got %v", err)
+	if _, err := ds.Content("nope"); err != ErrDocNotFound {
+		t.Fatalf("want ErrDocNotFound, got %v", err)
 	}
-	if _, err := ds.SetContent("nope", "x", time.Time{}); err != errDocNotFound {
-		t.Fatalf("want errDocNotFound, got %v", err)
+	if _, err := ds.SetContent("nope", "x", time.Time{}); err != ErrDocNotFound {
+		t.Fatalf("want ErrDocNotFound, got %v", err)
 	}
-	if _, err := ds.Update("nope", docPatch{Title: strptr("x")}); err != errDocNotFound {
-		t.Fatalf("want errDocNotFound, got %v", err)
+	if _, err := ds.Update("nope", DocPatch{Title: strptr("x")}); err != ErrDocNotFound {
+		t.Fatalf("want ErrDocNotFound, got %v", err)
 	}
-	if err := ds.Delete("nope"); err != errDocNotFound {
-		t.Fatalf("want errDocNotFound, got %v", err)
+	if err := ds.Delete("nope"); err != ErrDocNotFound {
+		t.Fatalf("want ErrDocNotFound, got %v", err)
 	}
 }
 
@@ -107,7 +107,7 @@ func TestDocStoreMetadataKeepsBodyVersion(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	base := d.UpdatedAt
-	renamed, err := ds.Update(d.ID, docPatch{Title: strptr("renamed")})
+	renamed, err := ds.Update(d.ID, DocPatch{Title: strptr("renamed")})
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestDocStoreGroup(t *testing.T) {
 	}
 	base := d.UpdatedAt
 
-	moved, err := ds.Update(d.ID, docPatch{Group: strptr("  shop  ")})
+	moved, err := ds.Update(d.ID, DocPatch{Group: strptr("  shop  ")})
 	if err != nil || moved.Group != "shop" {
 		t.Fatalf("group should trim + apply, got %q (%v)", moved.Group, err)
 	}
@@ -145,11 +145,11 @@ func TestDocStoreGroup(t *testing.T) {
 	}
 
 	// A patch without group leaves it alone; "" is a real clear.
-	renamed, err := ds.Update(d.ID, docPatch{Title: strptr("renamed")})
+	renamed, err := ds.Update(d.ID, DocPatch{Title: strptr("renamed")})
 	if err != nil || renamed.Group != "shop" {
 		t.Fatalf("groupless patch should keep the group, got %q (%v)", renamed.Group, err)
 	}
-	cleared, err := ds.Update(d.ID, docPatch{Group: strptr("")})
+	cleared, err := ds.Update(d.ID, DocPatch{Group: strptr("")})
 	if err != nil || cleared.Group != "" {
 		t.Fatalf("empty group should clear, got %q (%v)", cleared.Group, err)
 	}
@@ -178,8 +178,8 @@ func TestDocStoreConditionalWrites(t *testing.T) {
 	}
 
 	// The stale base (pre-bump) now conflicts and leaves the body untouched.
-	if _, err := ds.SetContent(d.ID, "v2", d.UpdatedAt); err != errDocConflict {
-		t.Fatalf("want errDocConflict, got %v", err)
+	if _, err := ds.SetContent(d.ID, "v2", d.UpdatedAt); err != ErrDocConflict {
+		t.Fatalf("want ErrDocConflict, got %v", err)
 	}
 	if body, _ := ds.Content(d.ID); body != "v1" {
 		t.Fatalf("conflicted write must not change the body, got %q", body)
@@ -260,12 +260,12 @@ func TestDocStoreTreeNestingAndCycles(t *testing.T) {
 	}
 
 	// Moving a page under itself is a cycle.
-	if _, err := ds.Update(parent.ID, docPatch{ParentID: strptr(parent.ID)}); err != errDocCycle {
-		t.Fatalf("self-parent should be errDocCycle, got %v", err)
+	if _, err := ds.Update(parent.ID, DocPatch{ParentID: strptr(parent.ID)}); err != ErrDocCycle {
+		t.Fatalf("self-parent should be ErrDocCycle, got %v", err)
 	}
 	// Moving a page under its own descendant is a cycle, and changes nothing.
-	if _, err := ds.Update(parent.ID, docPatch{ParentID: strptr(child.ID)}); err != errDocCycle {
-		t.Fatalf("moving under a descendant should be errDocCycle, got %v", err)
+	if _, err := ds.Update(parent.ID, DocPatch{ParentID: strptr(child.ID)}); err != ErrDocCycle {
+		t.Fatalf("moving under a descendant should be ErrDocCycle, got %v", err)
 	}
 	if got, _ := ds.Get(parent.ID); got.ParentID != "" {
 		t.Fatalf("cycle-rejected move must not change the parent, got %q", got.ParentID)
@@ -277,7 +277,7 @@ func TestDocStoreTreeNestingAndCycles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create other: %v", err)
 	}
-	moved, err := ds.Update(child.ID, docPatch{ParentID: strptr(other.ID)})
+	moved, err := ds.Update(child.ID, DocPatch{ParentID: strptr(other.ID)})
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}

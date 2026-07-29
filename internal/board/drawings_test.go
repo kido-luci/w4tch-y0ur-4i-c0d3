@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"fmt"
@@ -99,17 +99,17 @@ func TestDrawingStoreValidation(t *testing.T) {
 		t.Fatal("blank rename should be rejected")
 	}
 
-	if _, err := ds.Content("nope"); err != errDrawingNotFound {
-		t.Fatalf("want errDrawingNotFound, got %v", err)
+	if _, err := ds.Content("nope"); err != ErrDrawingNotFound {
+		t.Fatalf("want ErrDrawingNotFound, got %v", err)
 	}
-	if _, err := ds.SetContent("nope", []byte("{}"), time.Time{}); err != errDrawingNotFound {
-		t.Fatalf("want errDrawingNotFound, got %v", err)
+	if _, err := ds.SetContent("nope", []byte("{}"), time.Time{}); err != ErrDrawingNotFound {
+		t.Fatalf("want ErrDrawingNotFound, got %v", err)
 	}
-	if _, err := ds.Rename("nope", "x"); err != errDrawingNotFound {
-		t.Fatalf("want errDrawingNotFound, got %v", err)
+	if _, err := ds.Rename("nope", "x"); err != ErrDrawingNotFound {
+		t.Fatalf("want ErrDrawingNotFound, got %v", err)
 	}
-	if err := ds.Delete("nope"); err != errDrawingNotFound {
-		t.Fatalf("want errDrawingNotFound, got %v", err)
+	if err := ds.Delete("nope"); err != ErrDrawingNotFound {
+		t.Fatalf("want ErrDrawingNotFound, got %v", err)
 	}
 }
 
@@ -154,8 +154,8 @@ func TestDrawingStoreDuplicate(t *testing.T) {
 		t.Fatalf("want 2 drawings after reload, got %d", got)
 	}
 
-	if _, err := ds.Duplicate("nope"); err != errDrawingNotFound {
-		t.Fatalf("want errDrawingNotFound, got %v", err)
+	if _, err := ds.Duplicate("nope"); err != ErrDrawingNotFound {
+		t.Fatalf("want ErrDrawingNotFound, got %v", err)
 	}
 }
 
@@ -172,8 +172,8 @@ func TestDrawingStoreConditionalWrites(t *testing.T) {
 	}
 
 	// The stale base (pre-bump) now conflicts and leaves the scene untouched.
-	if _, err := ds.SetContent(d.ID, []byte(`{"v":2}`), d.UpdatedAt); err != errDrawingConflict {
-		t.Fatalf("want errDrawingConflict, got %v", err)
+	if _, err := ds.SetContent(d.ID, []byte(`{"v":2}`), d.UpdatedAt); err != ErrDrawingConflict {
+		t.Fatalf("want ErrDrawingConflict, got %v", err)
 	}
 	content, _ := ds.Content(d.ID)
 	if string(content) != `{"v":1}` {
@@ -286,7 +286,7 @@ func TestDrawingStoreThumbnails(t *testing.T) {
 	if err := ds2.Delete(d.ID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := ds2.Thumbnail(d.ID); err != errDrawingNotFound {
+	if _, err := ds2.Thumbnail(d.ID); err != ErrDrawingNotFound {
 		t.Fatalf("deleted drawing's thumbnail should be gone, got %v", err)
 	}
 }
@@ -317,7 +317,7 @@ func TestDrawingStoreGroups(t *testing.T) {
 	if cleared, err := ds.SetGroup(a.ID, "   "); err != nil || cleared.Group != "" {
 		t.Fatalf("blank group clears to Ungrouped, got %q (%v)", cleared.Group, err)
 	}
-	if _, err := ds.SetGroup("nope", "x"); err != errDrawingNotFound {
+	if _, err := ds.SetGroup("nope", "x"); err != ErrDrawingNotFound {
 		t.Fatalf("set group on missing id, got %v", err)
 	}
 
@@ -363,7 +363,7 @@ func TestDrawingStoreTopics(t *testing.T) {
 	if !tagged.UpdatedAt.Equal(a.UpdatedAt) {
 		t.Fatalf("SetTopics must not bump UpdatedAt: %v -> %v", a.UpdatedAt, tagged.UpdatedAt)
 	}
-	if _, err := ds.SetTopics("nope", []string{"x"}); err != errDrawingNotFound {
+	if _, err := ds.SetTopics("nope", []string{"x"}); err != ErrDrawingNotFound {
 		t.Fatalf("set topics on missing id, got %v", err)
 	}
 

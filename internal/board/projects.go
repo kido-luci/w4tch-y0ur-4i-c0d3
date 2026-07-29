@@ -1,4 +1,4 @@
-package main
+package board
 
 // Project registry: the nav's global scope, decoupled from the raw ~/.claude
 // scan. Where the sessions index reports one project per session cwd-basename,
@@ -59,7 +59,7 @@ func (p *Project) clone() Project {
 }
 
 var (
-	errProjectNotFound = errors.New("project not found")
+	ErrProjectNotFound = errors.New("project not found")
 	errNoLogo          = errors.New("project has no logo")
 )
 
@@ -250,7 +250,7 @@ func (ps *ProjectStore) wouldCycle(name, parent string) bool {
 // flag and order. The name is the label items carry, so the caller must cascade
 // it across the label stores (todos/docs/drawings/groups). Rejects "/" and a
 // name another project already holds; a collision with a group name is the
-// endpoint's check. errProjectNotFound if old isn't a project.
+// endpoint's check. ErrProjectNotFound if old isn't a project.
 func (ps *ProjectStore) Rename(old, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -263,7 +263,7 @@ func (ps *ProjectStore) Rename(old, name string) error {
 	defer ps.mu.Unlock()
 	p := ps.find(old)
 	if p == nil {
-		return errProjectNotFound
+		return ErrProjectNotFound
 	}
 	if name == old {
 		return nil
@@ -294,7 +294,7 @@ func (ps *ProjectStore) Delete(name string) error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	if ps.find(name) == nil {
-		return errProjectNotFound
+		return ErrProjectNotFound
 	}
 	if _, err := ps.db.Exec(`DELETE FROM projects WHERE name=?`, name); err != nil {
 		return fmt.Errorf("delete project: %w", err)
@@ -318,14 +318,14 @@ func (ps *ProjectStore) Delete(name string) error {
 }
 
 // SetLogo stores a project's logo (bytes + content-type) and stamps its
-// version (a ms timestamp the caller supplies). errProjectNotFound if the
+// version (a ms timestamp the caller supplies). ErrProjectNotFound if the
 // project is gone.
 func (ps *ProjectStore) SetLogo(name string, data []byte, contentType string, ts int64) error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	p := ps.find(name)
 	if p == nil {
-		return errProjectNotFound
+		return ErrProjectNotFound
 	}
 	if _, err := ps.db.Exec(
 		`UPDATE projects SET logo=?, logo_type=?, logo_updated_at=? WHERE name=?`,
@@ -337,12 +337,12 @@ func (ps *ProjectStore) SetLogo(name string, data []byte, contentType string, ts
 }
 
 // Logo returns a project's stored logo bytes and content-type, or errNoLogo
-// when none is set (also errProjectNotFound if the project is gone).
+// when none is set (also ErrProjectNotFound if the project is gone).
 func (ps *ProjectStore) Logo(name string) ([]byte, string, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	if ps.find(name) == nil {
-		return nil, "", errProjectNotFound
+		return nil, "", ErrProjectNotFound
 	}
 	var data []byte
 	var ct string
@@ -355,13 +355,13 @@ func (ps *ProjectStore) Logo(name string) ([]byte, string, error) {
 	return data, ct, nil
 }
 
-// DeleteLogo clears a project's logo. errProjectNotFound if the project is gone.
+// DeleteLogo clears a project's logo. ErrProjectNotFound if the project is gone.
 func (ps *ProjectStore) DeleteLogo(name string) error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	p := ps.find(name)
 	if p == nil {
-		return errProjectNotFound
+		return ErrProjectNotFound
 	}
 	if _, err := ps.db.Exec(
 		`UPDATE projects SET logo=NULL, logo_type='', logo_updated_at=0 WHERE name=?`, name); err != nil {
@@ -373,7 +373,7 @@ func (ps *ProjectStore) DeleteLogo(name string) error {
 
 // Seed ensures every name has a registry entry that owns the same-named folder:
 // add-only and idempotent, existing rows are never touched. Names come from the
-// labels the content actually carries (see seedProjects), so a fresh registry
+// labels the content actually carries (see SeedProjects), so a fresh registry
 // MIRRORS today's taxonomy exactly (seed keeps names — no rewrite). New entries
 // are appended after the current tail so a custom order survives. Returns how
 // many were added.
@@ -415,7 +415,7 @@ func (ps *ProjectStore) Seed(names []string) int {
 	return added
 }
 
-// seedProjects mirrors the CONTENT taxonomy into the registry: every label
+// SeedProjects mirrors the CONTENT taxonomy into the registry: every label
 // actually carried by a board card, wiki page or drawing becomes a registry
 // entry owning its same-named Claude folder (if one exists — harmless
 // otherwise). The session scan is deliberately NOT a source: which folders
@@ -424,7 +424,7 @@ func (ps *ProjectStore) Seed(names []string) int {
 // group members resolve by name without needing a row of their own. Add-only,
 // so it also runs on the periodic tick to adopt a freshly-labelled item.
 // Returns how many entries it added.
-func seedProjects(ps *ProjectStore, groups *GroupStore, todos *TodoStore, docs *DocStore, drawings *DrawingStore) int {
+func SeedProjects(ps *ProjectStore, groups *GroupStore, todos *TodoStore, docs *DocStore, drawings *DrawingStore) int {
 	set := map[string]bool{}
 	for _, t := range todos.List() {
 		if t.Repo != "" {

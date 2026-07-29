@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"database/sql"
@@ -23,39 +23,39 @@ func boardWithDepth(t *testing.T) (*sql.DB, *TodoStore, *StateStore, *EventStore
 
 func TestHierarchyNestsTwoLevelsDeep(t *testing.T) {
 	_, ts, _, _, _ := boardWithDepth(t)
-	epic, err := ts.CreateFull(todoCreate{Title: "checkout rewrite", Kind: "epic"})
+	epic, err := ts.CreateFull(TodoCreate{Title: "checkout rewrite", Kind: "epic"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	story, err := ts.CreateFull(todoCreate{Title: "cart page", ParentID: epic.ID})
+	story, err := ts.CreateFull(TodoCreate{Title: "cart page", ParentID: epic.ID})
 	if err != nil {
 		t.Fatalf("a child of a top-level card must be allowed: %v", err)
 	}
 	// Third level is refused.
-	if _, err := ts.CreateFull(todoCreate{Title: "too deep", ParentID: story.ID}); err == nil {
+	if _, err := ts.CreateFull(TodoCreate{Title: "too deep", ParentID: story.ID}); err == nil {
 		t.Fatal("nesting under a child must be refused")
 	}
 	// So is nesting a card that already has children.
-	other, err := ts.CreateFull(todoCreate{Title: "another top level"})
+	other, err := ts.CreateFull(TodoCreate{Title: "another top level"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Update(epic.ID, todoPatch{ParentID: &other.ID}); err == nil {
+	if _, err := ts.Update(epic.ID, TodoPatch{ParentID: &other.ID}); err == nil {
 		t.Fatal("a card with children must not become a child itself")
 	}
 	// And a card cannot parent itself.
-	if _, err := ts.Update(story.ID, todoPatch{ParentID: &story.ID}); err == nil {
+	if _, err := ts.Update(story.ID, TodoPatch{ParentID: &story.ID}); err == nil {
 		t.Fatal("self-parenting must be refused")
 	}
 	unknown := "nope"
-	if _, err := ts.Update(story.ID, todoPatch{ParentID: &unknown}); err == nil {
+	if _, err := ts.Update(story.ID, TodoPatch{ParentID: &unknown}); err == nil {
 		t.Fatal("an unknown parent id must be refused")
 	}
 }
 
 func TestRollupCountsChildrenAndPoints(t *testing.T) {
 	_, ts, _, _, _ := boardWithDepth(t)
-	epic, err := ts.CreateFull(todoCreate{Title: "epic", Kind: "epic"})
+	epic, err := ts.CreateFull(TodoCreate{Title: "epic", Kind: "epic"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestRollupCountsChildrenAndPoints(t *testing.T) {
 		{"b", "doing", 5},
 		{"c", "backlog", 2},
 	} {
-		if _, err := ts.CreateFull(todoCreate{
+		if _, err := ts.CreateFull(TodoCreate{
 			Title: c.title, ParentID: epic.ID, Status: c.status, Estimate: c.estimate,
 		}); err != nil {
 			t.Fatal(err)
@@ -93,8 +93,8 @@ func TestRollupCountsChildrenAndPoints(t *testing.T) {
 // Deleting a parent promotes its children instead of taking them with it.
 func TestDeletePromotesChildren(t *testing.T) {
 	_, ts, _, _, _ := boardWithDepth(t)
-	epic, _ := ts.CreateFull(todoCreate{Title: "epic", Kind: "epic"})
-	child, _ := ts.CreateFull(todoCreate{Title: "child", ParentID: epic.ID})
+	epic, _ := ts.CreateFull(TodoCreate{Title: "epic", Kind: "epic"})
+	child, _ := ts.CreateFull(TodoCreate{Title: "child", ParentID: epic.ID})
 	if err := ts.Delete(epic.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestDeletePromotesChildren(t *testing.T) {
 
 func TestCardFieldsSurviveAReload(t *testing.T) {
 	db, ts, _, _, _ := boardWithDepth(t)
-	made, err := ts.CreateFull(todoCreate{
+	made, err := ts.CreateFull(TodoCreate{
 		Title: "sized", Kind: "bug", Priority: 3, Estimate: 5, CycleID: "cy1",
 	})
 	if err != nil {
@@ -127,13 +127,13 @@ func TestCardFieldsSurviveAReload(t *testing.T) {
 
 func TestCardFieldValidation(t *testing.T) {
 	_, ts, _, _, _ := boardWithDepth(t)
-	if _, err := ts.CreateFull(todoCreate{Title: "x", Kind: "saga"}); err == nil {
+	if _, err := ts.CreateFull(TodoCreate{Title: "x", Kind: "saga"}); err == nil {
 		t.Error("an unknown kind must be refused")
 	}
-	if _, err := ts.CreateFull(todoCreate{Title: "x", Priority: 9}); err == nil {
+	if _, err := ts.CreateFull(TodoCreate{Title: "x", Priority: 9}); err == nil {
 		t.Error("a priority out of 0-4 must be refused")
 	}
-	if _, err := ts.CreateFull(todoCreate{Title: "x", Estimate: -1}); err == nil {
+	if _, err := ts.CreateFull(TodoCreate{Title: "x", Estimate: -1}); err == nil {
 		t.Error("a negative estimate must be refused")
 	}
 }
@@ -163,7 +163,7 @@ func TestCycleCloseAndReopen(t *testing.T) {
 	now := time.Now()
 	c, _ := cs.Create("Sprint 1", "", "", now, now.Add(time.Hour))
 	closed := true
-	got, err := cs.Update(c.ID, cyclePatch{Closed: &closed})
+	got, err := cs.Update(c.ID, CyclePatch{Closed: &closed})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestCycleCloseAndReopen(t *testing.T) {
 		t.Fatal("closing must stamp closedAt")
 	}
 	closed = false
-	if got, err = cs.Update(c.ID, cyclePatch{Closed: &closed}); err != nil || got.ClosedAt != nil {
+	if got, err = cs.Update(c.ID, CyclePatch{Closed: &closed}); err != nil || got.ClosedAt != nil {
 		t.Fatalf("reopening must clear closedAt: %#v (%v)", got, err)
 	}
 }
@@ -180,7 +180,7 @@ func TestVelocityTotalsCommittedAndLanded(t *testing.T) {
 	_, ts, _, _, cs := boardWithDepth(t)
 	now := time.Now()
 	c, _ := cs.Create("Sprint 1", "", "", now.Add(-24*time.Hour), now.Add(24*time.Hour))
-	for _, in := range []todoCreate{
+	for _, in := range []TodoCreate{
 		{Title: "a", CycleID: c.ID, Estimate: 3, Status: "done"},
 		{Title: "b", CycleID: c.ID, Estimate: 5, Status: "doing"},
 		{Title: "c", CycleID: c.ID}, // unestimated
@@ -190,7 +190,7 @@ func TestVelocityTotalsCommittedAndLanded(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rows := Velocity(cs.List(), ts, allScopes())
+	rows := Velocity(cs.List(), ts, AllScopes())
 	if len(rows) != 1 {
 		t.Fatalf("want one row, got %d", len(rows))
 	}
@@ -205,7 +205,7 @@ func TestUnlinkCycleClearsCards(t *testing.T) {
 	_, ts, _, _, cs := boardWithDepth(t)
 	now := time.Now()
 	c, _ := cs.Create("Sprint 1", "", "", now, now.Add(time.Hour))
-	if _, err := ts.CreateFull(todoCreate{Title: "planned", CycleID: c.ID}); err != nil {
+	if _, err := ts.CreateFull(TodoCreate{Title: "planned", CycleID: c.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := cs.Delete(c.ID); err != nil {
@@ -231,14 +231,14 @@ func TestBurndownReplaysHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	card, err := ts.CreateFull(todoCreate{Title: "sized", CycleID: c.ID, Estimate: 4})
+	card, err := ts.CreateFull(TodoCreate{Title: "sized", CycleID: c.ID, Estimate: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Move it to done, then rewrite both events onto the timeline: created on
 	// day 0, finished on day 2. Append stamps time.Now(), and a burndown over
 	// real days needs events on real days.
-	if _, err := ts.Update(card.ID, todoPatch{Status: strPtr("done")}); err != nil {
+	if _, err := ts.Update(card.ID, TodoPatch{Status: strPtr("done")}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`DELETE FROM todo_events`); err != nil {
@@ -258,7 +258,7 @@ func TestBurndownReplaysHistory(t *testing.T) {
 		}
 	}
 
-	bd, err := ComputeBurndown(c, ts, es, now, allScopes())
+	bd, err := ComputeBurndown(c, ts, es, now, AllScopes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestBurndownIgnoresCardsNotYetCreated(t *testing.T) {
 	now := time.Now()
 	start := startOfDay(now).AddDate(0, 0, -2)
 	c, _ := cs.Create("Sprint 1", "", "", start, start.AddDate(0, 0, 5))
-	card, err := ts.CreateFull(todoCreate{Title: "late arrival", CycleID: c.ID, Estimate: 7})
+	card, err := ts.CreateFull(TodoCreate{Title: "late arrival", CycleID: c.ID, Estimate: 7})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestBurndownIgnoresCardsNotYetCreated(t *testing.T) {
 		card.ID, timeToNano(startOfDay(now).Add(time.Hour)), "created", "", "backlog"); err != nil {
 		t.Fatal(err)
 	}
-	bd, err := ComputeBurndown(c, ts, es, now, allScopes())
+	bd, err := ComputeBurndown(c, ts, es, now, AllScopes())
 	if err != nil {
 		t.Fatal(err)
 	}

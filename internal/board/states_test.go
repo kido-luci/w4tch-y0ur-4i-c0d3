@@ -1,4 +1,4 @@
-package main
+package board
 
 import "testing"
 
@@ -69,7 +69,7 @@ func TestStatesUpdatePersists(t *testing.T) {
 	db := newTestDataDB(t)
 	ss := NewStateStore(db)
 	name, order := "Shipped", 9.0
-	if _, err := ss.Update("done", statePatch{Name: &name, Order: &order}); err != nil {
+	if _, err := ss.Update("done", StatePatch{Name: &name, Order: &order}); err != nil {
 		t.Fatal(err)
 	}
 	got, ok := NewStateStore(db).Get("done")
@@ -94,7 +94,7 @@ func TestBoardSortsByCustomColumnOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	order := 1.5 // between doing (1) and done (2)
-	if _, err := ss.Update(review.ID, statePatch{Order: &order}); err != nil {
+	if _, err := ss.Update(review.ID, StatePatch{Order: &order}); err != nil {
 		t.Fatal(err)
 	}
 	for _, status := range []string{"done", review.ID, "backlog"} {
@@ -153,7 +153,7 @@ func TestIsDoneStatusFollowsCategory(t *testing.T) {
 	}
 	// Recategorising the builtin flips it — the string "done" is not magic.
 	cat := "started"
-	if _, err := ss.Update("done", statePatch{Category: &cat}); err != nil {
+	if _, err := ss.Update("done", StatePatch{Category: &cat}); err != nil {
 		t.Fatal(err)
 	}
 	if ts.IsDoneStatus("done") {

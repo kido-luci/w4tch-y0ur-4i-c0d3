@@ -1,4 +1,4 @@
-package main
+package board
 
 import (
 	"testing"
@@ -36,43 +36,43 @@ func TestResolveScopeExpandsGroupsAndTheRailTree(t *testing.T) {
 	gs, ps := scopeFixture(t)
 
 	// The all-projects scope is nil: it filters nothing.
-	if got := resolveScope("", gs, ps); !got.all {
+	if got := ResolveScope("", gs, ps); !got.All {
 		t.Fatalf("an empty label must resolve to the all-projects scope, got %v", got)
 	}
 
 	// A GROUP covers its members — and, transitively, anything nested under a
 	// member. This is the case that used to fail: a cycle stored as
 	// "luci-studio" was invisible from blog-backend.
-	g := resolveScope("luci-studio", gs, ps)
+	g := ResolveScope("luci-studio", gs, ps)
 	for _, want := range []string{"luci-studio", "blog-frontend", "blog-backend", "blog-worker"} {
-		if !g.covers(want) && want != "luci-studio" {
+		if !g.Covers(want) && want != "luci-studio" {
 			t.Errorf("group scope should cover %q", want)
 		}
 	}
-	if !g.cards["luci-studio"] {
+	if !g.Cards["luci-studio"] {
 		t.Error("the label itself belongs in the set")
 	}
-	if g.covers("standalone") {
+	if g.Covers("standalone") {
 		t.Error("a project outside the group must stay out of scope")
 	}
 
 	// A PARENT project covers its children but not its siblings.
-	p := resolveScope("blog-backend", gs, ps)
-	if !p.covers("blog-backend") || !p.covers("blog-worker") {
+	p := ResolveScope("blog-backend", gs, ps)
+	if !p.Covers("blog-backend") || !p.Covers("blog-worker") {
 		t.Error("a parent scope should cover itself and its child")
 	}
-	if p.covers("blog-frontend") {
+	if p.Covers("blog-frontend") {
 		t.Error("a sibling project must stay out of scope")
 	}
 	// And it does NOT reach up: scoping to a member does not pull in the group's
 	// other projects.
-	if p.covers("standalone") {
+	if p.Covers("standalone") {
 		t.Error("scoping to a project must not widen to unrelated ones")
 	}
 
 	// A leaf covers only itself.
-	leaf := resolveScope("standalone", gs, ps)
-	if !leaf.covers("standalone") || leaf.covers("blog-backend") {
+	leaf := ResolveScope("standalone", gs, ps)
+	if !leaf.Covers("standalone") || leaf.Covers("blog-backend") {
 		t.Errorf("a leaf scope should cover only itself, got %v", leaf)
 	}
 }
@@ -82,17 +82,17 @@ func TestResolveScopeExpandsGroupsAndTheRailTree(t *testing.T) {
 // answers — the distinction the two methods exist for.
 func TestScopeSetTreatsEmptyRepoDifferentlyForCardsAndConfig(t *testing.T) {
 	gs, ps := scopeFixture(t)
-	in := resolveScope("blog-backend", gs, ps)
+	in := ResolveScope("blog-backend", gs, ps)
 
-	if in.covers("") {
+	if in.Covers("") {
 		t.Error("a card with no project must be out of scope under a real scope")
 	}
-	if !in.coversOwner("") {
+	if !in.CoversOwner("") {
 		t.Error("shared configuration (no repo) must be visible under every scope")
 	}
 
 	// Under all-projects both are visible.
-	if !allScopes().covers("") || !allScopes().coversOwner("") {
+	if !AllScopes().Covers("") || !AllScopes().CoversOwner("") {
 		t.Error("all-projects must show both a card with no project and shared config")
 	}
 }
@@ -128,7 +128,7 @@ func TestStoresAgreeOnScope(t *testing.T) {
 	// Narrowing to a MEMBER project must still see all three. Before the
 	// resolver each store compared the label to the stored repo, so every one
 	// of these vanished.
-	member := resolveScope("blog-backend", gs, ps)
+	member := ResolveScope("blog-backend", gs, ps)
 	if n := len(states.ListForScope(member)); n != 4 { // 3 builtin + the group's
 		t.Errorf("states: want 4 columns from a member project, got %d", n)
 	}
@@ -140,7 +140,7 @@ func TestStoresAgreeOnScope(t *testing.T) {
 	}
 
 	// An unrelated project sees only the shared builtins.
-	other := resolveScope("standalone", gs, ps)
+	other := ResolveScope("standalone", gs, ps)
 	if n := len(states.ListForScope(other)); n != 3 {
 		t.Errorf("states: an unrelated project should see only the 3 builtins, got %d", n)
 	}
@@ -179,7 +179,7 @@ func TestReportsCountOnlyCardsInScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A shared cycle holding one card from each project.
-	for _, in := range []todoCreate{
+	for _, in := range []TodoCreate{
 		{Title: "in scope", Repo: "blog-backend", CycleID: c.ID, Estimate: 3},
 		{Title: "out of scope", Repo: "elsewhere", CycleID: c.ID, Estimate: 5},
 	} {
@@ -188,12 +188,12 @@ func TestReportsCountOnlyCardsInScope(t *testing.T) {
 		}
 	}
 
-	all := Velocity(cs.List(), ts, allScopes())
+	all := Velocity(cs.List(), ts, AllScopes())
 	if all[0].Cards != 2 || all[0].Points != 8 {
 		t.Errorf("all projects should see both cards, got %#v", all[0])
 	}
 
-	scoped := resolveScope("luci-studio", gs, ps)
+	scoped := ResolveScope("luci-studio", gs, ps)
 	one := Velocity(cs.ListForScope(scoped), ts, scoped)
 	if len(one) != 1 || one[0].Cards != 1 || one[0].Points != 3 {
 		t.Errorf("a group scope should count only its own card, got %#v", one)
@@ -235,12 +235,12 @@ func TestBurndownRefusesACycleOutsideTheScope(t *testing.T) {
 
 	// The scope that owns it, and a member of that group, both see it.
 	for _, label := range []string{"", "luci-studio", "blog-backend"} {
-		if in := resolveScope(label, gs, ps); !in.coversOwner(c.Repo) {
+		if in := ResolveScope(label, gs, ps); !in.CoversOwner(c.Repo) {
 			t.Errorf("scope %q should see the cycle", label)
 		}
 	}
 	// An unrelated project must not — which is what makes the handler 404.
-	if in := resolveScope("elsewhere", gs, ps); in.coversOwner(c.Repo) {
+	if in := ResolveScope("elsewhere", gs, ps); in.CoversOwner(c.Repo) {
 		t.Error("an unrelated project must not see another group's cycle")
 	}
 }

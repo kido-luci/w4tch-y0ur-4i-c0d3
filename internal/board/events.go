@@ -1,4 +1,4 @@
-package main
+package board
 
 // The board's history — an append-only log of the card mutations that a chart
 // or an activity feed needs (status, estimate, cycle, parent, priority).

@@ -1,4 +1,4 @@
-package main
+package board
 
 // Todo board (roadmap "coding manager", phase 1): a local backlog whose cards
 // link to real sessions. Since v0.45 the board lives in data.db's todos table
@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"watch-your-ai-code/internal/index"
 )
 
 // Todo is one board card. Status moves backlog → doing → done; Order sorts
@@ -118,8 +120,8 @@ func validTodoStatus(s string) bool {
 	return ok
 }
 
-// todoPatch is a partial update; nil fields stay untouched.
-type todoPatch struct {
+// TodoPatch is a partial update; nil fields stay untouched.
+type TodoPatch struct {
 	Title            *string   `json:"title"`
 	Note             *string   `json:"note"`
 	Repo             *string   `json:"repo"`
@@ -152,7 +154,7 @@ func cleanStrings(in []string) []string {
 	return out
 }
 
-var errTodoNotFound = errors.New("todo not found")
+var ErrTodoNotFound = errors.New("todo not found")
 
 // TodoStore persists the board to data.db's todos table; the in-memory slice
 // is the serving copy.
@@ -171,7 +173,7 @@ type TodoStore struct {
 }
 
 // NewTodoStore opens the board over data.db (import from the pre-v0.45
-// todos.json has already run by then — see importDataOnce).
+// todos.json has already run by then — see ImportOnce).
 func NewTodoStore(db *sql.DB) *TodoStore {
 	ts := &TodoStore{db: db}
 	ts.loadDB()
@@ -301,7 +303,7 @@ func (ts *TodoStore) loadFromFile(path string) {
 		}
 		// A snapshot frozen before v0.35 predates the Sessions count. Zero can
 		// only mean "legacy": the old model froze exactly one session, and
-		// refreezeTodo never writes a snapshot covering none.
+		// RefreezeTodo never writes a snapshot covering none.
 		if t.Snapshot != nil && t.Snapshot.Sessions == 0 {
 			t.Snapshot.Sessions = 1
 		}
@@ -455,9 +457,9 @@ func (ts *TodoStore) fillRollups(out []Todo) {
 	}
 }
 
-// todoCreate is the full new-card input. Create keeps the original four-string
+// TodoCreate is the full new-card input. Create keeps the original four-string
 // signature for the callers that only ever set those.
-type todoCreate struct {
+type TodoCreate struct {
 	Title    string  `json:"title"`
 	Note     string  `json:"note"`
 	Repo     string  `json:"repo"`
@@ -472,12 +474,12 @@ type todoCreate struct {
 // Create appends a new todo at the bottom of the given column
 // (default backlog).
 func (ts *TodoStore) Create(title, note, repo, status string) (Todo, error) {
-	return ts.CreateFull(todoCreate{Title: title, Note: note, Repo: repo, Status: status})
+	return ts.CreateFull(TodoCreate{Title: title, Note: note, Repo: repo, Status: status})
 }
 
 // CreateFull appends a new card, with the depth fields set up front so an epic
 // arrives as an epic rather than as a task that is immediately patched.
-func (ts *TodoStore) CreateFull(in todoCreate) (Todo, error) {
+func (ts *TodoStore) CreateFull(in TodoCreate) (Todo, error) {
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
 		return Todo{}, fmt.Errorf("title is required")
@@ -571,7 +573,7 @@ func (ts *TodoStore) checkParent(id, parentID string) error {
 }
 
 // Update applies the non-nil patch fields to one todo.
-func (ts *TodoStore) Update(id string, p todoPatch) (Todo, error) {
+func (ts *TodoStore) Update(id string, p TodoPatch) (Todo, error) {
 	if p.Title != nil && strings.TrimSpace(*p.Title) == "" {
 		return Todo{}, fmt.Errorf("title is required")
 	}
@@ -666,7 +668,7 @@ func (ts *TodoStore) Update(id string, p todoPatch) (Todo, error) {
 		*t = next
 		return next, nil
 	}
-	return Todo{}, errTodoNotFound
+	return Todo{}, ErrTodoNotFound
 }
 
 // formatPoints renders an estimate the way the event log stores it — trimmed,
@@ -690,7 +692,7 @@ func (ts *TodoStore) SetSnapshot(id string, snap *TodoSnapshot) (Todo, error) {
 			return next, nil
 		}
 	}
-	return Todo{}, errTodoNotFound
+	return Todo{}, ErrTodoNotFound
 }
 
 // UnlinkDrawing removes a (deleted) drawing's id from every card, reporting
@@ -821,5 +823,85 @@ func (ts *TodoStore) Delete(id string) error {
 		}
 		return nil
 	}
-	return errTodoNotFound
+	return ErrTodoNotFound
+}
+
+// UnknownDrawingID returns the first id that no longer exists in the library,
+// so a typo'd link is rejected at the edge instead of rendering as a dead chip
+// on the card. "" means every id checks out. Shared by the REST PATCH handler
+// and the MCP update_todo tool.
+func UnknownDrawingID(drawings *DrawingStore, ids []string) string {
+	for _, did := range ids {
+		if did = strings.TrimSpace(did); did == "" {
+			continue
+		}
+		if _, err := drawings.Get(did); err != nil {
+			return did
+		}
+	}
+	return ""
+}
+
+// UnknownDocID is the docs-wiki analogue of UnknownDrawingID: the first linked
+// doc id that no longer exists, or "" when they all check out. Shared by the
+// REST PATCH handler and the MCP update_todo tool.
+func UnknownDocID(docs *DocStore, ids []string) string {
+	for _, did := range ids {
+		if did = strings.TrimSpace(did); did == "" {
+			continue
+		}
+		if _, err := docs.Get(did); err != nil {
+			return did
+		}
+	}
+	return ""
+}
+
+// Sessions is the slice of the session index the board reads when it
+// freezes a card's cost snapshot: the totals of the sessions linked to it.
+type Sessions interface {
+	Session(id string) *index.Session
+}
+
+// RefreezeTodo keeps a card's cost snapshot in step with the status it just
+// moved to: landing in a done-category column freezes its linked sessions'
+// summed numbers onto the card, leaving one thaws it (the numbers re-freeze on
+// the next done). Shared by the REST PATCH handler and the MCP update_todo tool
+// so a card costs the same however it was moved. Sessions missing from the
+// index (their transcript is gone) are skipped rather than counted as zero.
+//
+// Since data.db v12 the test is the column's category, not the literal string
+// "done" — a workflow whose last column is "Shipped" freezes just the same.
+func RefreezeTodo(todos *TodoStore, sessions Sessions, todo Todo, status string) Todo {
+	if !todos.IsDoneStatus(status) {
+		if todo.Snapshot == nil {
+			return todo
+		}
+		if thawed, err := todos.SetSnapshot(todo.ID, nil); err == nil {
+			return thawed
+		}
+		return todo
+	}
+	if todo.Snapshot != nil {
+		return todo // already frozen; a re-done doesn't move the numbers
+	}
+	snap := TodoSnapshot{TakenAt: time.Now()}
+	for _, sid := range todo.LinkedSessionIDs {
+		s := sessions.Session(sid)
+		if s == nil {
+			continue
+		}
+		snap.Tokens += s.TotalTokens + s.AgentTokens
+		snap.CostUSD += s.CostUSD + s.AgentCostUSD
+		snap.Agents += s.AgentCount
+		snap.DurationMs += s.DurationMs
+		snap.Sessions++
+	}
+	if snap.Sessions == 0 {
+		return todo // nothing linked (or nothing left on disk) — no snapshot
+	}
+	if frozen, err := todos.SetSnapshot(todo.ID, &snap); err == nil {
+		return frozen
+	}
+	return todo
 }

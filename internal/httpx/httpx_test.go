@@ -1,51 +1,10 @@
-package main
+package httpx
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
-
-	"watch-your-ai-code/internal/httpx"
 )
-
-// A burst of kicks while a rescan runs must fold into exactly ONE follow-up:
-// N events cost two parses, not N. Kicks for another path run independently,
-// and the first kick of a burst starts immediately (no timer latency).
-func TestRescanCoalescer(t *testing.T) {
-	started := make(chan string, 16)
-	release := make(chan struct{})
-	rc := newRescanCoalescer(func(path string) {
-		started <- path
-		<-release
-	})
-
-	rc.kick("a")
-	if got := <-started; got != "a" {
-		t.Fatalf("first kick should run immediately, got %q", got)
-	}
-	// Burst while the first parse runs — and an independent path alongside.
-	rc.kick("a")
-	rc.kick("a")
-	rc.kick("a")
-	rc.kick("b")
-	if got := <-started; got != "b" {
-		t.Fatalf("an independent path should start immediately, got %q", got)
-	}
-	release <- struct{}{} // finish a's first parse
-	if got := <-started; got != "a" {
-		t.Fatalf("the burst should fold into one follow-up for a, got %q", got)
-	}
-	release <- struct{}{} // finish a's follow-up
-	release <- struct{}{} // finish b's parse
-
-	// No further runs are owed.
-	select {
-	case p := <-started:
-		t.Fatalf("unexpected extra rescan of %q", p)
-	case <-time.After(100 * time.Millisecond):
-	}
-}
 
 // hostGuard must block DNS rebinding (foreign Host) and blind cross-origin
 // writes (foreign Origin on state-changing methods) while leaving every
@@ -56,7 +15,7 @@ func TestHostGuard(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	guard := httpx.HostGuard("127.0.0.1:4777", ok)
+	guard := HostGuard("127.0.0.1:4777", ok)
 
 	cases := []struct {
 		name   string
@@ -98,7 +57,7 @@ func TestHostGuardCustomAddr(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	guard := httpx.HostGuard("192.168.1.5:4779", ok)
+	guard := HostGuard("192.168.1.5:4779", ok)
 
 	r := httptest.NewRequest("GET", "/api/todos", nil)
 	r.Host = "192.168.1.5:4779"

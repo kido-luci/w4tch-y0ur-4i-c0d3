@@ -1,4 +1,4 @@
-package main
+package board
 
 // ONE definition of "in scope", server-side.
 //
@@ -17,11 +17,11 @@ package main
 // list_todos, which answered a group name with zero cards.
 //
 // Hence this file. Every scope question on the server resolves through
-// resolveScope, so a new consumer cannot quietly invent a fourth rule.
+// ResolveScope, so a new consumer cannot quietly invent a fourth rule.
 
-// scopeSet answers two different questions, which is why it is not one set.
+// ScopeSet answers two different questions, which is why it is not one set.
 //
-//   - cards: which projects' CARDS belong to this view. Resolved DOWNWARD —
+//   - Cards: which projects' CARDS belong to this view. Resolved DOWNWARD —
 //     the label, a group's members, and anything nested under those.
 //   - owners: whose CONFIGURATION applies here. Resolved BOTH ways, because a
 //     column can be owned by an ancestor (created while the rail sat on the
@@ -32,50 +32,54 @@ package main
 // owned by the group when the rail narrowed to a member, because the member's
 // set never contained the group's name. Both directions, or cards land in a
 // column nothing draws.
-type scopeSet struct {
-	all    bool            // the all-projects scope: nothing is filtered
-	cards  map[string]bool // projects whose cards are in scope
+//
+// All and Cards are exported for httpapi/mcpserver, which read them directly
+// (the all-projects check, and the /api/scopes name listing); owners has no
+// consumer outside this package and stays private.
+type ScopeSet struct {
+	All    bool            // the all-projects scope: nothing is filtered
+	Cards  map[string]bool // projects whose cards are in scope
 	owners map[string]bool // labels whose configuration applies here
 }
 
-// covers reports whether a CARD carrying this repo is in scope.
+// Covers reports whether a CARD carrying this repo is in scope.
 //
 // An empty repo is deliberately out of scope for any real scope: a card with no
 // project shows only under all-projects, which is the rule the board has had
 // since v0.63. Do not "fix" this to return true.
-func (s scopeSet) covers(repo string) bool {
-	if s.all {
+func (s ScopeSet) Covers(repo string) bool {
+	if s.All {
 		return true
 	}
 	if repo == "" {
 		return false
 	}
-	return s.cards[repo]
+	return s.Cards[repo]
 }
 
-// coversOwner reports whether a piece of CONFIGURATION owned by this repo is in
+// CoversOwner reports whether a piece of CONFIGURATION owned by this repo is in
 // scope — a workflow column, a cycle, a saved view.
 //
-// The difference from covers is the empty string, and it is not an oversight:
+// The difference from Covers is the empty string, and it is not an oversight:
 // for a card, no repo means unscoped and therefore hidden; for configuration,
 // no repo means SHARED and therefore visible everywhere. Two meanings for one
 // empty value, so they get two methods rather than one flag.
-func (s scopeSet) coversOwner(repo string) bool {
-	if repo == "" || s.all {
+func (s ScopeSet) CoversOwner(repo string) bool {
+	if repo == "" || s.All {
 		return true
 	}
 	return s.owners[repo]
 }
 
-// resolveScope expands a scope label into the two sets above. An empty label is
+// ResolveScope expands a scope label into the two sets above. An empty label is
 // the all-projects scope and filters nothing.
 //
 // The downward walk mirrors getScopeSet in scope.ts step for step, including the
 // fixpoint loop, because the two must agree: a client that shows a card and a
 // server that hides its column is worse than either rule alone.
-func resolveScope(label string, groups *GroupStore, projects *ProjectStore) scopeSet {
+func ResolveScope(label string, groups *GroupStore, projects *ProjectStore) ScopeSet {
 	if label == "" {
-		return scopeSet{all: true}
+		return ScopeSet{All: true}
 	}
 	var grps []ProjectGroup
 	if groups != nil {
@@ -147,9 +151,9 @@ func resolveScope(label string, groups *GroupStore, projects *ProjectStore) scop
 	for k := range up {
 		owners[k] = true
 	}
-	return scopeSet{cards: cards, owners: owners}
+	return ScopeSet{Cards: cards, owners: owners}
 }
 
-// allScopes is the all-projects scope, for callers with no label to resolve
+// AllScopes is the all-projects scope, for callers with no label to resolve
 // (tests, and any future caller that means "everything").
-func allScopes() scopeSet { return scopeSet{all: true} }
+func AllScopes() ScopeSet { return ScopeSet{All: true} }

@@ -1,4 +1,4 @@
-package main
+package mcpserver
 
 // MCP endpoint (route `/mcp`, streamable HTTP): exposes the design library
 // (`#/design`), the todo board (`#/board`) and the docs wiki (`#/docs`) to MCP
@@ -21,6 +21,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"watch-your-ai-code/internal/board"
 	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
 )
@@ -57,7 +58,7 @@ type updateDrawingInput struct {
 }
 
 type drawingListOutput struct {
-	Drawings []Drawing `json:"drawings"`
+	Drawings []board.Drawing `json:"drawings"`
 }
 
 type todoListInput struct {
@@ -65,7 +66,7 @@ type todoListInput struct {
 }
 
 type todoListOutput struct {
-	Todos []Todo `json:"todos"`
+	Todos []board.Todo `json:"todos"`
 }
 
 type createTodoInput struct {
@@ -80,7 +81,7 @@ type createTodoInput struct {
 	CycleID  string  `json:"cycleId,omitempty" jsonschema:"plan into this cycle (sprint) id, from list_cycles"`
 }
 
-// updateTodoInput mirrors todoPatch: every field is optional, and only the
+// updateTodoInput mirrors board.TodoPatch: every field is optional, and only the
 // ones present are touched.
 type updateTodoInput struct {
 	ID               string    `json:"id" jsonschema:"todo id, as returned by list_todos — note the #N shown on a card is its seq, not its id"`
@@ -104,7 +105,7 @@ type stateListInput struct {
 }
 
 type stateListOutput struct {
-	States []TodoState `json:"states"`
+	States []board.TodoState `json:"states"`
 }
 
 type cycleListInput struct {
@@ -112,7 +113,7 @@ type cycleListInput struct {
 }
 
 type cycleListOutput struct {
-	Cycles []CycleReport `json:"cycles"`
+	Cycles []board.CycleReport `json:"cycles"`
 }
 
 type docIDInput struct {
@@ -145,11 +146,11 @@ type moveDocInput struct {
 }
 
 type docListOutput struct {
-	Docs []Doc `json:"docs"`
+	Docs []board.Doc `json:"docs"`
 }
 
 type groupListOutput struct {
-	Groups []ProjectGroup `json:"groups"`
+	Groups []board.ProjectGroup `json:"groups"`
 }
 
 type upsertGroupInput struct {
@@ -163,9 +164,9 @@ type listShipsInput struct {
 	WithLog bool   `json:"withLog,omitempty" jsonschema:"include each run's captured log tail — verbose, ask only when debugging a failed run"`
 }
 
-// newMCPServer builds the "wyac" MCP server over the drawing, todo and doc
+// newServer builds the "wyac" MCP server over the drawing, todo and doc
 // stores. ix is read-only here — it backs the done snapshot.
-func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, shipStore *ships.Store, sessions todoSessions, hub *sse.Hub) *mcp.Server {
+func newServer(drawings *board.DrawingStore, todos *board.TodoStore, states *board.StateStore, cycles *board.CycleStore, docs *board.DocStore, groups *board.GroupStore, projects *board.ProjectStore, shipStore *ships.Store, sessions board.Sessions, hub *sse.Hub) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "wyac",
 		Title:   "W4tch y0ur 4I c0d3",
@@ -182,14 +183,14 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_drawing",
 		Description: "Read one wireframe's scene as raw .excalidraw JSON (text content), plus its metadata (structured). Keep the updatedAt — pass it as baseUpdatedAt when you update_drawing.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in drawingIDInput) (*mcp.CallToolResult, Drawing, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in drawingIDInput) (*mcp.CallToolResult, board.Drawing, error) {
 		content, err := drawings.Content(in.ID)
 		if err != nil {
-			return nil, Drawing{}, err
+			return nil, board.Drawing{}, err
 		}
 		d, err := drawings.Get(in.ID)
 		if err != nil {
-			return nil, Drawing{}, err
+			return nil, board.Drawing{}, err
 		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: string(content)}},
@@ -199,10 +200,10 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_drawing",
 		Description: "Create a new, empty wireframe in the design library, optionally in a group tab (a project name or a custom label) and with topic tags (the grid groups by them).",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in createDrawingInput) (*mcp.CallToolResult, Drawing, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in createDrawingInput) (*mcp.CallToolResult, board.Drawing, error) {
 		d, err := drawings.Create(in.Name, in.Group)
 		if err != nil {
-			return nil, Drawing{}, err
+			return nil, board.Drawing{}, err
 		}
 		// The drawing exists from here on — broadcast even if tagging fails,
 		// or open tabs wouldn't see it until some unrelated refresh.
@@ -210,7 +211,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		if len(in.Topics) > 0 {
 			tagged, terr := drawings.SetTopics(d.ID, in.Topics)
 			if terr != nil {
-				return nil, Drawing{}, fmt.Errorf("drawing %s was created, but tagging failed: %w — set_drawing_topics to retry", d.ID, terr)
+				return nil, board.Drawing{}, fmt.Errorf("drawing %s was created, but tagging failed: %w — set_drawing_topics to retry", d.ID, terr)
 			}
 			d = tagged
 		}
@@ -220,10 +221,10 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "set_drawing_topics",
 		Description: "Replace one wireframe's topic tags (metadata only — the scene is untouched). The design grid renders a section per topic; a drawing carrying several appears under each.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in setDrawingTopicsInput) (*mcp.CallToolResult, Drawing, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in setDrawingTopicsInput) (*mcp.CallToolResult, board.Drawing, error) {
 		d, err := drawings.SetTopics(in.ID, in.Topics)
 		if err != nil {
-			return nil, Drawing{}, err
+			return nil, board.Drawing{}, err
 		}
 		hub.Broadcast("drawings-updated", drawings.List())
 		return nil, d, nil
@@ -232,10 +233,10 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "rename_drawing",
 		Description: "Rename one wireframe in the design library (metadata only — the scene is untouched).",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in renameDrawingInput) (*mcp.CallToolResult, Drawing, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in renameDrawingInput) (*mcp.CallToolResult, board.Drawing, error) {
 		d, err := drawings.Rename(in.ID, in.Name)
 		if err != nil {
-			return nil, Drawing{}, err
+			return nil, board.Drawing{}, err
 		}
 		hub.Broadcast("drawings-updated", drawings.List())
 		return nil, d, nil
@@ -244,20 +245,20 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_drawing",
 		Description: "Replace one wireframe's scene with new .excalidraw JSON. Overwrites the whole scene — read it with get_drawing first when editing, and pass its updatedAt as baseUpdatedAt so a save from the app in the meantime fails the write instead of being clobbered. On a conflict, re-read and re-apply.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateDrawingInput) (*mcp.CallToolResult, Drawing, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateDrawingInput) (*mcp.CallToolResult, board.Drawing, error) {
 		var base time.Time
 		if in.BaseUpdatedAt != "" {
 			var err error
 			if base, err = time.Parse(time.RFC3339Nano, in.BaseUpdatedAt); err != nil {
-				return nil, Drawing{}, fmt.Errorf("bad baseUpdatedAt %q (want RFC3339)", in.BaseUpdatedAt)
+				return nil, board.Drawing{}, fmt.Errorf("bad baseUpdatedAt %q (want RFC3339)", in.BaseUpdatedAt)
 			}
 		}
 		d, err := drawings.SetContent(in.ID, []byte(in.Content), base)
-		if errors.Is(err, errDrawingConflict) {
-			return nil, Drawing{}, fmt.Errorf("conflict: the drawing was saved by someone else after your baseUpdatedAt — get_drawing again and re-apply your change")
+		if errors.Is(err, board.ErrDrawingConflict) {
+			return nil, board.Drawing{}, fmt.Errorf("conflict: the drawing was saved by someone else after your baseUpdatedAt — get_drawing again and re-apply your change")
 		}
 		if err != nil {
-			return nil, Drawing{}, err
+			return nil, board.Drawing{}, err
 		}
 		hub.Broadcast("drawings-updated", drawings.List())
 		return nil, d, nil
@@ -271,10 +272,10 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		// Resolve rather than compare: `repo` may name a GROUP or a parent in the
 		// rail tree, and an exact match answered those with zero cards even
 		// though every card sat inside them. See scope.go.
-		if in := resolveScope(strings.TrimSpace(in.Repo), groups, projects); !in.all {
-			kept := make([]Todo, 0, len(list))
+		if in := board.ResolveScope(strings.TrimSpace(in.Repo), groups, projects); !in.All {
+			kept := make([]board.Todo, 0, len(list))
 			for _, t := range list {
-				if in.covers(t.Repo) {
+				if in.Covers(t.Repo) {
 					kept = append(kept, t)
 				}
 			}
@@ -286,8 +287,8 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_todo",
 		Description: "Add a card to the board. Title and note render as markdown. An epic and its children can be created in one pass: create the epic, then create each child with parentId set to the epic's id.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in createTodoInput) (*mcp.CallToolResult, Todo, error) {
-		t, err := todos.CreateFull(todoCreate{
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in createTodoInput) (*mcp.CallToolResult, board.Todo, error) {
+		t, err := todos.CreateFull(board.TodoCreate{
 			Title:    in.Title,
 			Note:     in.Note,
 			Repo:     in.Repo,
@@ -299,7 +300,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 			CycleID:  in.CycleID,
 		})
 		if err != nil {
-			return nil, Todo{}, err
+			return nil, board.Todo{}, err
 		}
 		hub.Broadcast("todos-updated", todos.List())
 		return nil, t, nil
@@ -310,7 +311,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		Description: "List the board's workflow columns in order. A column's id is what create_todo/update_todo take as `status`, and its category (todo | started | done) is what decides whether landing there freezes a card's cost snapshot — so read this before moving a card, rather than assuming backlog/doing/done.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in stateListInput) (*mcp.CallToolResult, stateListOutput, error) {
 		return nil, stateListOutput{
-			States: states.ListForScope(resolveScope(strings.TrimSpace(in.Repo), groups, projects)),
+			States: states.ListForScope(board.ResolveScope(strings.TrimSpace(in.Repo), groups, projects)),
 		}, nil
 	})
 
@@ -318,25 +319,25 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 		Name:        "list_cycles",
 		Description: "List the board's cycles (sprints), newest first, each with what it committed to and what has landed: card counts, story points, and how many cards carry no estimate. Use a cycle's id as create_todo/update_todo's cycleId to plan work into it.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in cycleListInput) (*mcp.CallToolResult, cycleListOutput, error) {
-		scoped := resolveScope(strings.TrimSpace(in.Repo), groups, projects)
-		return nil, cycleListOutput{Cycles: Velocity(cycles.ListForScope(scoped), todos, scoped)}, nil
+		scoped := board.ResolveScope(strings.TrimSpace(in.Repo), groups, projects)
+		return nil, cycleListOutput{Cycles: board.Velocity(cycles.ListForScope(scoped), todos, scoped)}, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_todo",
 		Description: "Update one card. Only the fields you send are touched; list-valued fields replace the whole list. Use this to link the session you are running in to the card you are working on, or to move a card between columns.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateTodoInput) (*mcp.CallToolResult, Todo, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateTodoInput) (*mcp.CallToolResult, board.Todo, error) {
 		if in.LinkedDrawingIDs != nil {
-			if bad := unknownDrawingID(drawings, *in.LinkedDrawingIDs); bad != "" {
-				return nil, Todo{}, fmt.Errorf("unknown drawing id %q — see list_drawings", bad)
+			if bad := board.UnknownDrawingID(drawings, *in.LinkedDrawingIDs); bad != "" {
+				return nil, board.Todo{}, fmt.Errorf("unknown drawing id %q — see list_drawings", bad)
 			}
 		}
 		if in.LinkedDocIDs != nil {
-			if bad := unknownDocID(docs, *in.LinkedDocIDs); bad != "" {
-				return nil, Todo{}, fmt.Errorf("unknown doc id %q — see list_docs", bad)
+			if bad := board.UnknownDocID(docs, *in.LinkedDocIDs); bad != "" {
+				return nil, board.Todo{}, fmt.Errorf("unknown doc id %q — see list_docs", bad)
 			}
 		}
-		t, err := todos.Update(in.ID, todoPatch{
+		t, err := todos.Update(in.ID, board.TodoPatch{
 			Title:            in.Title,
 			Note:             in.Note,
 			Repo:             in.Repo,
@@ -351,14 +352,14 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 			Estimate:         in.Estimate,
 			CycleID:          in.CycleID,
 		})
-		if errors.Is(err, errTodoNotFound) {
-			return nil, Todo{}, fmt.Errorf("no todo with id %q — see list_todos (the #N on a card is its seq, not its id)", in.ID)
+		if errors.Is(err, board.ErrTodoNotFound) {
+			return nil, board.Todo{}, fmt.Errorf("no todo with id %q — see list_todos (the #N on a card is its seq, not its id)", in.ID)
 		}
 		if err != nil {
-			return nil, Todo{}, err
+			return nil, board.Todo{}, err
 		}
 		if in.Status != nil {
-			t = refreezeTodo(todos, sessions, t, *in.Status)
+			t = board.RefreezeTodo(todos, sessions, t, *in.Status)
 		}
 		hub.Broadcast("todos-updated", todos.List())
 		return nil, t, nil
@@ -374,14 +375,14 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_doc",
 		Description: "Read one wiki page's markdown body (text content), plus its metadata (structured). Keep the updatedAt — pass it as baseUpdatedAt when you update_doc.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in docIDInput) (*mcp.CallToolResult, Doc, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in docIDInput) (*mcp.CallToolResult, board.Doc, error) {
 		body, err := docs.Content(in.ID)
 		if err != nil {
-			return nil, Doc{}, err
+			return nil, board.Doc{}, err
 		}
 		d, err := docs.Get(in.ID)
 		if err != nil {
-			return nil, Doc{}, err
+			return nil, board.Doc{}, err
 		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: body}},
@@ -391,10 +392,10 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_doc",
 		Description: "Create a new, empty page in the docs wiki. Nest it by passing an existing page id as parentId; omit for a top-level page. A top-level page can carry a project scope via group. Write its body with update_doc.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in createDocInput) (*mcp.CallToolResult, Doc, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in createDocInput) (*mcp.CallToolResult, board.Doc, error) {
 		d, err := docs.Create(in.Title, in.ParentID, in.Group)
 		if err != nil {
-			return nil, Doc{}, err
+			return nil, board.Doc{}, err
 		}
 		hub.Broadcast("docs-updated", docs.List())
 		return nil, d, nil
@@ -403,20 +404,20 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_doc",
 		Description: "Replace one wiki page's markdown body. Overwrites the whole body — read it with get_doc first when editing, and pass its updatedAt as baseUpdatedAt so a save from the app in the meantime fails the write instead of being clobbered. On a conflict, re-read and re-apply.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateDocInput) (*mcp.CallToolResult, Doc, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateDocInput) (*mcp.CallToolResult, board.Doc, error) {
 		var base time.Time
 		if in.BaseUpdatedAt != "" {
 			var err error
 			if base, err = time.Parse(time.RFC3339Nano, in.BaseUpdatedAt); err != nil {
-				return nil, Doc{}, fmt.Errorf("bad baseUpdatedAt %q (want RFC3339)", in.BaseUpdatedAt)
+				return nil, board.Doc{}, fmt.Errorf("bad baseUpdatedAt %q (want RFC3339)", in.BaseUpdatedAt)
 			}
 		}
 		d, err := docs.SetContent(in.ID, in.Content, base)
-		if errors.Is(err, errDocConflict) {
-			return nil, Doc{}, fmt.Errorf("conflict: the page was saved by someone else after your baseUpdatedAt — get_doc again and re-apply your change")
+		if errors.Is(err, board.ErrDocConflict) {
+			return nil, board.Doc{}, fmt.Errorf("conflict: the page was saved by someone else after your baseUpdatedAt — get_doc again and re-apply your change")
 		}
 		if err != nil {
-			return nil, Doc{}, err
+			return nil, board.Doc{}, err
 		}
 		hub.Broadcast("docs-updated", docs.List())
 		return nil, d, nil
@@ -425,13 +426,13 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "move_doc",
 		Description: "Rename a wiki page and/or re-nest it under a different parent (metadata only — the body is untouched). Pass parentId \"\" to move it to the top level. A page cannot move under itself or its descendants.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in moveDocInput) (*mcp.CallToolResult, Doc, error) {
-		d, err := docs.Update(in.ID, docPatch{Title: in.Title, ParentID: in.ParentID})
-		if errors.Is(err, errDocNotFound) {
-			return nil, Doc{}, fmt.Errorf("no doc with id %q — see list_docs", in.ID)
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in moveDocInput) (*mcp.CallToolResult, board.Doc, error) {
+		d, err := docs.Update(in.ID, board.DocPatch{Title: in.Title, ParentID: in.ParentID})
+		if errors.Is(err, board.ErrDocNotFound) {
+			return nil, board.Doc{}, fmt.Errorf("no doc with id %q — see list_docs", in.ID)
 		}
 		if err != nil {
-			return nil, Doc{}, err
+			return nil, board.Doc{}, err
 		}
 		hub.Broadcast("docs-updated", docs.List())
 		return nil, d, nil
@@ -454,10 +455,10 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "upsert_group",
 		Description: "Create a project group, or replace an existing group's member set — projects is the FULL new set, not a delta. Items labelled with the group's own name also match its scope. Renaming and deleting stay in the UI (the scope select's \"+ groups…\" panel), like every other destructive op.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in upsertGroupInput) (*mcp.CallToolResult, ProjectGroup, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in upsertGroupInput) (*mcp.CallToolResult, board.ProjectGroup, error) {
 		g, err := groups.Upsert(in.Name, in.Projects)
 		if err != nil {
-			return nil, ProjectGroup{}, err
+			return nil, board.ProjectGroup{}, err
 		}
 		hub.Broadcast("groups-updated", groups.List())
 		return nil, g, nil
@@ -466,8 +467,8 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	return server
 }
 
-// newMCPHandler serves the MCP server on a streamable HTTP endpoint.
-func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, shipStore *ships.Store, sessions todoSessions, hub *sse.Hub) http.Handler {
-	server := newMCPServer(drawings, todos, states, cycles, docs, groups, projects, shipStore, sessions, hub)
+// Handler serves the MCP server on a streamable HTTP endpoint.
+func Handler(drawings *board.DrawingStore, todos *board.TodoStore, states *board.StateStore, cycles *board.CycleStore, docs *board.DocStore, groups *board.GroupStore, projects *board.ProjectStore, shipStore *ships.Store, sessions board.Sessions, hub *sse.Hub) http.Handler {
+	server := newServer(drawings, todos, states, cycles, docs, groups, projects, shipStore, sessions, hub)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 }

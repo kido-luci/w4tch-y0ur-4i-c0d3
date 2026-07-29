@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"encoding/json"
@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"watch-your-ai-code/internal/board"
 	"watch-your-ai-code/internal/codegraph"
 	"watch-your-ai-code/internal/cowork"
 	"watch-your-ai-code/internal/git"
@@ -88,91 +89,11 @@ type activityDay struct {
 // docWithBody is the GET /api/docs/{id} payload: a page's metadata plus its
 // markdown body (the List payload carries metadata only, to keep the tree light).
 type docWithBody struct {
-	Doc
+	board.Doc
 	Body string `json:"body"`
 }
 
-// unknownDrawingID returns the first id that no longer exists in the library,
-// so a typo'd link is rejected at the edge instead of rendering as a dead chip
-// on the card. "" means every id checks out. Shared by the REST PATCH handler
-// and the MCP update_todo tool.
-func unknownDrawingID(drawings *DrawingStore, ids []string) string {
-	for _, did := range ids {
-		if did = strings.TrimSpace(did); did == "" {
-			continue
-		}
-		if _, err := drawings.Get(did); err != nil {
-			return did
-		}
-	}
-	return ""
-}
-
-// unknownDocID is the docs-wiki analogue of unknownDrawingID: the first linked
-// doc id that no longer exists, or "" when they all check out. Shared by the
-// REST PATCH handler and the MCP update_todo tool.
-func unknownDocID(docs *DocStore, ids []string) string {
-	for _, did := range ids {
-		if did = strings.TrimSpace(did); did == "" {
-			continue
-		}
-		if _, err := docs.Get(did); err != nil {
-			return did
-		}
-	}
-	return ""
-}
-
-// todoSessions is the slice of the session index the board reads when it
-// freezes a card's cost snapshot: the totals of the sessions linked to it.
-type todoSessions interface {
-	Session(id string) *index.Session
-}
-
-// refreezeTodo keeps a card's cost snapshot in step with the status it just
-// moved to: landing in a done-category column freezes its linked sessions'
-// summed numbers onto the card, leaving one thaws it (the numbers re-freeze on
-// the next done). Shared by the REST PATCH handler and the MCP update_todo tool
-// so a card costs the same however it was moved. Sessions missing from the
-// index (their transcript is gone) are skipped rather than counted as zero.
-//
-// Since data.db v12 the test is the column's category, not the literal string
-// "done" — a workflow whose last column is "Shipped" freezes just the same.
-func refreezeTodo(todos *TodoStore, sessions todoSessions, todo Todo, status string) Todo {
-	if !todos.IsDoneStatus(status) {
-		if todo.Snapshot == nil {
-			return todo
-		}
-		if thawed, err := todos.SetSnapshot(todo.ID, nil); err == nil {
-			return thawed
-		}
-		return todo
-	}
-	if todo.Snapshot != nil {
-		return todo // already frozen; a re-done doesn't move the numbers
-	}
-	snap := TodoSnapshot{TakenAt: time.Now()}
-	for _, sid := range todo.LinkedSessionIDs {
-		s := sessions.Session(sid)
-		if s == nil {
-			continue
-		}
-		snap.Tokens += s.TotalTokens + s.AgentTokens
-		snap.CostUSD += s.CostUSD + s.AgentCostUSD
-		snap.Agents += s.AgentCount
-		snap.DurationMs += s.DurationMs
-		snap.Sessions++
-	}
-	if snap.Sessions == 0 {
-		return todo // nothing linked (or nothing left on disk) — no snapshot
-	}
-	if frozen, err := todos.SetSnapshot(todo.ID, &snap); err == nil {
-		return frozen
-	}
-	return todo
-}
-
-func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summarize.Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
+func Register(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summarize.Summarizer, todos *board.TodoStore, states *board.StateStore, cycles *board.CycleStore, events *board.EventStore, views *board.ViewStore, drawings *board.DrawingStore, docs *board.DocStore, groups *board.GroupStore, projects *board.ProjectStore) {
 	// Repo resolution, ship records and transcript search read the index but are
 	// not part of it — each takes the narrow slice of it that it needs, so none
 	// of them (nor the handlers below, nor MCP) depends on the whole index.
@@ -182,8 +103,8 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 
 	// Every scope question below goes through here, so a group label expands the
 	// same way the rail expands it — see scope.go.
-	scopeOf := func(r *http.Request) scopeSet {
-		return resolveScope(strings.TrimSpace(r.URL.Query().Get("repo")), groups, projects)
+	scopeOf := func(r *http.Request) board.ScopeSet {
+		return board.ResolveScope(strings.TrimSpace(r.URL.Query().Get("repo")), groups, projects)
 	}
 
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +160,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	//
 	// It exists so the rule lives in exactly one place. The client used to
 	// recompute it from /api/groups + /api/projects — a second implementation of
-	// resolveScope, in another language, agreeing only by inspection. Two copies
+	// board.ResolveScope, in another language, agreeing only by inspection. Two copies
 	// of one rule drift the moment someone edits one, and the last time this rule
 	// was wrong a workflow column vanished from a member project.
 	mux.HandleFunc("GET /api/scopes", func(w http.ResponseWriter, r *http.Request) {
@@ -248,9 +169,9 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 			if label == "" {
 				return
 			}
-			in := resolveScope(label, groups, projects)
-			names := make([]string, 0, len(in.cards))
-			for n := range in.cards {
+			in := board.ResolveScope(label, groups, projects)
+			names := make([]string, 0, len(in.Cards))
+			for n := range in.Cards {
 				names = append(names, n)
 			}
 			sort.Strings(names) // stable payload, so a refetch diffs cleanly
@@ -277,7 +198,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	})
 
 	mux.HandleFunc("POST /api/todos", func(w http.ResponseWriter, r *http.Request) {
-		var in todoCreate
+		var in board.TodoCreate
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
@@ -292,27 +213,27 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	})
 
 	mux.HandleFunc("PATCH /api/todos/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var p todoPatch
+		var p board.TodoPatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
 		// Linked drawings must exist — a typo'd id would render as a dead chip.
 		if p.LinkedDrawingIDs != nil {
-			if bad := unknownDrawingID(drawings, *p.LinkedDrawingIDs); bad != "" {
+			if bad := board.UnknownDrawingID(drawings, *p.LinkedDrawingIDs); bad != "" {
 				httpx.WriteJSONError(w, http.StatusBadRequest, fmt.Sprintf("unknown drawing id %q", bad))
 				return
 			}
 		}
 		// Linked docs must exist too, for the same reason.
 		if p.LinkedDocIDs != nil {
-			if bad := unknownDocID(docs, *p.LinkedDocIDs); bad != "" {
+			if bad := board.UnknownDocID(docs, *p.LinkedDocIDs); bad != "" {
 				httpx.WriteJSONError(w, http.StatusBadRequest, fmt.Sprintf("unknown doc id %q", bad))
 				return
 			}
 		}
 		todo, err := todos.Update(r.PathValue("id"), p)
-		if errors.Is(err, errTodoNotFound) {
+		if errors.Is(err, board.ErrTodoNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -321,7 +242,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 			return
 		}
 		if p.Status != nil {
-			todo = refreezeTodo(todos, ix, todo, *p.Status)
+			todo = board.RefreezeTodo(todos, ix, todo, *p.Status)
 		}
 		hub.Broadcast("todos-updated", todos.List())
 		httpx.WriteJSON(w, todo)
@@ -389,13 +310,13 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	})
 
 	mux.HandleFunc("PATCH /api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var p statePatch
+		var p board.StatePatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
 		st, err := states.Update(r.PathValue("id"), p)
-		if errors.Is(err, errStateNotFound) {
+		if errors.Is(err, board.ErrStateNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -418,7 +339,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 		// Builtin first: "this column can never be deleted" is the real reason,
 		// and reporting "move the cards out" instead sends the user off to do
 		// work that changes nothing.
-		if builtinStates[id] {
+		if board.BuiltinStates[id] {
 			httpx.WriteJSONError(w, http.StatusBadRequest,
 				fmt.Sprintf("%q is a builtin column and cannot be deleted", id))
 			return
@@ -435,7 +356,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 			return
 		}
 		if err := states.Delete(id); err != nil {
-			if errors.Is(err, errStateNotFound) {
+			if errors.Is(err, board.ErrStateNotFound) {
 				httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 				return
 			}
@@ -475,13 +396,13 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	})
 
 	mux.HandleFunc("PATCH /api/cycles/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var p cyclePatch
+		var p board.CyclePatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
 		c, err := cycles.Update(r.PathValue("id"), p)
-		if errors.Is(err, errCycleNotFound) {
+		if errors.Is(err, board.ErrCycleNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -515,11 +436,11 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 		// the git tab's endpoints validate ?repo: without it this charted a
 		// cycle that GET /api/cycles at the same scope says does not exist, so a
 		// shared URL rendered a report for something the page cannot list.
-		if !ok || !in.coversOwner(c.Repo) {
+		if !ok || !in.CoversOwner(c.Repo) {
 			httpx.WriteJSONError(w, http.StatusNotFound, "cycle not found")
 			return
 		}
-		bd, err := ComputeBurndown(c, todos, events, time.Now(), in)
+		bd, err := board.ComputeBurndown(c, todos, events, time.Now(), in)
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -529,7 +450,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 
 	mux.HandleFunc("GET /api/cycles/velocity", func(w http.ResponseWriter, r *http.Request) {
 		in := scopeOf(r)
-		httpx.WriteJSON(w, Velocity(cycles.ListForScope(in), todos, in))
+		httpx.WriteJSON(w, board.Velocity(cycles.ListForScope(in), todos, in))
 	})
 
 	// --- saved views (boardviews.go): a named filter plus the shape it draws.
@@ -559,13 +480,13 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	})
 
 	mux.HandleFunc("PATCH /api/board/views/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var p viewPatch
+		var p board.ViewPatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
 		v, err := views.Update(r.PathValue("id"), p)
-		if errors.Is(err, errViewNotFound) {
+		if errors.Is(err, board.ErrViewNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -645,11 +566,11 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 			}
 		}
 		d, err := drawings.SetContent(r.PathValue("id"), content, base)
-		if errors.Is(err, errDrawingNotFound) {
+		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		if errors.Is(err, errDrawingConflict) {
+		if errors.Is(err, board.ErrDrawingConflict) {
 			httpx.WriteJSONError(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -700,7 +621,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 		if applied {
 			hub.Broadcast("drawings-updated", drawings.List())
 		}
-		if errors.Is(err, errDrawingNotFound) {
+		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -713,7 +634,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 
 	mux.HandleFunc("POST /api/drawings/{id}/duplicate", func(w http.ResponseWriter, r *http.Request) {
 		d, err := drawings.Duplicate(r.PathValue("id"))
-		if errors.Is(err, errDrawingNotFound) {
+		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -731,7 +652,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	mux.HandleFunc("POST /api/drawings/{id}/publish", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		d, err := drawings.Get(id)
-		if errors.Is(err, errDrawingNotFound) {
+		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -757,7 +678,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 		}
 		hub.Broadcast("drawings-updated", drawings.List())
 		httpx.WriteJSON(w, struct {
-			Drawing
+			board.Drawing
 			ReviewURL string `json:"reviewUrl"`
 		}{out, publisher.ReviewURL(id)})
 	})
@@ -789,7 +710,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 			return
 		}
 		d, err := drawings.SetThumbnail(r.PathValue("id"), data, base)
-		if errors.Is(err, errDrawingNotFound) {
+		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -866,11 +787,11 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 			}
 		}
 		d, err := docs.SetContent(r.PathValue("id"), string(body), base)
-		if errors.Is(err, errDocNotFound) {
+		if errors.Is(err, board.ErrDocNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		if errors.Is(err, errDocConflict) {
+		if errors.Is(err, board.ErrDocConflict) {
 			httpx.WriteJSONError(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -883,17 +804,17 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	})
 
 	mux.HandleFunc("PATCH /api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var p docPatch
+		var p board.DocPatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
 		d, err := docs.Update(r.PathValue("id"), p)
-		if errors.Is(err, errDocNotFound) {
+		if errors.Is(err, board.ErrDocNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		if errors.Is(err, errDocCycle) {
+		if errors.Is(err, board.ErrDocCycle) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -1031,7 +952,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 		}
 		if err := projects.Rename(old, to); err != nil {
 			code := http.StatusBadRequest
-			if errors.Is(err, errProjectNotFound) {
+			if errors.Is(err, board.ErrProjectNotFound) {
 				code = http.StatusNotFound
 			}
 			httpx.WriteJSONError(w, code, err.Error())
@@ -1083,7 +1004,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 		}
 		if err := projects.SetLogo(r.PathValue("name"), data, ct, time.Now().UnixMilli()); err != nil {
 			code := http.StatusBadRequest
-			if errors.Is(err, errProjectNotFound) {
+			if errors.Is(err, board.ErrProjectNotFound) {
 				code = http.StatusNotFound
 			}
 			httpx.WriteJSONError(w, code, err.Error())
@@ -1109,7 +1030,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	mux.HandleFunc("DELETE /api/projects/{name}/logo", func(w http.ResponseWriter, r *http.Request) {
 		if err := projects.DeleteLogo(r.PathValue("name")); err != nil {
 			code := http.StatusBadRequest
-			if errors.Is(err, errProjectNotFound) {
+			if errors.Is(err, board.ErrProjectNotFound) {
 				code = http.StatusNotFound
 			}
 			httpx.WriteJSONError(w, code, err.Error())
@@ -1122,8 +1043,6 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summariz
 	codegraph.Register(mux, rr)
 	git.Register(mux, rr)
 	github.Register(mux, rr)
-
-	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, projects, shipStore, ix, hub))
 
 	// Per-day activity buckets for the last `weeks` weeks (default 26), bucketed
 	// by the local calendar day of each session's start. Powers the heatmap; its

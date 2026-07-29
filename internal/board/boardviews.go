@@ -1,4 +1,4 @@
-package main
+package board
 
 // Saved board views — a named filter plus the shape it renders in (board,
 // table or timeline). "My bugs this cycle" stops being something you re-type
@@ -34,7 +34,7 @@ func validViewKind(k string) bool {
 	return k == "board" || k == "table" || k == "timeline"
 }
 
-var errViewNotFound = errors.New("view not found")
+var ErrViewNotFound = errors.New("view not found")
 
 // ViewStore persists the saved views to data.db (board_views).
 type ViewStore struct {
@@ -113,12 +113,12 @@ func (vs *ViewStore) List() []BoardView {
 
 // ListForScope returns the views one scope sees: shared plus those owned by any
 // project the scope covers (scope.go).
-func (vs *ViewStore) ListForScope(in scopeSet) []BoardView {
+func (vs *ViewStore) ListForScope(in ScopeSet) []BoardView {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 	out := make([]BoardView, 0, len(vs.views))
 	for _, v := range vs.views {
-		if in.coversOwner(v.Repo) {
+		if in.CoversOwner(v.Repo) {
 			out = append(out, *v)
 		}
 	}
@@ -164,15 +164,15 @@ func (vs *ViewStore) Create(name, repo, kind string, query json.RawMessage) (Boa
 	return *v, nil
 }
 
-// viewPatch is a partial saved-view update; nil fields stay untouched.
-type viewPatch struct {
+// ViewPatch is a partial saved-view update; nil fields stay untouched.
+type ViewPatch struct {
 	Name  *string          `json:"name"`
 	Kind  *string          `json:"kind"`
 	Query *json.RawMessage `json:"query"`
 	Order *float64         `json:"order"`
 }
 
-func (vs *ViewStore) Update(id string, p viewPatch) (BoardView, error) {
+func (vs *ViewStore) Update(id string, p ViewPatch) (BoardView, error) {
 	if p.Name != nil && strings.TrimSpace(*p.Name) == "" {
 		return BoardView{}, fmt.Errorf("name is required")
 	}
@@ -207,7 +207,7 @@ func (vs *ViewStore) Update(id string, p viewPatch) (BoardView, error) {
 		*v = next
 		return next, nil
 	}
-	return BoardView{}, errViewNotFound
+	return BoardView{}, ErrViewNotFound
 }
 
 func (vs *ViewStore) Delete(id string) error {
@@ -223,7 +223,7 @@ func (vs *ViewStore) Delete(id string) error {
 		vs.views = append(vs.views[:i], vs.views[i+1:]...)
 		return nil
 	}
-	return errViewNotFound
+	return ErrViewNotFound
 }
 
 // RenameRepo re-points a project's saved views at its new name.

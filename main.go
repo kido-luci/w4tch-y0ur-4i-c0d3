@@ -13,8 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"watch-your-ai-code/internal/board"
+	"watch-your-ai-code/internal/httpapi"
 	"watch-your-ai-code/internal/httpx"
 	"watch-your-ai-code/internal/index"
+	"watch-your-ai-code/internal/mcpserver"
 	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
 	"watch-your-ai-code/internal/summarize"
@@ -103,44 +106,45 @@ func main() {
 
 	// data.db: the durable half — board + design library. A failure here is
 	// fatal on purpose: refusing to start beats starting over the user's data.
-	dataDB, err := openDataDB(cfgDir)
+	dataDB, err := board.OpenDB(cfgDir)
 	if err != nil {
 		log.Fatalf("data.db: %v", err)
 	}
-	importDataOnce(dataDB, cfgDir)
-	go backupDataDB(dataDB, cfgDir)
+	board.ImportOnce(dataDB, cfgDir)
+	go board.Backup(dataDB, cfgDir)
 
-	todoStore := NewTodoStore(dataDB)
-	stateStore := NewStateStore(dataDB)
-	cycleStore := NewCycleStore(dataDB)
-	eventStore := NewEventStore(dataDB)
-	viewStore := NewViewStore(dataDB)
+	todoStore := board.NewTodoStore(dataDB)
+	stateStore := board.NewStateStore(dataDB)
+	cycleStore := board.NewCycleStore(dataDB)
+	eventStore := board.NewEventStore(dataDB)
+	viewStore := board.NewViewStore(dataDB)
 	// The board's columns and its history are injected rather than constructed
 	// inside TodoStore: each store keeps its own serving copy of one table, and
 	// a second instance would be a second writer over it.
 	todoStore.UseStates(stateStore)
 	todoStore.UseEvents(eventStore)
-	drawingStore := NewDrawingStore(dataDB)
-	docStore := NewDocStore(dataDB)
-	groupStore := NewGroupStore(dataDB)
-	projectStore := NewProjectStore(dataDB)
+	drawingStore := board.NewDrawingStore(dataDB)
+	docStore := board.NewDocStore(dataDB)
+	groupStore := board.NewGroupStore(dataDB)
+	projectStore := board.NewProjectStore(dataDB)
 	// Seed the project registry from the content taxonomy (add-only, keeps
 	// names): every label the board / docs / design actually carry. The Claude
 	// session scan is NOT a source — which folders sessions ran in doesn't
 	// invent projects; nothing is renamed or rewritten.
-	if n := seedProjects(projectStore, groupStore, todoStore, docStore, drawingStore); n > 0 {
+	if n := board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore); n > 0 {
 		log.Printf("projects: seeded %d registry entries", n)
 	}
 
 	mux := http.NewServeMux()
-	registerAPI(mux, ix, hub, summarize.New(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore)
+	httpapi.Register(mux, ix, hub, summarize.New(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore)
+	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, shipStore, ix, hub))
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
 	// under an unselectable scope for long. Add-only; broadcast only on change.
 	go func() {
 		for range time.Tick(5 * time.Minute) {
-			if seedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0 {
+			if board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0 {
 				hub.Broadcast("projects-updated", projectStore.List())
 			}
 		}

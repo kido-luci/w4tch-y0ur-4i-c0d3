@@ -1,32 +1,48 @@
-package main
+package mcpserver
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"watch-your-ai-code/internal/board"
 	"watch-your-ai-code/internal/index"
 	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
 )
 
+// newTestDataDB opens a real data.db in a temp config dir — the same fixture
+// internal/board's own tests use (see data_test.go there), duplicated here
+// because a package's test-only helpers are not visible outside it, even to
+// another package's tests.
+func newTestDataDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := board.OpenDB(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
 // dialMCP connects an in-process MCP client session to a server over fresh
 // drawing, todo and doc stores, mirroring what Claude Code does against /mcp.
 // The index is empty — no test here needs a real transcript on disk.
-func dialMCP(t *testing.T) (*mcp.ClientSession, *DrawingStore, *TodoStore, *DocStore) {
+func dialMCP(t *testing.T) (*mcp.ClientSession, *board.DrawingStore, *board.TodoStore, *board.DocStore) {
 	t.Helper()
 	db := newTestDataDB(t)
-	ds := NewDrawingStore(db)
-	ts := NewTodoStore(db)
-	ss := NewStateStore(db)
+	ds := board.NewDrawingStore(db)
+	ts := board.NewTodoStore(db)
+	ss := board.NewStateStore(db)
 	ts.UseStates(ss)
-	ts.UseEvents(NewEventStore(db))
-	dcs := NewDocStore(db)
+	ts.UseEvents(board.NewEventStore(db))
+	dcs := board.NewDocStore(db)
 	ixEmpty := index.New(t.TempDir())
-	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewProjectStore(db), ships.New(nil, ixEmpty), ixEmpty, sse.New())
+	server := newServer(ds, ts, ss, board.NewCycleStore(db), dcs, board.NewGroupStore(db), board.NewProjectStore(db), ships.New(nil, ixEmpty), ixEmpty, sse.New())
 
 	ctx := context.Background()
 	clientTr, serverTr := mcp.NewInMemoryTransports()
@@ -263,13 +279,13 @@ func TestMCPBoardRoundTrip(t *testing.T) {
 }
 
 // findTodo pulls one card out of the store by id.
-func findTodo(ts *TodoStore, id string) (Todo, error) {
+func findTodo(ts *board.TodoStore, id string) (board.Todo, error) {
 	for _, t := range ts.List() {
 		if t.ID == id {
 			return t, nil
 		}
 	}
-	return Todo{}, fmt.Errorf("todo %q not in the store", id)
+	return board.Todo{}, fmt.Errorf("todo %q not in the store", id)
 }
 
 func TestMCPUpdateConflictsOnStaleBase(t *testing.T) {
