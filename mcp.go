@@ -21,6 +21,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
 )
 
@@ -164,7 +165,7 @@ type listShipsInput struct {
 
 // newMCPServer builds the "wyac" MCP server over the drawing, todo and doc
 // stores. ix is read-only here — it backs the done snapshot.
-func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ships *shipStore, sessions todoSessions, hub *sse.Hub) *mcp.Server {
+func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, shipStore *ships.Store, sessions todoSessions, hub *sse.Hub) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "wyac",
 		Title:   "W4tch y0ur 4I c0d3",
@@ -439,8 +440,8 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_ships",
 		Description: "Ship history across the solo projects: every recorded `make check` / `make release` run (project, kind, version, exit code, duration, when), newest first, from the ~/.wyac/ships drop records. Use it to see what actually shipped — e.g. to note on a done card which version carried it, or to check whether the last release's gates were green.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in listShipsInput) (*mcp.CallToolResult, ShipsResult, error) {
-		return nil, ships.List(strings.TrimSpace(in.Project), in.Days, 100, in.WithLog), nil
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in listShipsInput) (*mcp.CallToolResult, ships.ShipsResult, error) {
+		return nil, shipStore.List(strings.TrimSpace(in.Project), in.Days, 100, in.WithLog), nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -466,7 +467,7 @@ func newMCPServer(drawings *DrawingStore, todos *TodoStore, states *StateStore, 
 }
 
 // newMCPHandler serves the MCP server on a streamable HTTP endpoint.
-func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, ships *shipStore, sessions todoSessions, hub *sse.Hub) http.Handler {
-	server := newMCPServer(drawings, todos, states, cycles, docs, groups, projects, ships, sessions, hub)
+func newMCPHandler(drawings *DrawingStore, todos *TodoStore, states *StateStore, cycles *CycleStore, docs *DocStore, groups *GroupStore, projects *ProjectStore, shipStore *ships.Store, sessions todoSessions, hub *sse.Hub) http.Handler {
+	server := newMCPServer(drawings, todos, states, cycles, docs, groups, projects, shipStore, sessions, hub)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 }

@@ -1,4 +1,4 @@
-package main
+package search
 
 import (
 	"os"
@@ -55,10 +55,10 @@ func searchRoot(t *testing.T) string {
 
 // newSearchFixture is newSearchIndex plus the searcher built over it — what the
 // search tests actually exercise.
-func newSearchFixture(t *testing.T, root string) *searcher {
+func newSearchFixture(t *testing.T, root string) *Searcher {
 	t.Helper()
 	ix := newSearchIndex(t, root)
-	return newSearcher(ix.DB(), ix)
+	return New(ix.DB(), ix)
 }
 
 func TestSearchMatchesConversationNotTooling(t *testing.T) {
@@ -150,7 +150,7 @@ func TestSearchFiltersAndHostileInput(t *testing.T) {
 
 func TestSearchWithoutDB(t *testing.T) {
 	ix := index.New(t.TempDir())
-	se := newSearcher(ix.DB(), ix)
+	se := New(ix.DB(), ix)
 	if res := se.Search("anything", 0, "", 10); len(res.Hits) != 0 {
 		t.Errorf("nil db must mean empty search, got %+v", res.Hits)
 	}

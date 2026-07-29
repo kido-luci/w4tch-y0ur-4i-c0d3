@@ -1,4 +1,4 @@
-package main
+package git
 
 // Git — a read-only dashboard over each scope's repos: current branch,
 // working-tree state, upstream ahead/behind, and the recent commits. Like the
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"watch-your-ai-code/internal/httpx"
+	"watch-your-ai-code/internal/repos"
 )
 
 // gitCommit is one row of the recent-commits list.
@@ -65,6 +66,15 @@ func runGit(root string, args ...string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(string(out)), true
+}
+
+// RemoteURL reads a remote's configured URL. This is the only piece of git
+// the GitHub package needs, and it is exported deliberately narrow rather
+// than exposing the general shell-out: every git call in this package is
+// read-only plumbing, and that stays a property of the surface instead of a
+// convention a future caller could quietly break by reaching for runGit.
+func RemoteURL(root, remote string) (string, bool) {
+	return runGit(root, "remote", "get-url", remote)
 }
 
 // gitSnapshot fills one repo from its root. The work-tree check gates the rest;
@@ -250,7 +260,7 @@ func parseGitLog(s string) []gitCommit {
 // snapshots run concurrently — the unscoped case can resolve to many repos, and
 // each carries up to a handful of ×3s-timeout git calls — bounded so a large
 // scope doesn't fork one goroutine per repo unbounded.
-func gitRepos(rr *repoResolver, project string) []gitRepo {
+func gitRepos(rr *repos.Resolver, project string) []gitRepo {
 	roots := rr.Repos(project)
 	out := make([]gitRepo, len(roots))
 	const workers = 6
@@ -478,7 +488,7 @@ func gitBranches(root string) []gitBranch {
 	return branches
 }
 
-func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
+func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	// scoped validates ?repo against the scope's resolved roots and returns the
 	// root; on a miss it writes the 404 and returns ok=false.
 	scoped := func(w http.ResponseWriter, r *http.Request) (string, bool) {
@@ -561,6 +571,4 @@ func registerGitAPI(mux *http.ServeMux, rr *repoResolver) {
 			Branches []gitBranch `json:"branches"`
 		}{Branches: gitBranches(root)})
 	})
-
-	registerGitHubAPI(mux, rr)
 }

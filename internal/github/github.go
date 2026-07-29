@@ -1,4 +1,4 @@
-package main
+package github
 
 // GitHub — the git tab's remote layer: pull requests, open issues, and recent
 // CI runs, read through the `gh` CLI (already logged in on this machine) for the
@@ -24,7 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"watch-your-ai-code/internal/git"
 	"watch-your-ai-code/internal/httpx"
+	"watch-your-ai-code/internal/repos"
 )
 
 // ghPath resolves the gh binary by absolute path: LookPath first (covers `make
@@ -47,7 +49,7 @@ var reGitHubRemote = regexp.MustCompile(`github\.com[:/]+([^/]+/[^/]+?)(?:\.git)
 // ghSlug parses "owner/repo" from a repo's origin remote, but only when the host
 // is github.com; ok=false for any other host (GitLab, self-hosted, no remote).
 func ghSlug(root string) (slug string, ok bool) {
-	url, ok := runGit(root, "remote", "get-url", "origin")
+	url, ok := git.RemoteURL(root, "origin")
 	if !ok {
 		return "", false
 	}
@@ -316,11 +318,11 @@ func ghActivityFor(slug string) (ghActivity, bool) {
 	return act, true
 }
 
-// registerGitHubAPI mounts the GitHub sections of the git tab. Each handler
+// Register mounts the GitHub sections of the git tab. Each handler
 // validates ?repo against the scope's resolved roots, derives the github slug
 // from its origin, and returns {supported:false} for a non-GitHub repo so the UI
 // shows an honest "no GitHub remote" state instead of an error.
-func registerGitHubAPI(mux *http.ServeMux, rr *repoResolver) {
+func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	prCache := newGHCache(60 * time.Second)
 	actCache := newGHCache(60 * time.Second)
 

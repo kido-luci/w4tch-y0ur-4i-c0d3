@@ -15,7 +15,9 @@ import (
 
 	"watch-your-ai-code/internal/httpx"
 	"watch-your-ai-code/internal/index"
+	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
+	"watch-your-ai-code/internal/summarize"
 )
 
 //go:embed all:frontend/dist
@@ -55,13 +57,13 @@ func main() {
 	}
 	log.Printf("indexed %d sessions in %s", len(updated), time.Since(start).Round(time.Millisecond))
 
-	// Ship records (make check / make release drops — see ships.go). Scanned
+	// Ship records (make check / make release drops — see internal/ships). Scanned
 	// after the index DB is open, watched alongside the transcripts.
 	sd := *shipsDir
 	if sd == "" {
-		sd = defaultShipsDir()
+		sd = ships.DefaultDir()
 	}
-	shipStore := newShipStore(ix.DB(), ix)
+	shipStore := ships.New(ix.DB(), ix)
 	if n := shipStore.Scan(sd); n > 0 {
 		log.Printf("ships: %d records ingested", n)
 	}
@@ -70,7 +72,7 @@ func main() {
 	if err := index.Watch(ix, func(s *index.Session) { hub.Broadcast("session-updated", s) }); err != nil {
 		log.Printf("file watch disabled: %v", err)
 	}
-	if err := watchShips(shipStore, hub, sd); err != nil {
+	if err := ships.Watch(shipStore, sd, func(r *ships.ShipRecord) { hub.Broadcast("ship-recorded", r) }); err != nil {
 		log.Printf("ships watch disabled: %v", err)
 	}
 
@@ -131,7 +133,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	registerAPI(mux, ix, hub, NewSummarizer(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore)
+	registerAPI(mux, ix, hub, summarize.New(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore)
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
@@ -189,7 +191,7 @@ func main() {
 
 	log.Printf("watch-your-ai-code on http://%s (root: %s, config: %s)", *addr, *root, cfgDir)
 	// hostGuard wraps EVERYTHING (API, MCP, static): loopback alone doesn't
-	// stop DNS rebinding or blind cross-origin POSTs — see api.go.
+	// stop DNS rebinding or blind cross-origin POSTs — see internal/httpx.
 	log.Fatal(http.ListenAndServe(*addr, httpx.HostGuard(*addr, mux)))
 }
 

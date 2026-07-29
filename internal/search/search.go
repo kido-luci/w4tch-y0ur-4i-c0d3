@@ -1,4 +1,4 @@
-package main
+package search
 
 // Transcript search, over the FTS5 table in <config-dir>/index.db.
 //
@@ -49,26 +49,26 @@ type SearchResult struct {
 // newest first, at most limit hits. Matching is FTS5 token matching — every
 // term must appear, the last term also matches as a prefix ("tok" finds
 // "token") — not substring: a mid-word fragment no longer matches.
-// searchSessions is the slice of the session index search reads: the title
+// Sessions is the slice of the session index search reads: the title
 // and project of the session a hit belongs to. SessionRef rather than Session
 // so labelling a hit doesn't copy the whole parse, agent runs included.
-type searchSessions interface {
+type Sessions interface {
 	SessionRef(id string) *index.Session
 }
 
-// searcher queries the message FTS table of index.db (whose schema the index
-// owns, see db.go). A nil db means the cache is disabled — an empty result,
+// Searcher queries the message FTS table of index.db (whose schema the index
+// owns, see internal/index/db.go). A nil db means the cache is disabled — an empty result,
 // never an error.
-type searcher struct {
+type Searcher struct {
 	db       *sql.DB
-	sessions searchSessions
+	sessions Sessions
 }
 
-func newSearcher(db *sql.DB, ss searchSessions) *searcher {
-	return &searcher{db: db, sessions: ss}
+func New(db *sql.DB, ss Sessions) *Searcher {
+	return &Searcher{db: db, sessions: ss}
 }
 
-func (se *searcher) Search(q string, days int, project string, limit int) SearchResult {
+func (se *Searcher) Search(q string, days int, project string, limit int) SearchResult {
 	start := time.Now()
 	res := SearchResult{Hits: []SearchHit{}}
 	match := ftsQuery(q)

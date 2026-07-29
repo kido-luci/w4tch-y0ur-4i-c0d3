@@ -1,4 +1,4 @@
-package main
+package summarize
 
 // AI one-liners for milestone groups. Generated on demand (button-triggered,
 // never automatic) by shelling out to the user's own `claude` CLI in headless
@@ -48,7 +48,7 @@ type Summarizer struct {
 	locks map[string]*sync.Mutex // per-session generation locks
 }
 
-func NewSummarizer() *Summarizer {
+func New() *Summarizer {
 	base, err := os.UserCacheDir()
 	if err != nil {
 		base = os.TempDir()

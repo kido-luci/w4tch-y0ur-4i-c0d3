@@ -281,7 +281,7 @@ type Session struct {
 	Project string `json:"project"`
 	// CWD: the session's working directory from its first transcript line.
 	// Index-internal — the code-graph endpoints hop folder → cwd → repo with
-	// it (see codegraph.go); it never rides an API payload.
+	// it (see internal/codegraph); it never rides an API payload.
 	CWD          string    `json:"-"`
 	Slug         string    `json:"slug"`
 	Title        string    `json:"title"`

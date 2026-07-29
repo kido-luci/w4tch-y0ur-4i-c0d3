@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"watch-your-ai-code/internal/index"
+	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
 )
 
@@ -25,7 +26,7 @@ func dialMCP(t *testing.T) (*mcp.ClientSession, *DrawingStore, *TodoStore, *DocS
 	ts.UseEvents(NewEventStore(db))
 	dcs := NewDocStore(db)
 	ixEmpty := index.New(t.TempDir())
-	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewProjectStore(db), newShipStore(nil, ixEmpty), ixEmpty, sse.New())
+	server := newMCPServer(ds, ts, ss, NewCycleStore(db), dcs, NewGroupStore(db), NewProjectStore(db), ships.New(nil, ixEmpty), ixEmpty, sse.New())
 
 	ctx := context.Background()
 	clientTr, serverTr := mcp.NewInMemoryTransports()

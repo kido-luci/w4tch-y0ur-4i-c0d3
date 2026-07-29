@@ -1,4 +1,4 @@
-package main
+package ships
 
 // Ship history: what actually went out, across every solo project.
 //
@@ -26,7 +26,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"watch-your-ai-code/internal/index"
-	"watch-your-ai-code/internal/sse"
 )
 
 // maxShipFile bounds one drop record; the writer tails its log to ~200 lines,
@@ -60,37 +59,37 @@ type ShipsResult struct {
 	Total int          `json:"total"`
 }
 
-// defaultShipsDir is where drop records land unless -ships-dir says otherwise.
+// DefaultDir is where drop records land unless -ships-dir says otherwise.
 // A fixed, HOME-anchored path on purpose: every project's Makefile must be
 // able to name it without knowing this app's config dir.
-func defaultShipsDir() string {
+func DefaultDir() string {
 	return filepath.Join(os.Getenv("HOME"), ".wyac", "ships")
 }
 
-// shipSessions is the slice of the session index that ship records join
+// Sessions is the slice of the session index that ship records join
 // against — which session was running a project when a run happened. Taking
 // this rather than the whole *Index lets ship records live outside the
 // index's package.
-type shipSessions interface {
+type Sessions interface {
 	Snapshot() []*index.Session
 }
 
-// shipStore is the ships table of index.db (whose schema the index owns, see
+// Store is the ships table of index.db (whose schema the index owns, see
 // db.go) plus the session join. A nil db means the index cache is disabled:
 // every method then answers "no rows" rather than failing.
-type shipStore struct {
+type Store struct {
 	db       *sql.DB
-	sessions shipSessions
+	sessions Sessions
 }
 
-func newShipStore(db *sql.DB, ss shipSessions) *shipStore {
-	return &shipStore{db: db, sessions: ss}
+func New(db *sql.DB, ss Sessions) *Store {
+	return &Store{db: db, sessions: ss}
 }
 
 // Scan reconciles the ships table with dir: new *.json files are ingested,
 // rows whose file is gone are pruned. Returns how many records were ingested.
 // Safe to call repeatedly — known files are skipped by name.
-func (st *shipStore) Scan(dir string) int {
+func (st *Store) Scan(dir string) int {
 	if st.db == nil {
 		return 0
 	}
@@ -138,7 +137,7 @@ func (st *shipStore) Scan(dir string) int {
 // ingestShip reads one drop file into the ships table. A file that isn't a
 // valid record (foreign JSON, missing fields, oversized) is skipped with a
 // log line — one bad drop must never sink the scan.
-func (st *shipStore) ingest(dir, name string) *ShipRecord {
+func (st *Store) ingest(dir, name string) *ShipRecord {
 	if st.db == nil {
 		return nil
 	}
@@ -171,7 +170,7 @@ func (st *shipStore) ingest(dir, name string) *ShipRecord {
 // out of the capped newest-first slice by other projects' volume (which is
 // what client-side scope filtering over that slice did).
 // Logs ride along only when withLog asks — they are the payload's whole weight.
-func (st *shipStore) List(project string, days, limit int, withLog bool) ShipsResult {
+func (st *Store) List(project string, days, limit int, withLog bool) ShipsResult {
 	res := ShipsResult{Ships: []ShipRecord{}}
 	if st.db == nil {
 		return res
@@ -230,7 +229,7 @@ func (st *shipStore) List(project string, days, limit int, withLog bool) ShipsRe
 // a small slack, since the drop file lands moments after the transcript's
 // last line. Overlapping sessions on one repo resolve to the latest-started —
 // in practice the one that actually ran the command.
-func (st *shipStore) joinSessions(ships []ShipRecord) {
+func (st *Store) joinSessions(ships []ShipRecord) {
 	const slack = 5 * time.Minute
 	sessions := st.sessions.Snapshot()
 	for i := range ships {
@@ -254,10 +253,10 @@ func (st *shipStore) joinSessions(ships []ShipRecord) {
 	}
 }
 
-// watchShips ingests new drop records as they land and broadcasts each over
-// SSE. The dir is flat, so this stays much simpler than the transcript
-// watcher; deletions reconcile on the periodic ScanShips, not here.
-func watchShips(st *shipStore, hub *sse.Hub, dir string) error {
+// Watch ingests new drop records as they land and calls onShip with each.
+// The dir is flat, so this stays much simpler than the transcript watcher;
+// deletions reconcile on the periodic ScanShips, not here.
+func Watch(st *Store, dir string, onShip func(*ShipRecord)) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -298,7 +297,7 @@ func watchShips(st *shipStore, hub *sse.Hub, dir string) error {
 					delete(pending, name)
 					mu.Unlock()
 					if r := st.ingest(dir, name); r != nil {
-						hub.Broadcast("ship-recorded", r)
+						onShip(r)
 					}
 				})
 				mu.Unlock()

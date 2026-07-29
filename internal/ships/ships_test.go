@@ -1,4 +1,4 @@
-package main
+package ships
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 // table — an empty transcript root, a real index.db. TestShipsJoinSessions
 // swaps in a fakeSessions for the join case rather than reaching into this
 // index's (always-empty) session set, which now lives in another package.
-func newShipsStore(t *testing.T) *shipStore {
+func newShipsStore(t *testing.T) *Store {
 	t.Helper()
 	root := t.TempDir()
 	db, err := index.OpenDB(filepath.Join(t.TempDir(), "cfg"), root)
@@ -24,14 +24,13 @@ func newShipsStore(t *testing.T) *shipStore {
 	t.Cleanup(func() { db.Close() })
 	ix := index.New(root)
 	ix.UseCache(db)
-	return newShipStore(ix.DB(), ix)
+	return New(ix.DB(), ix)
 }
 
-// fakeSessions satisfies any of the narrow Snapshot() []*index.Session
-// interfaces this package declares (shipSessions here, repoSessions in
-// codegraph.go — also used by codegraph_test.go). It hands a test exact
-// session data without needing write access to an Index's session map, which
-// is unexported and now lives in another package.
+// fakeSessions satisfies the Sessions interface (Snapshot() []*index.Session)
+// this package declares. It hands a test exact session data without needing
+// write access to an Index's session map, which is unexported and lives in
+// another package.
 type fakeSessions []*index.Session
 
 func (f fakeSessions) Snapshot() []*index.Session { return f }

@@ -12,10 +12,17 @@ import (
 	"sync"
 	"time"
 
+	"watch-your-ai-code/internal/codegraph"
 	"watch-your-ai-code/internal/cowork"
+	"watch-your-ai-code/internal/git"
+	"watch-your-ai-code/internal/github"
 	"watch-your-ai-code/internal/httpx"
 	"watch-your-ai-code/internal/index"
+	"watch-your-ai-code/internal/repos"
+	"watch-your-ai-code/internal/search"
+	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
+	"watch-your-ai-code/internal/summarize"
 )
 
 // rescanCoalescer collapses hook-event bursts into at most one running and
@@ -165,13 +172,13 @@ func refreezeTodo(todos *TodoStore, sessions todoSessions, todo Todo, status str
 	return todo
 }
 
-func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
+func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summarize.Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
 	// Repo resolution, ship records and transcript search read the index but are
 	// not part of it — each takes the narrow slice of it that it needs, so none
 	// of them (nor the handlers below, nor MCP) depends on the whole index.
-	repos := newRepoResolver(ix)
-	ships := newShipStore(ix.DB(), ix)
-	search := newSearcher(ix.DB(), ix)
+	rr := repos.New(ix)
+	shipStore := ships.New(ix.DB(), ix)
+	searchIdx := search.New(ix.DB(), ix)
 
 	// Every scope question below goes through here, so a group label expands the
 	// same way the rail expands it — see scope.go.
@@ -1112,10 +1119,11 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *Summariz
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	registerCodegraphAPI(mux, repos)
-	registerGitAPI(mux, repos)
+	codegraph.Register(mux, rr)
+	git.Register(mux, rr)
+	github.Register(mux, rr)
 
-	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, projects, ships, ix, hub))
+	mux.Handle("/mcp", newMCPHandler(drawings, todos, states, cycles, docs, groups, projects, shipStore, ix, hub))
 
 	// Per-day activity buckets for the last `weeks` weeks (default 26), bucketed
 	// by the local calendar day of each session's start. Powers the heatmap; its
@@ -1218,7 +1226,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *Summariz
 	})
 
 	// Ship history: recorded make check / make release runs from the drop dir
-	// (see ships.go). Distinct from /api/ledger, the cost-per-outcome insights.
+	// (see internal/ships). Distinct from /api/ledger, the cost-per-outcome insights.
 	// `log=1` includes each run's captured log tail.
 	mux.HandleFunc("GET /api/ships", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1230,10 +1238,10 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *Summariz
 		if limit > 500 {
 			limit = 500
 		}
-		httpx.WriteJSON(w, ships.List(q.Get("project"), days, limit, q.Get("log") == "1"))
+		httpx.WriteJSON(w, shipStore.List(q.Get("project"), days, limit, q.Get("log") == "1"))
 	})
 
-	// Transcript search over the FTS5 index (see search.go). `limit` (default
+	// Transcript search over the FTS5 index (see internal/search). `limit` (default
 	// 100) bounds the response; `matched` reports what the cap left out.
 	mux.HandleFunc("GET /api/search", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1245,7 +1253,7 @@ func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *Summariz
 		if limit > 500 {
 			limit = 500
 		}
-		httpx.WriteJSON(w, search.Search(q.Get("q"), days, q.Get("project"), limit))
+		httpx.WriteJSON(w, searchIdx.Search(q.Get("q"), days, q.Get("project"), limit))
 	})
 
 	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {

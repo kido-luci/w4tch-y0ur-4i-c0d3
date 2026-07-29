@@ -1,4 +1,4 @@
-package main
+package codegraph
 
 // Code graph — a read-only window onto each repo's .codegraph/codegraph.db,
 // the SQLite knowledge graph the codegraph MCP indexer maintains (nodes =
@@ -16,32 +16,15 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
-	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"watch-your-ai-code/internal/httpx"
-	"watch-your-ai-code/internal/index"
+	"watch-your-ai-code/internal/repos"
 )
-
-// cgRepo is one repo a scope resolves to: where it lives, whether it carries
-// an index, and — when it does — the index's size and age plus how many
-// commits the repo has seen since it was written (-1 = git couldn't answer).
-type cgRepo struct {
-	Root         string    `json:"root"`
-	Folder       string    `json:"folder"` // the Claude folder that led here
-	HasIndex     bool      `json:"hasIndex"`
-	IndexedAt    time.Time `json:"indexedAt"`
-	Files        int       `json:"files"`
-	Nodes        int       `json:"nodes"`
-	Edges        int       `json:"edges"`
-	CommitsSince int       `json:"commitsSince"`
-}
 
 // cgFile / cgEdge / cgGraph: the file-level graph payload. Edges are the
 // symbol edge table aggregated per (source file, target file, kind), weight =
@@ -85,192 +68,17 @@ type cgSymbolDetail struct {
 	Callees []cgSymbol `json:"callees"`
 }
 
-func cgDBPath(root string) string {
-	return filepath.Join(root, ".codegraph", "codegraph.db")
-}
-
-// repoSessions is the slice of the session index that repo resolution reads:
-// the working directories sessions ran in, and when. Taking this rather than
-// the whole *Index is what lets resolution live outside the index's package.
-type repoSessions interface {
-	Snapshot() []*index.Session
-}
-
-// repoResolver maps a scope to on-disk repo roots. The git tab and the code
-// graph both go through it, so the two always list the same repo set — and
-// every drill-down endpoint validates its ?repo against ResolveRoot, which is
-// why those endpoints are safe to expose at all.
-type repoResolver struct{ sessions repoSessions }
-
-func newRepoResolver(ss repoSessions) *repoResolver { return &repoResolver{sessions: ss} }
-
-// Repos maps the scope's folders to on-disk repo roots. For each folder the
-// candidates are its sessions' cwds, newest first; the first one that still
-// exists wins, preferring one that carries an index — so a leftover worktree
-// path or a since-moved checkout can't shadow the real repo. A folder with no
-// live session cwd of its own then falls back to finding an indexed directory
-// of that name near a known workspace cwd (see findIndexedDir), so an infra
-// sub-repo you've indexed surfaces without ever opening Claude in it. Roots are
-// deduped across folders, indexed repos sort first.
-func (rr *repoResolver) Repos(project string) []cgRepo {
-	var want map[string]bool
-	if list := index.SplitProjects(project); list != nil {
-		want = make(map[string]bool, len(list))
-		for _, p := range list {
-			want[p] = true
-		}
-	}
-	type cand struct {
-		cwd string
-		at  time.Time
-	}
-	byFolder := map[string][]cand{}
-	for _, s := range rr.sessions.Snapshot() {
-		if s.CWD == "" || (want != nil && !want[s.Project]) {
-			continue
-		}
-		byFolder[s.Project] = append(byFolder[s.Project], cand{s.CWD, s.EndedAt})
-	}
-
-	out := []cgRepo{}
-	seen := map[string]bool{}
-	for folder, cands := range byFolder {
-		sort.Slice(cands, func(i, j int) bool { return cands[i].at.After(cands[j].at) })
-		root, hasIndex := "", false
-		for _, c := range cands {
-			fi, err := os.Stat(c.cwd)
-			if err != nil || !fi.IsDir() {
-				continue
-			}
-			if _, err := os.Stat(cgDBPath(c.cwd)); err == nil {
-				root, hasIndex = c.cwd, true
-				break
-			}
-			if root == "" {
-				root = c.cwd
-			}
-		}
-		if root == "" || seen[root] {
-			continue
-		}
-		seen[root] = true
-		out = append(out, cgRepo{Root: root, Folder: folder, HasIndex: hasIndex, CommitsSince: -1})
-	}
-
-	// Fallback for a scoped folder that resolved to nothing above — an infra
-	// sub-repo you indexed but never opened Claude in, so it has no session cwd
-	// of its own. Locate its OWN repo dir by matching the folder name against
-	// the children and siblings of every known session cwd, and keep it only if
-	// it carries a .codegraph. This never borrows a parent's index — it finds
-	// the sub-repo's own — so a nested checkout surfaces without a session there.
-	if want != nil {
-		resolved := make(map[string]bool, len(out))
-		for _, r := range out {
-			resolved[r.Folder] = true
-		}
-		var missing []string
-		for folder := range want {
-			if !resolved[folder] && folder != "" && !strings.ContainsAny(folder, `/\`) && folder != ".." {
-				missing = append(missing, folder)
-			}
-		}
-		if len(missing) > 0 {
-			anchors := rr.Dirs()
-			for _, folder := range missing {
-				root := findIndexedDir(folder, anchors)
-				if root != "" && !seen[root] {
-					seen[root] = true
-					out = append(out, cgRepo{Root: root, Folder: folder, HasIndex: true, CommitsSince: -1})
-				}
-			}
-		}
-	}
-
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].HasIndex != out[j].HasIndex {
-			return out[i].HasIndex
-		}
-		return out[i].Root < out[j].Root
-	})
-	return out
-}
-
-// Dirs is the distinct set of session working directories that still exist on
-// disk — the anchors the fallback resolution searches from.
-func (rr *repoResolver) Dirs() []string {
-	uniq := map[string]bool{}
-	for _, s := range rr.sessions.Snapshot() {
-		if s.CWD != "" {
-			uniq[s.CWD] = true
-		}
-	}
-	out := make([]string, 0, len(uniq))
-	for d := range uniq {
-		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
-			out = append(out, d)
-		}
-	}
-	return out
-}
-
-// ResolveRoot reports whether root is one of the scope's resolved repo roots.
-// Every git and GitHub drill-down endpoint validates its ?repo through here,
-// so it can only ever touch a repo the scope already surfaced, never an
-// arbitrary path. It lives beside the resolution rather than in git.go so the
-// guard and the list it guards cannot drift apart.
-func (rr *repoResolver) ResolveRoot(project, root string) bool {
-	if root == "" {
-		return false
-	}
-	for _, rp := range rr.Repos(project) {
-		if rp.Root == root {
-			return true
-		}
-	}
-	return false
-}
-
-// findIndexedDir looks for a directory named `folder` that carries its own
-// .codegraph, sitting as a child or sibling of one of the anchor cwds (or being
-// one). "" if none — the fallback only surfaces a sub-repo that's actually been
-// indexed, never a bare directory.
-func findIndexedDir(folder string, anchors []string) string {
-	indexed := func(d string) string {
-		if _, err := os.Stat(cgDBPath(d)); err != nil {
-			return ""
-		}
-		if fi, err := os.Stat(d); err != nil || !fi.IsDir() {
-			return ""
-		}
-		return d
-	}
-	for _, a := range anchors {
-		if r := indexed(filepath.Join(a, folder)); r != "" { // child of a workspace root
-			return r
-		}
-		if r := indexed(filepath.Join(filepath.Dir(a), folder)); r != "" { // sibling of a subdir
-			return r
-		}
-		if filepath.Base(a) == folder {
-			if r := indexed(a); r != "" {
-				return r
-			}
-		}
-	}
-	return ""
-}
-
 // cgOpen opens a repo's codegraph.db strictly read-only: the indexer owns
 // these files, and anything beyond a short shared read would fight its writes.
 func cgOpen(root string) (*sql.DB, error) {
 	return sql.Open("sqlite",
-		"file:"+cgDBPath(root)+"?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(2000)")
+		"file:"+repos.DBPath(root)+"?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(2000)")
 }
 
 // cgFillSummary loads the index-size numbers and age for one repo. Any
 // failure just demotes it to HasIndex=false — a half-broken DB renders as
 // "no index", never as an error page.
-func cgFillSummary(r *cgRepo) {
+func cgFillSummary(r *repos.Repo) {
 	db, err := cgOpen(r.Root)
 	if err != nil {
 		r.HasIndex = false
@@ -468,8 +276,8 @@ ORDER BY n.file_path, n.start_line LIMIT 50`, id)
 	return d, nil
 }
 
-// registerCodegraphAPI wires the three code-graph read endpoints.
-func registerCodegraphAPI(mux *http.ServeMux, rr *repoResolver) {
+// Register wires the three code-graph read endpoints.
+func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	// openScoped validates ?repo against the scope's resolved roots and opens
 	// its DB; nil means the response was already written.
 	openScoped := func(w http.ResponseWriter, r *http.Request) *sql.DB {
@@ -496,30 +304,30 @@ func registerCodegraphAPI(mux *http.ServeMux, rr *repoResolver) {
 	// The page load: the scope's repos with their summaries, plus the file
 	// graph of ?repo (or the first indexed repo when unset).
 	mux.HandleFunc("GET /api/codegraph", func(w http.ResponseWriter, r *http.Request) {
-		repos := rr.Repos(r.URL.Query().Get("project"))
-		for i := range repos {
-			if repos[i].HasIndex {
-				cgFillSummary(&repos[i])
+		repoList := rr.Repos(r.URL.Query().Get("project"))
+		for i := range repoList {
+			if repoList[i].HasIndex {
+				cgFillSummary(&repoList[i])
 			}
 		}
 		want := r.URL.Query().Get("repo")
 		active := -1
-		for i := range repos {
-			if want == "" && repos[i].HasIndex || want != "" && repos[i].Root == want && repos[i].HasIndex {
+		for i := range repoList {
+			if want == "" && repoList[i].HasIndex || want != "" && repoList[i].Root == want && repoList[i].HasIndex {
 				active = i
 				break
 			}
 		}
 		resp := struct {
-			Repos  []cgRepo `json:"repos"`
-			Active string   `json:"active"`
-			Graph  *cgGraph `json:"graph"`
-		}{Repos: repos}
+			Repos  []repos.Repo `json:"repos"`
+			Active string       `json:"active"`
+			Graph  *cgGraph     `json:"graph"`
+		}{Repos: repoList}
 		if active >= 0 {
-			if db, err := cgOpen(repos[active].Root); err == nil {
+			if db, err := cgOpen(repoList[active].Root); err == nil {
 				defer db.Close()
 				if g, err := cgFileGraph(db); err == nil {
-					resp.Active = repos[active].Root
+					resp.Active = repoList[active].Root
 					resp.Graph = g
 				}
 			}
