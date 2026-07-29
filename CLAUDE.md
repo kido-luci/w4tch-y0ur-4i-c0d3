@@ -56,6 +56,23 @@ Mutating a stored session would make every reader a data race.
   switcher) and `scopeRail.ts` (the project rail) are different rails.
 - `views/` — one module per route.
 
+**A render function cannot find its own wrapper in the document.** The views
+build a detached element and the caller appends it *after* the function
+returns, so `document.querySelector` inside a render path matches nothing and
+fails silently. `ui/milestones.ts` hid this for a long time: it fetched on
+every render, and the fetch's `.then()` ran after the append and painted
+everything. Gating that fetch exposed it — repaints stopped painting and the
+summarize button stayed hidden. Hence `paintSummaries(wrapper, id)` (takes the
+element, cannot no-op) versus `repaintSummaries(id)` (looks it up, for async
+callbacks where doing nothing is correct). Pass the element on a render path.
+
+**Fetching from inside a render is a leak, not a refresh.** The detail view
+re-renders on every `session-updated` SSE event, and on a running session those
+never stop — one summaries fetch per repaint, measured at 13 requests in 91
+seconds and still climbing. Key a fetch to the data it depends on, not to the
+repaint: `ui/summaryGate.ts` mirrors the server's freshness hash so the request
+fires when the milestones change and not otherwise.
+
 Two files are deliberately still large: `views/board.ts` (~1.5k lines) and
 `style.css` (~6.2k). `renderBoardView` is one closure over 19 mutable variables
 and that closure IS the per-mount state isolation, so splitting it means
@@ -168,6 +185,14 @@ Two consequences, both of which have bitten:
 So a tag is never "just a tag" here. If you want one without publishing, there
 is no such thing while this trigger exists — say so rather than promising it.
 
+**`main` is protected.** A PR is required, the `frontend + backend` check must
+pass, the branch must be up to date (strict), and force-push and deletion are
+blocked. Approvals are set to zero on purpose — this is a solo repo and
+requiring a review would deadlock it. Admins can bypass, so protection is a
+guard rail, not a wall. Strict is not ceremony: merging a fix for a flaky test
+immediately put an open PR into `BEHIND`, which forced it to re-run CI on the
+fixed base instead of merging on a stale green.
+
 **`make release-dry` — the release path, minus publishing.** Guards, full
 check, all four cross-compiles, then the one thing a real release never does:
 it unpacks the tarball built for THIS host and runs it, checking the served
@@ -177,7 +202,18 @@ artifact works. It takes no argument — VERSION defaults to the newest
 CHANGELOG entry — and tags nothing, pushes nothing, publishes nothing.
 
 Use it before every release. The cross-compile is shared with `make release`
-(`release-build`) rather than copied, so the two cannot drift. This exists
+(`release-build`) rather than copied, so the two cannot drift.
+
+Two build-file traps, both of which produced a broken file that still *looked*
+right:
+
+- **`#` starts a comment in a Makefile even inside quotes.** `grep '^## '` in a
+  variable assignment gets truncated mid-string and make reports something
+  unrelated ("unterminated call to function `shell'"). Escape it: `'^\#\# '`.
+- **Environment assignments cannot prefix a subshell.** `GOOS=... (cd backend
+  && go build ...)` is a shell syntax error, not a slower way to do the same
+  thing. Use `go build -C backend` instead, and `bash -n` a recipe before
+  trusting it — nothing else here would have caught it before a release. This exists
 because the release path is the one path nothing else covers: CI runs on
 pull_request and never cross-compiles, and `make check` stops at a native
 build. A `GOOS=... (cd backend && ...)` line — an outright shell syntax error
@@ -189,11 +225,13 @@ in `git push origin <tag>`, `release.yml` fires on `v*`, and GitHub hands
 AND demotes the real one on a public repo.
 
 **CI is NOT the same gate as `make check`.** `ci.yml` runs on `pull_request`
-only (never on push to main) and does npm ci, `npm run build` (tsc + vite),
-gofmt, go vet, go test, go build. It does **not** run the frontend vitest suite,
-and it does **not** do the served-vs-disk embed check. `make check` does both, so
-a green PR is weaker evidence than a green `make check` — keep running the local
-one before you release.
+only (never on push to main) and does npm ci, `npm run build` (tsc + vite), the
+vitest suite, gofmt, go vet, go test, go build — all Go steps inside `backend/`.
+It does **not** do the served-vs-disk embed check, and it never cross-compiles,
+so it cannot see the release path at all. `make check` covers the embed gate and
+`make release-dry` covers the rest; a green PR is still weaker evidence than
+both. The vitest step was added late: every PR before it merged green without a
+single frontend test having run.
 
 **The everyday instance — delivering.** Under the optional launchd agent
 (`launchd/com.luci.watch-your-ai-code.plist`, `KeepAlive=true`), restart it
@@ -218,6 +256,22 @@ stale assets. Confirm the served bundle changed:
 
 The hash only moves when the built bundle changed — a Go-only fix legitimately
 leaves it identical, so check the behaviour too, not just the hash.
+
+## Tests — two things that pass locally and fail on CI
+
+**A send on a shared unbuffered channel goes to whichever goroutine parked
+first, and parking order is not start order.** `TestRescanCoalescer` had two
+callbacks waiting on one `release` channel and assumed the send would reach the
+first one started. It always did on this machine — 300 runs pinned to one CPU
+stayed green — and on a contended runner the other one won, finished, exited,
+and left the first blocked forever: a ten-minute timeout with no output. Give
+each concurrent actor its own channel so there is one waiter per channel and no
+ambiguity to lose. This had shipped green through three PRs before it fired.
+
+**Local green is not evidence for a scheduling race.** When a test hangs on CI
+and passes here, reproduce it by forcing the interleaving by hand (a `sleep`
+that makes the other goroutine park first) rather than re-running and hoping.
+That turns "flaky" into a fact in about a minute.
 
 ## Routing — real paths, and the scope lives in one of the segments
 
