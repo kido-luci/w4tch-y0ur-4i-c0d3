@@ -3,12 +3,12 @@
 // sessions without going back to the list. It shares the sessions view's filter
 // state (localStorage), so Status/Project/etc. stay in sync across both.
 
-import { getSessions } from "./api";
-import type { Session } from "./api";
-import { DEFAULT_FILTERS, loadFilters, renderFilterBar, saveFilters } from "./filters";
-import type { FilterState, GroupBy } from "./filters";
-import { escapeHtml, formatRelativeTime, truncate } from "./format";
-import { getScopeParam, getScopeSet, labelForFolder } from "./scope";
+import { getSessions } from "../api";
+import type { Session } from "../api";
+import { DEFAULT_FILTERS, loadFilters, renderFilterBar, saveFilters } from "../domain/filters";
+import type { FilterState, GroupBy } from "../domain/filters";
+import { escapeHtml, formatRelativeTime, truncate } from "../domain/format";
+import { getScopeParam, getScopeSet, labelForFolder } from "../scope";
 
 // Cap how many sessions the rail shows (plus the current one, always) so a busy
 // window stays a switcher rather than an endless scroll.

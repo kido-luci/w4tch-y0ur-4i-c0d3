@@ -9,8 +9,8 @@
 // needed. The card owns its Trend / Annotations / window controls and redraws
 // from the last aggregate on toggle — call `update()` to feed fresh sessions.
 
-import type { ModelUsage, Session } from "./api";
-import { escapeHtml, formatTokens, modelColor } from "./format";
+import type { ModelUsage, Session } from "../api";
+import { escapeHtml, formatTokens, modelColor } from "../domain/format";
 
 // Known families first (stable order + colors), then any others by tokens desc.
 const MODEL_ORDER = ["opus", "sonnet", "haiku", "fable"];

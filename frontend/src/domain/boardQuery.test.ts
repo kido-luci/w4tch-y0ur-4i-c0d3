@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { matchesQuery } from "./boardQuery";
-import type { BoardQuery, Todo } from "./api";
+import type { BoardQuery, Todo } from "../api";
 
 // matchesQuery is the ONE place a saved view's stored query is interpreted, and
 // a saved view's `query` is opaque JSON the server never validates. So the two

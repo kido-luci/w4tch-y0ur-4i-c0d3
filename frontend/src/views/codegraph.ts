@@ -2,7 +2,7 @@
 // a dependency graph, read from the .codegraph/codegraph.db index the codegraph
 // MCP maintains (wyac never writes it, never runs the indexer).
 //
-// The graph canvas is a React Flow island (see codegraphGraph.tsx): HTML card
+// The graph canvas is a React Flow island (see ui/codegraphGraph.tsx): HTML card
 // nodes and edges routed by ELK (orthogonal, channel-separated — so the layered
 // graph reads instead of tangling). This vanilla shell owns everything else —
 // the chips, the side panel, search, the data prep — and drives the island.
@@ -26,9 +26,9 @@ import {
   searchCodegraphSymbols,
 } from "../api";
 import type { CGResponse, CGSymbol } from "../api";
-import { mountCodegraphGraph } from "./codegraphGraph";
-import type { GraphHandle, GVEdge, GVNode } from "./codegraphGraph";
-import { chipAttrs, escapeHtml, formatRelativeTime, formatTokens } from "../format";
+import { mountCodegraphGraph } from "../ui/codegraphGraph";
+import type { GraphHandle, GVEdge, GVNode } from "../ui/codegraphGraph";
+import { chipAttrs, escapeHtml, formatRelativeTime, formatTokens } from "../domain/format";
 import { getScope, getScopeParam } from "../scope";
 
 // Which subsystems (components) are shown, persisted per scope. Default is

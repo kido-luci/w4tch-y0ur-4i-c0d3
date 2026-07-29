@@ -4,7 +4,7 @@
 // Built as a plain HTML string parsed via innerHTML (allowed by spec) for
 // straightforward templating; all dynamic text is escaped.
 
-import type { AgentRun, SessionDetail } from "./api";
+import type { AgentRun, SessionDetail } from "../api";
 import {
   escapeHtml,
   formatDuration,
@@ -12,7 +12,7 @@ import {
   formatTokens,
   modelColor,
   truncate,
-} from "./format";
+} from "../domain/format";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

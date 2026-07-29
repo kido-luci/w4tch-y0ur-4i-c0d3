@@ -7,8 +7,8 @@
 
 import { getGit } from "../api";
 import type { GitRepo } from "../api";
-import { chipAttrs, escapeHtml, formatRelativeTime } from "../format";
-import { showError } from "../live";
+import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
+import { showError } from "../app/live";
 import { getScopeParam } from "../scope";
 
 /** Renders the git view into `container`; returns a cleanup callback. */

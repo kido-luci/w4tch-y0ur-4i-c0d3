@@ -24,9 +24,9 @@ import {
   subscribeRawEvents,
 } from "../api";
 import type { Burndown, CycleReport, Todo, TodoEvent, TodoState } from "../api";
-import { describeEventOrCreated } from "../boardEvents";
-import { escapeHtml, formatDay, formatRelativeTime } from "../format";
-import { showError } from "../live";
+import { describeEventOrCreated } from "../domain/boardEvents";
+import { escapeHtml, formatDay, formatRelativeTime } from "../domain/format";
+import { showError } from "../app/live";
 import { getScope, getScopeSet, scopeChipHtml } from "../scope";
 
 function points(v: number): string {

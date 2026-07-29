@@ -9,7 +9,7 @@
 // names change and history must not. So the lookups are injected: the caller
 // owns the live name tables, this module owns the wording.
 
-import type { TodoEvent } from "./api";
+import type { TodoEvent } from "../api";
 import { escapeHtml } from "./format";
 
 export interface EventNames {

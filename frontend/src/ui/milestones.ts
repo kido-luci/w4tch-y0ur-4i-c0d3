@@ -12,9 +12,9 @@
 // roots at a small session card, fans out one column per group (group card,
 // count badge, then its chain).
 
-import { getSummaries, postSummarize } from "./api";
-import type { Milestone, MilestoneGroup, SessionDetail } from "./api";
-import { escapeHtml, truncate } from "./format";
+import { getSummaries, postSummarize } from "../api";
+import type { Milestone, MilestoneGroup, SessionDetail } from "../api";
+import { escapeHtml, truncate } from "../domain/format";
 
 // One accent + glyph + noun per kind. Distinct from the action-flow palette so
 // a milestone never reads as a phase node.

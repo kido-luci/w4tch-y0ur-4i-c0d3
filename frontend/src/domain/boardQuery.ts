@@ -5,7 +5,7 @@
 // without a migration — which only holds while every renderer routes through
 // here rather than reimplementing "does this card match".
 
-import type { BoardQuery, Cycle, Todo, TodoState } from "./api";
+import type { BoardQuery, Cycle, Todo, TodoState } from "../api";
 import { escapeHtml, formatDay } from "./format";
 
 /** Does one card survive the filter? An absent field filters nothing. */

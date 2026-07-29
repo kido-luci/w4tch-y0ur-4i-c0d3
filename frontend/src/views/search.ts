@@ -8,7 +8,7 @@
 
 import { search } from "../api";
 import type { SearchHit, SearchResult } from "../api";
-import { chipAttrs, escapeHtml, formatRelativeTime, truncate } from "../format";
+import { chipAttrs, escapeHtml, formatRelativeTime, truncate } from "../domain/format";
 import { getScopeParam, labelForFolder, scopeChipHtml } from "../scope";
 
 const DAY_OPTS: { v: number; label: string }[] = [

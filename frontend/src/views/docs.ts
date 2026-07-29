@@ -19,9 +19,9 @@ import {
   subscribeRawEvents,
 } from "../api";
 import type { Doc, Todo } from "../api";
-import { escapeHtml, truncate } from "../format";
-import { announce } from "../live";
-import { renderMarkdown } from "../markdown";
+import { escapeHtml, truncate } from "../domain/format";
+import { announce } from "../app/live";
+import { renderMarkdown } from "../domain/markdown";
 import { getKnownGroupNames, getScope, getScopeSet, navigate } from "../scope";
 
 const SAVE_DEBOUNCE_MS = 800;

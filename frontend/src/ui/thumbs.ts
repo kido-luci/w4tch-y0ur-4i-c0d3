@@ -5,7 +5,7 @@
 // Excalidraw bundle is heavy: it is only reached via dynamic import, and only
 // when at least one thumbnail is missing or stale.
 
-import { getDrawingContent, putDrawingThumbnail } from "./api";
+import { getDrawingContent, putDrawingThumbnail } from "../api";
 
 const THUMB_MAX_EDGE = 640;
 

@@ -45,9 +45,9 @@ import type {
   TodoStatus,
   ViewKind,
 } from "../api";
-import { mountBoardTable } from "../boardTableIsland";
-import { describeEvent } from "../boardEvents";
-import { matchesQuery, renderTimeline } from "../boardQuery";
+import { mountBoardTable } from "../ui/boardTableIsland";
+import { describeEvent } from "../domain/boardEvents";
+import { matchesQuery, renderTimeline } from "../domain/boardQuery";
 import {
   chipAttrs,
   escapeHtml,
@@ -56,9 +56,9 @@ import {
   formatRelativeTime,
   formatTokens,
   truncate,
-} from "../format";
-import { showError } from "../live";
-import { renderInlineMarkdown, renderMarkdown } from "../markdown";
+} from "../domain/format";
+import { showError } from "../app/live";
+import { renderInlineMarkdown, renderMarkdown } from "../domain/markdown";
 import { getScope, getScopeSet, labelForFolder, navigate } from "../scope";
 
 // The columns are data now (data.db v12), not a const: the board renders
@@ -726,7 +726,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       </div>`;
   }
 
-  /** Name tables for the shared event renderer (boardEvents.ts). */
+  /** Name tables for the shared event renderer (domain/boardEvents.ts). */
   const eventNames = {
     state: (id: string): string => stateById(id)?.name ?? id ?? "—",
     cycle: (id: string): string => (id ? (cycleById(id)?.name ?? id) : "no cycle"),

@@ -3,8 +3,8 @@
 // of sessions started that day; the tooltip carries tokens + cost too. Built as
 // an innerHTML SVG string like the agent graph; all dynamic text is escaped.
 
-import type { Activity, ActivityDay } from "./api";
-import { escapeHtml, formatCost, formatTokens } from "./format";
+import type { Activity, ActivityDay } from "../api";
+import { escapeHtml, formatCost, formatTokens } from "../domain/format";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

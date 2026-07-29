@@ -13,16 +13,16 @@ import {
   modelBadgeHtml,
   modelColor,
   truncate,
-} from "../format";
-import { showError } from "../live";
+} from "../domain/format";
+import { showError } from "../app/live";
 import { labelForFolder } from "../scope";
-import { renderModelDistribution } from "../distribution";
-import { renderSessionFlow } from "../flow";
-import { renderSessionMilestones } from "../milestones";
-import { renderAgentGraph } from "../graph";
-import { renderInspectorBody } from "../inspector";
-import { renderSessionRail } from "../rail";
-import { renderSessionTimeline } from "../timeline";
+import { renderModelDistribution } from "../domain/distribution";
+import { renderSessionFlow } from "../domain/flow";
+import { renderSessionMilestones } from "../ui/milestones";
+import { renderAgentGraph } from "../ui/graph";
+import { renderInspectorBody } from "../ui/inspector";
+import { renderSessionRail } from "../ui/sessionRail";
+import { renderSessionTimeline } from "../ui/timeline";
 
 /** Renders the session detail view into `container`; returns a cleanup callback. */
 export function renderSessionDetailView(container: HTMLElement, id: string): () => void {

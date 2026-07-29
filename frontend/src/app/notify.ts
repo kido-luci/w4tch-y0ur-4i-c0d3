@@ -5,9 +5,9 @@
 //                 for FINISH_QUIET_MS (so an active back-and-forth doesn't spam)
 // Requires the viewer tab to be open and notifications enabled by the user.
 
-import { subscribeRawEvents } from "./api";
-import type { Session } from "./api";
-import { navigate } from "./scope";
+import { subscribeRawEvents } from "../api";
+import type { Session } from "../api";
+import { navigate } from "../scope";
 
 const STORAGE_KEY = "wyac-notify";
 const FINISH_QUIET_MS = 60_000;

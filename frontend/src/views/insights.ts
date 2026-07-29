@@ -29,8 +29,8 @@ import {
   formatTokens,
   linesBadgeHtml,
   truncate,
-} from "../format";
-import { showError } from "../live";
+} from "../domain/format";
+import { showError } from "../app/live";
 import { getScopeParam, labelForFolder, scopeChipHtml } from "../scope";
 
 interface InsightsFilters {

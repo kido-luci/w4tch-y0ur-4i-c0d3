@@ -13,7 +13,7 @@ import {
   subscribeRawEvents,
 } from "../api";
 import type { Project, ProjectGroup } from "../api";
-import { escapeHtml } from "../format";
+import { escapeHtml } from "../domain/format";
 import {
   getKnownGroups,
   getKnownProjects,

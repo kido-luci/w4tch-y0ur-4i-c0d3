@@ -6,8 +6,8 @@
 // clickable (data attrs) so they open the same inspector as the graph nodes.
 // Built as an innerHTML SVG string; text escaped.
 
-import type { ActivitySlot, SessionDetail, ToolEvent } from "./api";
-import { kindColor, toolKind } from "./flow";
+import type { ActivitySlot, SessionDetail, ToolEvent } from "../api";
+import { kindColor, toolKind } from "../domain/flow";
 import {
   escapeHtml,
   formatAbsoluteTime,
@@ -16,7 +16,7 @@ import {
   formatTokens,
   modelColor,
   truncate,
-} from "./format";
+} from "../domain/format";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

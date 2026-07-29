@@ -6,7 +6,7 @@
 // node pulses while the session is running. Delegate nodes carry data-agent-id
 // so they open the same inspector as the graph / timeline.
 
-import type { FlowNode, SessionDetail } from "./api";
+import type { FlowNode, SessionDetail } from "../api";
 import { escapeHtml, truncate } from "./format";
 
 // Accent per phase kind, deliberately distinct from the model-family palette

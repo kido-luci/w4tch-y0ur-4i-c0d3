@@ -2,7 +2,7 @@
 // legend (tokens · share · cost). Reuses the app's model colors so a family
 // reads the same here as on its badges. Div-based so it fills its card width.
 
-import type { ModelUsage } from "./api";
+import type { ModelUsage } from "../api";
 import { escapeHtml, formatCost, formatTokens, modelColor } from "./format";
 
 /** Render a token-distribution bar + legend from per-model usage. */

@@ -2,7 +2,7 @@
 // either a subagent or the main session. Uses only data already on the session
 // payload. Returns an HTML string for the drawer panel; all dynamic text escaped.
 
-import type { AgentRun, SessionDetail, TokenBreakdown } from "./api";
+import type { AgentRun, SessionDetail, TokenBreakdown } from "../api";
 import {
   escapeHtml,
   formatAbsoluteTime,
@@ -10,7 +10,7 @@ import {
   formatDuration,
   formatTokens,
   modelBadgeHtml,
-} from "./format";
+} from "../domain/format";
 
 function tile(label: string, value: string): string {
   return `<div class="insp-tile"><div class="insp-tile-label">${label}</div><div class="insp-tile-value">${value}</div></div>`;
