@@ -37,7 +37,7 @@ process, no network egress, nothing shared.)
 │     ▲                              + SSE       │
 │  fsnotify (incremental re-parse)               │
 │                                                │
-│  //go:embed frontend/dist  (Vite vanilla TS)   │
+│  //go:embed internal/web/dist (built by Vite)  │
 └─────────────────────────────────────────────┘
 ```
 

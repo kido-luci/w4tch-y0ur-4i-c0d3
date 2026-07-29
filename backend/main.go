@@ -23,7 +23,7 @@ import (
 	"watch-your-ai-code/internal/summarize"
 )
 
-//go:embed all:frontend/dist
+//go:embed all:internal/web/dist
 var distFS embed.FS
 
 func main() {
@@ -163,7 +163,7 @@ func main() {
 		}
 	}()
 
-	dist, err := fs.Sub(distFS, "frontend/dist")
+	dist, err := fs.Sub(distFS, "internal/web/dist")
 	if err != nil {
 		log.Fatal(err)
 	}

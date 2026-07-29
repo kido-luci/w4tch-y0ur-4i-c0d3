@@ -4,12 +4,12 @@ root = "."
 tmp_dir = ".dev/tmp"
 
 [build]
-  cmd = "go build -o ./.dev/tmp/wyac-dev ."
+  cmd = "cd backend && go build -o ../.dev/tmp/wyac-dev ."
   bin = "./.dev/tmp/wyac-dev"
   include_ext = ["go"]
   # frontend/ is Vite's job — rebuilding Go on a .ts edit would restart the API
   # for nothing. testdata/ and .dev/ would loop: the binary writes into .dev.
-  exclude_dir = ["frontend", "testdata", "docs", "launchd", ".dev", ".git", ".claude"]
+  exclude_dir = ["frontend", "docs", "launchd", "scripts", ".dev", ".git", ".claude"]
   exclude_regex = ["_test\\.go"]
   stop_on_error = true
   # A rebuild takes ~1s and the rescan ~1s; don't restart twice on one save.

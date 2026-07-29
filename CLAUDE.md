@@ -9,11 +9,16 @@ default (read-only viewer over `~/.claude/projects`). Build/run details:
 Both halves are layered, and in both the rule is the same: **nothing imports a
 layer above it.** If an import looks like it points upward, it is wrong.
 
-**Go — `main.go` at the root, everything else under `internal/`.** `main.go`
-stays at the root because it carries `//go:embed all:frontend/dist`, and
-`go:embed` cannot reach a parent directory; it is otherwise pure wiring (flags,
-construction, the SPA fallback). The composition root is the only place that
-knows about every package.
+**`frontend/` and `backend/` are siblings at the repo root.** Neither contains
+the other. `backend/main.go` is pure wiring (flags, construction, the SPA
+fallback) and the composition root — the only place that knows every package.
+
+The one thing that crosses the boundary is the built bundle, not source:
+`go:embed` cannot reach a parent directory, so Vite writes straight into
+`backend/internal/web/dist` (`outDir` in `frontend/vite.config.ts`) and
+`backend/main.go` embeds it from there. That is the whole reason the two halves
+used to be nested. If you ever move either directory, that pair of paths is
+what breaks, silently, at build time.
 
     main -> {httpapi, mcpserver} -> board -> index
 
@@ -93,11 +98,12 @@ The tell that you left one stack running and started a second is in air's output
 That is the newer stack losing the race for 4778 — not a broken build. The older
 one keeps serving, so requests still answer while your rebuilds go nowhere.
 
-**`make build` + a throwaway port — verifying what ships.** `main.go` embeds the
-built frontend via `//go:embed all:frontend/dist`, so on this path a
-`frontend/src` change stays invisible until BOTH are rebuilt, in that order:
+**`make build` + a throwaway port — verifying what ships.** `backend/main.go`
+embeds the built frontend via `//go:embed all:internal/web/dist`, so on this
+path a `frontend/src` change stays invisible until BOTH are rebuilt, in that
+order:
 
-    make build   # npm run build (frontend) THEN go build -o watch-your-ai-code .
+    make build   # npm run build (writes into backend/) THEN go build
 
 Rebuilding only the Go binary — or editing `frontend/src` without `npm run build` —
 leaves stale assets embedded and served. `make dev` never exercises this path at
@@ -117,11 +123,11 @@ config dir.
 **Check the served bundle against the one on disk, not just against last time:**
 
     curl -s http://127.0.0.1:4779/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js'
-    grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' frontend/dist/index.html
+    grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' backend/internal/web/dist/index.html
 
 They must match. A binary can be **new and stale at once**: this happened once —
 the binary answered on a brand-new endpoint (so the Go half was current) while
-serving the *previous* release's assets, with `frontend/dist` on disk timestamped
+serving the *previous* release's assets, with the built bundle on disk timestamped
 17s after the binary that supposedly embedded it. The cause was never found: a
 port conflict was ruled out (a losing process logs its bind error and the winner
 keeps serving — checked), and `make build` under a running `make dev` wouldn't
@@ -129,7 +135,7 @@ reproduce it. So this check stays, because it is what caught it. "New endpoint
 answers" is not evidence the frontend came along.
 
 **`make check` + `make release` — the gates.** `make check` runs npm ci +
-vite/tsc build, gofmt, go vet, go test, go build, and the served-vs-disk embed
+vite/tsc build, then gofmt/vet/test/build inside `backend/`, and the served-vs-disk embed
 check above. `make release VERSION=vX.Y.Z` = fail-fast guards (VERSION set, clean
 tree, CHANGELOG entry) → full check → cross-compiles 4 platforms → tag push →
 `gh release create`. That cross-compile makes **CGO a red line**: it's why the
@@ -190,14 +196,14 @@ stale assets. Confirm the served bundle changed:
 
     curl -s http://127.0.0.1:4777/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js'
 
-The hash only moves when `frontend/dist` changed — a Go-only fix legitimately
+The hash only moves when the built bundle changed — a Go-only fix legitimately
 leaves it identical, so check the behaviour too, not just the hash.
 
 ## Routing — real paths, and the scope lives in one of the segments
 
 Routes are real paths (History API), not `#/`: **`family/scope/tab[/detail]`** —
 `/project/<scope>/git/<repo>`, `/claude/<scope>/session/<id>` (`/` canonicalises
-to `/claude/<scope>/sessions`). `main.go` holds the SPA fallback that lets a deep
+to `/claude/<scope>/sessions`). `backend/main.go` holds the SPA fallback that lets a deep
 path reload instead of 404. On the client the grammar and the state are separate
 modules: `scope/location.ts` owns `parseLocation` / `buildPath` and imports
 nothing, `scope/scope.ts` owns `navigate` / `setScope` / `syncScopeToURL`.
@@ -241,7 +247,7 @@ that without asking; it's a deliberate property, not an oversight.
 - **Detail** `/project/<scope>/git/<folder>` — tabs, each lazy-loaded on first
   open: commits (click one → its diff), changes (working tree), branches, pull
   requests, issues & CI. (These are real paths, not `#/` — see the History-API
-  routing and the Go SPA fallback in `main.go`; a deep path that 404s means that
+  routing and the Go SPA fallback in `backend/main.go`; a deep path that 404s means that
   fallback broke.)
 
 **Repo resolution is shared with the code graph** — both go through

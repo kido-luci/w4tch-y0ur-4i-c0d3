@@ -1,10 +1,13 @@
 # Build the single-binary viewer: frontend first, then embed into Go.
+# frontend/ and backend/ are siblings; `npm run build` writes the bundle into
+# backend/internal/web/dist, which is what go:embed picks up — go:embed cannot
+# reach a parent directory, so the artifact crosses over, not the source.
 build:
 	cd frontend && npm install && npm run build
-	go build -o watch-your-ai-code .
+	cd backend && go build -o ../watch-your-ai-code .
 
 test:
-	go test ./...
+	cd backend && go test ./...
 
 run: build
 	./watch-your-ai-code
@@ -12,7 +15,7 @@ run: build
 # --- release gate --------------------------------------------------------------
 # `check` is the local stand-in for the (disabled) CI workflow: the same five
 # gates, plus one CI never had — the embed gate, comparing the asset hash inside
-# the freshly built binary against frontend/dist on disk. That mismatch is the
+# the freshly built binary against the built bundle on disk. That mismatch is the
 # "new and stale at once" failure that bit v0.41.0 (see CLAUDE.md). Actions is
 # off since 2026-07-17 (quota); CI returns 2026-08-01, Release stays local.
 # Both gates run through scripts/wyac-ship, which drops one JSON record per
@@ -23,15 +26,15 @@ check:
 
 check-run:
 	cd frontend && npm ci && npm run build && npm test
-	@unformatted=$$(gofmt -l .); if [ -n "$$unformatted" ]; then \
+	@unformatted=$$(cd backend && gofmt -l .); if [ -n "$$unformatted" ]; then \
 		echo "not gofmt-formatted:"; echo "$$unformatted"; exit 1; fi
-	go vet ./...
-	go test ./...
-	go build -o watch-your-ai-code .
+	cd backend && go vet ./...
+	cd backend && go test ./...
+	cd backend && go build -o ../watch-your-ai-code .
 	@served=$$(grep -a -oE 'assets/index-[A-Za-z0-9_-]+\.js' watch-your-ai-code | head -1); \
-	disk=$$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' frontend/dist/index.html | head -1); \
+	disk=$$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' backend/internal/web/dist/index.html | head -1); \
 	if [ -z "$$disk" ] || [ "$$served" != "$$disk" ]; then \
-		echo "embed gate FAILED: binary embeds '$$served', frontend/dist has '$$disk'"; \
+		echo "embed gate FAILED: binary embeds '$$served', the built bundle has '$$disk'"; \
 		exit 1; fi
 	@echo "check: all gates green"
 
@@ -64,7 +67,7 @@ release-run: release-guards check-run
 		name="watch-your-ai-code_$(VERSION)_$${goos}_$${goarch}"; \
 		echo "building $$name"; \
 		GOOS=$$goos GOARCH=$$goarch CGO_ENABLED=0 \
-			go build -trimpath -ldflags "-s -w" -o "dist/$$name" .; \
+				go build -C backend -trimpath -ldflags "-s -w" -o "../dist/$$name" .; \
 		tar -czf "dist/$$name.tar.gz" -C dist "$$name"; \
 		rm "dist/$$name"; \
 	done
@@ -79,7 +82,7 @@ release-run: release-guards check-run
 # --- dev loop -----------------------------------------------------------------
 # Two servers, neither of them the one on 4777. Vite serves the frontend with
 # HMR and proxies /api to the dev binary on DEV_ADDR, so a .ts/.css edit shows
-# up without `make build` — that path embeds frontend/dist, this one bypasses it.
+# up without `make build` — that path embeds the built bundle, this one bypasses it.
 #
 # The dev binary keeps its own board + design library under .dev/config. The
 # launchd instance on 4777 is writing the real todos.json, and two binaries on
