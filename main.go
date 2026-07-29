@@ -136,7 +136,20 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	httpapi.Register(mux, ix, hub, summarize.New(), todoStore, stateStore, cycleStore, eventStore, viewStore, drawingStore, docStore, groupStore, projectStore)
+	httpapi.Register(mux, httpapi.Deps{
+		Index:    ix,
+		Hub:      hub,
+		Sum:      summarize.New(),
+		Todos:    todoStore,
+		States:   stateStore,
+		Cycles:   cycleStore,
+		Events:   eventStore,
+		Views:    viewStore,
+		Drawings: drawingStore,
+		Docs:     docStore,
+		Groups:   groupStore,
+		Projects: projectStore,
+	})
 	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, shipStore, ix, hub))
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
