@@ -2,8 +2,9 @@ import "./style.css";
 import "./pixel.css";
 import { announce } from "./live";
 import { initNotifications } from "./notify";
-import { buildPath, mountScopeRail, navigate, parseLocation, syncScopeToURL } from "./scope";
+import { buildPath, navigate, parseLocation, syncScopeToURL } from "./scope";
 import { initTheme, mountThemeToggle } from "./theme";
+import { mountScopeRail } from "./ui/scopeRail";
 import { renderBoardView } from "./views/board";
 import { renderCodegraphView } from "./views/codegraph";
 import { renderCyclesView } from "./views/cycles";
@@ -39,7 +40,7 @@ type Route =
   | { view: "gitRepo"; folder: string }
   | { view: "cycles" };
 
-// Routes are real paths, shaped family/scope/tab[/detail] (see scope.ts). The
+// Routes are real paths, shaped family/scope/tab[/detail] (see scope/location.ts). The
 // scope segment is orthogonal to the view, so it's parsed out here and the view
 // is chosen from family + tab + detail. Detail segments arrive already decoded.
 function parseRoute(pathname: string): Route {
@@ -292,7 +293,7 @@ function render(): void {
 window.addEventListener("popstate", render);
 
 // The skip link moves focus itself rather than letting `href="#view"` do it.
-// Routing here is History-API paths (see scope.ts); letting the browser handle
+// Routing here is History-API paths (see scope/location.ts); letting the browser handle
 // the fragment would leave "#view" hanging off every URL copied afterwards, in
 // an app that already had to migrate away from hash routing once.
 app.querySelector<HTMLAnchorElement>(".skip-link")?.addEventListener("click", (e) => {

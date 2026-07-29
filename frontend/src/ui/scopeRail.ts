@@ -1,31 +1,9 @@
-// Global project scope: always one project name or one project-GROUP name.
-// Every view but web reads it at render time (web's data is per-site, and no
-// repo↔site mapping exists). There is no "all projects" entry anymore — ""
-// is only the transient pre-boot value before the rail picks a default. Its
-// UI is the project rail (#proj-rail): the leftmost column on board / design
-// / docs, mounted once outside #view so it persists across visits (routes
-// without it just hide it). Picking a project re-renders the view the same
-// path as a hashchange, so the old view's cleanup runs normally — and the
-// scope is app-wide: sessions, insights and the rest follow it too.
-//
-// The taxonomy is now the durable PROJECT REGISTRY (/api/projects/registry),
-// decoupled from the raw ~/.claude scan: a project OWNS the Claude folders
-// (session cwd-basenames) it stands for, so you can merge several folders under
-// one name or hide the junk. Two resolutions of a scope, for two kinds of view:
-//   - getScopeSet(): the user-project NAMES it covers — client-side label
-//     matching (board / docs / design / ships, whose items carry a name).
-//   - getScopeParam(): the Claude FOLDERS it covers — the server-side session
-//     filter (sessions / insights / search), which matches s.Project.
-// A group is a named set of project names, managed from "+ groups…"; it covers
-// its name plus its members. Names resolve group-first on collision.
-
 import {
   deleteGroup,
   deleteProject,
   deleteProjectLogo,
   getGroups,
   getProjectRegistry,
-  getScopeIndex,
   getUnmappedFolders,
   projectLogoURL,
   putGroup,
@@ -33,11 +11,19 @@ import {
   putProjectLogo,
   renameProject,
   subscribeRawEvents,
-} from "./api";
-import type { Project, ProjectGroup } from "./api";
-import { escapeHtml } from "./format";
+} from "../api";
+import type { Project, ProjectGroup } from "../api";
+import { escapeHtml } from "../format";
+import {
+  getKnownGroups,
+  getKnownProjects,
+  getScope,
+  getScopeParam,
+  loadScopeIndex,
+  setKnownTaxonomy,
+  setScope,
+} from "../scope/scope";
 
-const SCOPE_KEY = "wyac-scope";
 const COLLAPSED_KEY = "wyac-scope-collapsed"; // rail tree nodes the user has folded
 const LOGO_MAX = 128; // px — downscale a raster logo before upload to keep data.db small
 
@@ -78,238 +64,6 @@ async function resizeLogo(file: File): Promise<Blob> {
   return blob;
 }
 
-// Module-level caches so views can resolve the scope synchronously at render
-// time; mountScopeRail fills them (and re-renders once, if that changes what an
-// already-rendered scope resolves to).
-let knownGroups: ProjectGroup[] = [];
-let knownProjects: Project[] = [];
-
-// The route lives in the real path (History API), shaped family/scope/tab[/detail]:
-//   /project/<scope>/git , /claude/<scope>/sessions.
-// The tab sets let parseLocation tell a scope-less transient path (/project/git,
-// before syncScopeToURL injects the scope) apart from a scoped one (/project/x/git):
-// if the segment after the family names a known tab, there's no scope segment.
-const PROJECT_TABS = new Set(["board", "cycles", "design", "docs", "ships", "codegraph", "git"]);
-const CLAUDE_TABS = new Set(["sessions", "insights", "search", "session"]);
-
-export interface Loc {
-  family: "claude" | "project" | "";
-  scope: string; // "" when it's the transient scope-less form
-  tab: string;
-  detail: string;
-}
-
-/** Split a pathname into family / scope / tab / detail. */
-export function parseLocation(pathname: string): Loc {
-  const segs = pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  const family = segs[0] ?? "";
-  if (family === "project" || family === "claude") {
-    const tabs = family === "project" ? PROJECT_TABS : CLAUDE_TABS;
-    if (segs[1] && tabs.has(segs[1])) {
-      return { family, scope: "", tab: segs[1], detail: segs[2] ?? "" };
-    }
-    return { family, scope: segs[1] ?? "", tab: segs[2] ?? "", detail: segs[3] ?? "" };
-  }
-  return { family: "", scope: "", tab: "", detail: "" };
-}
-
-/** Build a canonical path from its parts; the scope segment is dropped when
-    there's no scope yet. */
-export function buildPath(family: string, scope: string, tab: string, detail: string): string {
-  const segs = [family];
-  if ((family === "project" || family === "claude") && scope) segs.push(encodeURIComponent(scope));
-  if (tab) segs.push(tab);
-  if (detail) segs.push(encodeURIComponent(detail));
-  return "/" + segs.join("/");
-}
-
-/** The active scope label. The URL path is the source of truth when it carries a
-    scope segment (so a bookmarked/shared link opens that project); localStorage is
-    the fallback that remembers the last scope across loads and seeds a bare path.
-    "" is the transient pre-boot value — the rail picks a default at boot. */
-export function getScope(): string {
-  const loc = parseLocation(window.location.pathname);
-  if (loc.scope) return loc.scope;
-  try {
-    return localStorage.getItem(SCOPE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-/** label -> the project names that scope covers, as RESOLVED BY THE SERVER
-    (/api/scopes). Empty until the boot fetch lands, exactly like knownProjects. */
-let scopeIndex: Record<string, string[]> = {};
-
-/** The set of user-project NAMES the active scope covers, or null when
-    unscoped. This is the client-side label filter for the board / design /
-    docs / ships / cycles.
-
-    It is a LOOKUP, not a computation. Expanding a group into its members and
-    walking the rail's parent tree used to happen here as well as in the Go
-    resolver — one rule, two implementations, in two languages, agreeing only
-    by inspection. They did not agree: the server's copy compared labels
-    instead of expanding them, and a workflow column created under a group
-    vanished when the rail narrowed to a member. One rule, one place.
-
-    The fallback before the index loads is the label alone, which is what the
-    old code also returned while knownGroups/knownProjects were still empty —
-    a degenerate answer, not a second copy of the rule. The boot fetch
-    re-renders the views when it lands. */
-export function getScopeSet(): Set<string> | null {
-  const scope = getScope();
-  if (!scope) return null;
-  return new Set(scopeIndex[scope] ?? [scope]);
-}
-
-/** Reload the resolved index. Called at boot and whenever the groups or the
-    project registry change, since either can change what a label covers. */
-export function loadScopeIndex(): Promise<void> {
-  return getScopeIndex()
-    .then((idx) => {
-      scopeIndex = idx ?? {};
-    })
-    .catch(() => {
-      /* keep the last good index; the label-alone fallback covers a cold start */
-    });
-}
-
-/** The active scope as an API `project` param for the SESSION-derived endpoints
-    (they filter s.Project, a Claude folder). Each project in scope owns a set
-    of folders — expand to those; a phantom label with no registry entry doubles
-    as its own folder, which preserves the pre-registry behaviour and keeps a
-    just-deleted project's sessions reachable. undefined when unscoped. */
-export function getScopeParam(): string | undefined {
-  const labels = getScopeSet();
-  if (!labels) return undefined;
-  const folders = new Set<string>();
-  for (const label of labels) {
-    const p = knownProjects.find((k) => k.name === label);
-    if (p) for (const f of p.folders ?? []) folders.add(f);
-    else folders.add(label);
-  }
-  return folders.size ? [...folders].join(",") : undefined;
-}
-
-/** A compact "you are looking at X" chip, for the views that filter by scope
-    but do NOT carry the rail (sessions / insights / search / cycles / ships —
-    see the allowlist in main.ts). Those five read getScopeParam() like everyone
-    else, so their numbers are scoped, and until this existed nothing on the
-    screen said to what: you could not tell which project's cost you were
-    reading, and the only way to change it was to leave for a tab that has the
-    rail. Cycles even printed "0 open cards are in this scope with no cycle"
-    while refusing to name the scope.
-
-    It links to the board because that is where the switcher lives. Deliberately
-    scope-LESS href, per the routing rule — syncScopeToURL splices the active
-    scope in at render. */
-export function scopeChipHtml(): string {
-  const scope = getScope();
-  const label = scope || "all projects";
-  return (
-    `<a class="scope-chip" href="/project/board" ` +
-    `title="the views with the project rail — board, design, docs, code graph, git — are where the scope is changed">` +
-    `<span class="scope-chip-key">scope</span>${escapeHtml(label)}</a>`
-  );
-}
-
-/** Known group names — extra labels the docs group input can offer. */
-export function getKnownGroupNames(): string[] {
-  return knownGroups.map((g) => g.name);
-}
-
-/** The display label for a Claude folder (an s.Project value): the name of the
-    project that owns it, or the folder itself if no project does. Session-derived
-    views (grouping, per-project tables, filters) show this so a merged/renamed
-    project reads as your name, not the raw folder. */
-export function labelForFolder(folder: string): string {
-  const p = knownProjects.find((k) => (k.folders ?? []).includes(folder));
-  return p ? p.name : folder;
-}
-
-function saveScope(p: string): void {
-  try {
-    if (p === "") {
-      localStorage.removeItem(SCOPE_KEY);
-    } else {
-      localStorage.setItem(SCOPE_KEY, p);
-    }
-  } catch {
-    /* storage unavailable — the scope just won't persist */
-  }
-}
-
-/** Go to a path via the History API. A push (the default) adds a Back entry and
-    dispatches a synthetic popstate — the single event both render() and the rail's
-    re-highlight listen for, so programmatic and Back/Forward navigation share one
-    path. replace=true is a SILENT in-place URL update (no entry, no event): its
-    callers (boot default, rename) re-render through their own path, so dispatching
-    here would just double-render. */
-export function navigate(path: string, replace = false): void {
-  if (path === window.location.pathname) {
-    return;
-  }
-  if (replace) {
-    window.history.replaceState(window.history.state, "", path);
-    // A replace fires no popstate, so render() — and with it syncScopeToURL —
-    // never runs. Canonicalise here instead, or a scope-less replace (the docs
-    // view auto-opening its first page) leaves the URL without its scope segment
-    // until some unrelated render happens to fix it. Copying the link in that
-    // window would resolve against the READER's remembered scope, not yours.
-    syncScopeToURL();
-    return;
-  }
-  window.history.pushState(window.history.state, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
-
-/** Set the active scope: persist it AND reflect it in the path, keeping the
-    current tab/detail. A rail pick pushes a history entry (Back returns to the
-    previous scope); a boot default or rename passes replace=true to swap it in
-    place. Service routes have no scope segment, so a scope change there is a
-    persist-only no-op on the URL. */
-export function setScope(label: string, replace = false): void {
-  saveScope(label);
-  const loc = parseLocation(window.location.pathname);
-  let { family, tab, detail } = loc;
-  if (family === "") {
-    // No scoped path to rewrite — the next scoped navigation will carry the
-    // persisted scope.
-    return;
-  }
-  if (family === "claude" && tab === "") tab = "sessions";
-  // Picking a DIFFERENT scope drops the detail segment. A repo / page / card /
-  // drawing belongs to the scope you were in; carrying it across lands on a dead
-  // "not in this scope" screen (a repo path under a scope that doesn't hold it).
-  // Switching project means "show me THIS project's list", so land on the tab.
-  // A replace is the other case — the boot default, or a rename of the scope
-  // you're already in — where it's the same scope and the detail is still valid.
-  if (!replace) detail = "";
-  navigate(buildPath(family, label, tab, detail), replace);
-}
-
-/** Canonicalise the path to the effective scope without adding history — render()
-    calls this so a bare/scope-less path (an existing link that omits the scope, or
-    the root) re-gains its scope segment, keeping every URL shareable. Also mirrors
-    the effective scope into localStorage, so opening a shared link makes it the
-    remembered scope. No-op once the path is already canonical, so it never loops. */
-export function syncScopeToURL(): void {
-  const loc = parseLocation(window.location.pathname);
-  let { family, tab, detail } = loc;
-  if (family === "") {
-    // Root → the default landing (sessions), scoped.
-    family = "claude";
-    tab = "sessions";
-  }
-  if (family === "claude" && tab === "") tab = "sessions";
-  const label = getScope();
-  saveScope(label);
-  const want = buildPath(family, label, tab, detail);
-  if ((window.location.pathname || "/") !== want) {
-    window.history.replaceState(window.history.state, "", want);
-  }
-}
-
 /** Mount the project rail (the scope list plus the group- and project-manager
     panels); onChange fires after anything that changes what the scope means. */
 export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
@@ -332,15 +86,15 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   const collapsed = loadCollapsed();
 
   function visibleProjects(): Project[] {
-    return knownProjects.filter((p) => !p.hidden);
+    return getKnownProjects().filter((p) => !p.hidden);
   }
 
   /** The default scope for a fresh load — first group, else first visible
    *  project (rail order), so a project is always selected now that "all
    *  projects" is gone. "" only when there's nothing to select. */
   function firstScope(): string {
-    if (knownGroups.length) {
-      return [...knownGroups].map((g) => g.name).sort((a, b) => a.localeCompare(b))[0]!;
+    if (getKnownGroups().length) {
+      return [...getKnownGroups()].map((g) => g.name).sort((a, b) => a.localeCompare(b))[0]!;
     }
     return visibleProjects()[0]?.name ?? "";
   }
@@ -436,15 +190,15 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       return row + body;
     };
 
-    const groupsHtml = knownGroups.length
+    const groupsHtml = getKnownGroups().length
       ? `<div class="rail-heading">groups</div>` +
-        [...knownGroups].sort((a, b) => a.name.localeCompare(b.name)).map(renderGroup).join("")
+        [...getKnownGroups()].sort((a, b) => a.name.localeCompare(b.name)).map(renderGroup).join("")
       : "";
 
     // Top-level projects: in no group and with no visible parent (their children
     // still nest under them). Usually empty once everything is grouped/parented.
     const inGroup = new Set<string>();
-    for (const g of knownGroups) for (const n of g.projects) inGroup.add(n);
+    for (const g of getKnownGroups()) for (const n of g.projects) inGroup.add(n);
     const topRows = projs
       .filter((p) => !inGroup.has(p.name) && !(p.parent && projs.some((x) => x.name === p.parent)))
       .map((p) => renderProject(p, 0));
@@ -452,7 +206,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     // A persisted scope may name a hidden/deleted project or group that shows
     // nowhere in the tree — keep it selectable rather than dropping the selection.
     const shown = new Set<string>();
-    for (const g of knownGroups) {
+    for (const g of getKnownGroups()) {
       shown.add(g.name);
       for (const n of g.projects) shown.add(n);
     }
@@ -508,14 +262,14 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // The member checklist offers every registry project name plus any member a
   // group already carries (e.g. a phantom from a repo whose folder aged out).
   function memberChoices(g: ProjectGroup | undefined): string[] {
-    const set = new Set(knownProjects.map((p) => p.name));
+    const set = new Set(getKnownProjects().map((p) => p.name));
     for (const p of g?.projects ?? []) set.add(p);
     return [...set].sort((a, b) => a.localeCompare(b));
   }
 
   /** editing: undefined = list only, "" = new-group form, else that group's. */
   function renderGroupPanel(editing?: string): void {
-    const rows = knownGroups
+    const rows = getKnownGroups()
       .map(
         (g) => `
       <div class="scope-panel-row">
@@ -527,7 +281,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       .join("");
     let form = "";
     if (editing !== undefined) {
-      const g = knownGroups.find((k) => k.name === editing);
+      const g = getKnownGroups().find((k) => k.name === editing);
       const checks = memberChoices(g)
         .map(
           (p) => `
@@ -627,7 +381,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
 
   /** editing: undefined = list only, "" = new-project form, else that project. */
   function renderProjectPanel(editing?: string): void {
-    const rows = knownProjects
+    const rows = getKnownProjects()
       .map(
         (p) => `
       <div class="scope-panel-row">
@@ -639,7 +393,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       .join("");
     let form = "";
     if (editing !== undefined) {
-      const p = editing ? knownProjects.find((k) => k.name === editing) : undefined;
+      const p = editing ? getKnownProjects().find((k) => k.name === editing) : undefined;
       const checks = folderChoices(p)
         .map(
           (f) => `
@@ -668,7 +422,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       if (editing) {
         for (;;) {
           let grew = false;
-          for (const q of knownProjects) {
+          for (const q of getKnownProjects()) {
             if (q.parent && banned.has(q.parent) && !banned.has(q.name)) {
               banned.add(q.name);
               grew = true;
@@ -680,7 +434,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       const curParent = p?.parent ?? "";
       const parentOpts = [`<option value="">(none — top level)</option>`]
         .concat(
-          knownProjects
+          getKnownProjects()
             .map((q) => q.name)
             .filter((n) => !banned.has(n))
             .sort((a, b) => a.localeCompare(b))
@@ -764,8 +518,8 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     const hidden = form.querySelector<HTMLInputElement>('input[name="hidden"]')?.checked ?? false;
     const parent = form.querySelector<HTMLSelectElement>('select[name="parent"]')?.value ?? "";
     // ord is preserved on an edit/rename (from the original row), fresh on a new one.
-    const cur = knownProjects.find((k) => k.name === editing);
-    const ord = cur ? cur.ord : knownProjects.reduce((m, p) => Math.max(m, p.ord), -1) + 1;
+    const cur = getKnownProjects().find((k) => k.name === editing);
+    const ord = cur ? cur.ord : getKnownProjects().reduce((m, p) => Math.max(m, p.ord), -1) + 1;
     void (async () => {
       try {
         // A changed name renames + cascades the label across the stores first
@@ -799,7 +553,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     if (type === "groups-updated") {
       const scope = getScope();
       const before = getScopeParam();
-      knownGroups = (data as ProjectGroup[] | null) ?? [];
+      setKnownTaxonomy(getKnownProjects(), (data as ProjectGroup[] | null) ?? []);
       renderRows();
       // Group membership changed, so what a label covers did too — the server
       // owns that rule, so refetch rather than recompute.
@@ -811,7 +565,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     }
     if (type === "projects-updated") {
       const before = getScopeParam();
-      knownProjects = (data as Project[] | null) ?? [];
+      setKnownTaxonomy((data as Project[] | null) ?? [], getKnownGroups());
       renderRows();
       void loadScopeIndex().then(onChange); // the parent tree moved; see above
       if (!projPanel.hidden && !projPanel.querySelector(".scope-panel-form")) renderProjectPanel();
@@ -843,8 +597,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   const beforeParam = getScopeParam(); // pre-load: labels resolve as their own folder
   Promise.all([getProjectRegistry(), getGroups(), loadScopeIndex()])
     .then(([projects, groups]) => {
-      knownProjects = projects;
-      knownGroups = groups;
+      setKnownTaxonomy(projects, groups);
       // No "all projects" anymore: a fresh load (or a cleared scope) lands on a
       // default project so a scope is always active.
       if (!hadScope) {

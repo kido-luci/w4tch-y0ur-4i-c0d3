@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildPath, navigate, parseLocation, setScope, syncScopeToURL } from "./scope";
+import { buildPath, parseLocation } from "./location";
+import { navigate, setScope, syncScopeToURL } from "./scope";
 
-// Characterization tests for the routing half of scope.ts, written before it is
-// split apart. Routing had no coverage at all, and CLAUDE.md records two rules
-// here that each shipped as a bug once:
+// Characterization tests for the routing half of the scope module, written
+// before it was split apart — they are what made that split safe to do.
+// Routing had no coverage at all, and CLAUDE.md records two rules here that
+// each shipped as a bug once:
 //
 //   1. A scope change must DROP the detail segment. Carrying it over lands on a
 //      detail belonging to the scope you just left — a dead "not in this scope"

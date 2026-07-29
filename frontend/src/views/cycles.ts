@@ -366,7 +366,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
       rows = v;
       todos = t;
       states = st;
-      events = ev ?? []; // nil Go slice arrives as null — the api.ts convention
+      events = ev ?? []; // nil Go slice arrives as null — the api/ convention
       // A cycle deleted elsewhere must not leave a dead selection behind.
       if (selectedId && !rows.some((r) => r.cycle.id === selectedId)) {
         selectedId = null;
