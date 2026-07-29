@@ -168,6 +168,26 @@ Two consequences, both of which have bitten:
 So a tag is never "just a tag" here. If you want one without publishing, there
 is no such thing while this trigger exists — say so rather than promising it.
 
+**`make release-dry` — the release path, minus publishing.** Guards, full
+check, all four cross-compiles, then the one thing a real release never does:
+it unpacks the tarball built for THIS host and runs it, checking the served
+bundle matches the one on disk, that the API and a deep SPA path answer, and
+that an unrouted `/api` path still 404s. Compiling is not evidence the
+artifact works. It takes no argument — VERSION defaults to the newest
+CHANGELOG entry — and tags nothing, pushes nothing, publishes nothing.
+
+Use it before every release. The cross-compile is shared with `make release`
+(`release-build`) rather than copied, so the two cannot drift. This exists
+because the release path is the one path nothing else covers: CI runs on
+pull_request and never cross-compiles, and `make check` stops at a native
+build. A `GOOS=... (cd backend && ...)` line — an outright shell syntax error
+— lived in the cross-compile and would have surfaced only mid-release.
+
+There is no safe way to rehearse the real thing instead: `make release` ends
+in `git push origin <tag>`, `release.yml` fires on `v*`, and GitHub hands
+"Latest" to whatever published last — so a throwaway tag publishes a release
+AND demotes the real one on a public repo.
+
 **CI is NOT the same gate as `make check`.** `ci.yml` runs on `pull_request`
 only (never on push to main) and does npm ci, `npm run build` (tsc + vite),
 gofmt, go vet, go test, go build. It does **not** run the frontend vitest suite,
