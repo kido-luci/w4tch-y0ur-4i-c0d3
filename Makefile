@@ -112,26 +112,32 @@ release-dry-run: release-guards check-run release-build
 	host="watch-your-ai-code_$(VERSION)_$$(go env GOOS)_$$(go env GOARCH)"; \
 	tgz="dist/$$host.tar.gz"; \
 	[ -f "$$tgz" ] || { echo "release-dry: no tarball for this host ($$tgz)"; exit 1; }; \
+	if curl -s --max-time 2 -o /dev/null "http://127.0.0.1:$(DRY_PORT)/" 2>/dev/null \
+		|| lsof -nP -iTCP:$(DRY_PORT) -sTCP:LISTEN >/dev/null 2>&1; then \
+		echo "release-dry: something already holds 127.0.0.1:$(DRY_PORT) — stop it, or pass DRY_PORT=<free port>"; \
+		exit 1; fi; \
 	work="$(CURDIR)/.dev/relcheck"; rm -rf "$$work"; mkdir -p "$$work/cfg"; \
 	tar -xzf "$$tgz" -C "$$work"; \
 	bin="$$work/$$host"; chmod +x "$$bin"; \
 	"$$bin" -addr 127.0.0.1:$(DRY_PORT) -config-dir "$$work/cfg" > "$$work/run.log" 2>&1 & \
 	pid=$$!; \
 	trap 'kill $$pid 2>/dev/null || true; rm -rf "$$work"' EXIT; \
+	ready=0; \
 	for i in $$(seq 1 90); do \
-		curl -sf -o /dev/null "http://127.0.0.1:$(DRY_PORT)/" && break; \
 		kill -0 $$pid 2>/dev/null || { echo "release-dry: the binary exited early:"; cat "$$work/run.log"; exit 1; }; \
+		if curl -sf --max-time 5 -o /dev/null "http://127.0.0.1:$(DRY_PORT)/"; then ready=1; break; fi; \
 		sleep 1; \
 	done; \
-	served=$$(curl -s "http://127.0.0.1:$(DRY_PORT)/" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1); \
+	[ "$$ready" = "1" ] || { echo "release-dry: no answer on $(DRY_PORT) after 90s:"; cat "$$work/run.log"; exit 1; }; \
+	served=$$(curl -s --max-time 10 "http://127.0.0.1:$(DRY_PORT)/" | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' | head -1); \
 	disk=$$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' backend/internal/web/dist/index.html | head -1); \
 	[ -n "$$served" ] && [ "$$served" = "$$disk" ] || { \
 		echo "release-dry: the tarball serves '$$served', the bundle on disk is '$$disk'"; exit 1; }; \
 	for path in /api/todos /api/sessions /api/stats /project/git "/$$served"; do \
-		code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(DRY_PORT)$$path"); \
+		code=$$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(DRY_PORT)$$path"); \
 		[ "$$code" = "200" ] || { echo "release-dry: $$path -> $$code, want 200"; exit 1; }; \
 	done; \
-	code=$$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(DRY_PORT)/api/nope"); \
+	code=$$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(DRY_PORT)/api/nope"); \
 	[ "$$code" = "404" ] || { echo "release-dry: /api/nope -> $$code, want 404"; exit 1; }; \
 	rm -f dist/*.tar.gz; \
 	echo "release-dry: $(VERSION) — 4 platforms built; the $$(go env GOOS)/$$(go env GOARCH) tarball was unpacked and served. Nothing tagged, nothing published."
