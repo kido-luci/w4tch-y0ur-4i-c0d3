@@ -145,18 +145,18 @@ function rootCard(session: SessionDetail, groupCount: number, msCount: number): 
     </div>`;
 }
 
-/** Patch summaries + button state into whatever wrapper is currently mounted —
- * the SSE re-render may have replaced the one a request started from. */
-function applySummaries(sessionId: string, into?: HTMLElement): void {
-  // `into` is the wrapper currently being built, which is not in the document
-  // yet — the caller appends it after we return. Without it this lookup finds
-  // nothing on a fresh render, and the summaries and the summarize button stay
-  // in their hidden template state. That used to be masked by the summaries
-  // fetch below: its .then() ran after the append and painted everything. Now
-  // that the fetch is gated on the milestones, a repaint may not fetch at all,
-  // so painting must not depend on it.
-  const wrapper = into ?? document.querySelector<HTMLElement>(`[data-ms-session="${sessionId}"]`);
-  if (!wrapper) return;
+/** Patch summaries + button state into a specific wrapper.
+ *
+ * Takes the element rather than looking it up, because the wrapper being built
+ * by renderSessionMilestones is NOT in the document yet — the caller appends it
+ * after that function returns. A lookup-based version silently painted nothing
+ * on a fresh render, which stayed invisible only because the summaries fetch
+ * ran on every render and its .then() repainted after the append. Gating that
+ * fetch on the milestones exposed it: repaints stopped painting and the
+ * summarize button stayed in its hidden template state.
+ *
+ * Use repaintSummaries below when the wrapper has to be found instead. */
+function paintSummaries(wrapper: HTMLElement, sessionId: string): void {
   const state = sumState.get(sessionId);
   const sums = state?.summaries ?? [];
   wrapper.querySelectorAll<HTMLElement>("[data-sum-idx]").forEach((el) => {
@@ -180,6 +180,17 @@ function applySummaries(sessionId: string, into?: HTMLElement): void {
   }
 }
 
+/** Repaint whichever wrapper for this session is mounted right now, if any.
+ *
+ * For async callbacks only: an SSE re-render may have replaced the wrapper the
+ * request started from, or the user may have navigated away entirely. Doing
+ * nothing is the correct outcome there — unlike on the render path, where it
+ * would mean the view never got painted at all. */
+function repaintSummaries(sessionId: string): void {
+  const mounted = document.querySelector<HTMLElement>(`[data-ms-session="${sessionId}"]`);
+  if (mounted) paintSummaries(mounted, sessionId);
+}
+
 function startSummarize(sessionId: string): void {
   if (inflight.has(sessionId)) return;
   const oldErr = document.querySelector<HTMLElement>(
@@ -191,7 +202,7 @@ function startSummarize(sessionId: string): void {
   }
   const p = postSummarize(sessionId);
   inflight.set(sessionId, p);
-  applySummaries(sessionId);
+  repaintSummaries(sessionId);
   p.then((summaries) => {
     sumState.set(sessionId, { summaries, fresh: true });
   })
@@ -205,7 +216,7 @@ function startSummarize(sessionId: string): void {
     })
     .finally(() => {
       inflight.delete(sessionId);
-      applySummaries(sessionId);
+      repaintSummaries(sessionId);
     });
 }
 
@@ -292,7 +303,7 @@ export function renderSessionMilestones(session: SessionDetail): HTMLElement {
   // The read is gated on the milestones rather than on the render: this view
   // re-renders on every session-updated event, which on a running session is
   // continuous, and the cache can only have changed when the milestones did.
-  applySummaries(session.id, wrapper);
+  paintSummaries(wrapper, session.id);
   if (!inflight.has(session.id) && needsSummaryFetch(session.id, ms)) {
     void getSummaries(session.id)
       .then((res) => {
@@ -300,9 +311,9 @@ export function renderSessionMilestones(session: SessionDetail): HTMLElement {
         const cur = sumState.get(session.id);
         if (!res.summaries && cur) return; // never downgrade to nothing
         if (res.summaries) sumState.set(session.id, { summaries: res.summaries, fresh: res.fresh });
-        applySummaries(session.id);
+        repaintSummaries(session.id);
       })
-      .catch(() => applySummaries(session.id));
+      .catch(() => repaintSummaries(session.id));
   }
 
   return wrapper;
