@@ -93,7 +93,38 @@ type docWithBody struct {
 	Body string `json:"body"`
 }
 
-func Register(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *summarize.Summarizer, todos *board.TodoStore, states *board.StateStore, cycles *board.CycleStore, events *board.EventStore, views *board.ViewStore, drawings *board.DrawingStore, docs *board.DocStore, groups *board.GroupStore, projects *board.ProjectStore) {
+// Deps is everything the handlers are wired over, named at the call site.
+//
+// It replaced a thirteen-parameter list. Every type in it is distinct, so the
+// compiler was already catching transposed arguments; what it could not catch
+// was the edit cost — adding one store meant changing the signature, changing
+// main's call, and lining up thirteen positional arguments across the two by
+// eye. A keyed struct literal says which store is which, and a new dependency
+// is one field rather than a signature change.
+type Deps struct {
+	Index    *index.Index
+	Hub      *sse.Hub
+	Sum      *summarize.Summarizer
+	Todos    *board.TodoStore
+	States   *board.StateStore
+	Cycles   *board.CycleStore
+	Events   *board.EventStore
+	Views    *board.ViewStore
+	Drawings *board.DrawingStore
+	Docs     *board.DocStore
+	Groups   *board.GroupStore
+	Projects *board.ProjectStore
+}
+
+func Register(mux *http.ServeMux, d Deps) {
+	// Bound to the names the handlers below already use. The struct is the
+	// wiring contract at the boundary, not an indirection to thread through
+	// sixty handler bodies.
+	ix, hub, su := d.Index, d.Hub, d.Sum
+	todos, states, cycles, events := d.Todos, d.States, d.Cycles, d.Events
+	views, drawings, docs := d.Views, d.Drawings, d.Docs
+	groups, projects := d.Groups, d.Projects
+
 	// Repo resolution, ship records and transcript search read the index but are
 	// not part of it — each takes the narrow slice of it that it needs, so none
 	// of them (nor the handlers below, nor MCP) depends on the whole index.
