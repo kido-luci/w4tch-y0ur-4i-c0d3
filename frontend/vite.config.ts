@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 const fontsDir = fileURLToPath(
   new URL("./node_modules/@excalidraw/excalidraw/dist/prod/fonts", import.meta.url),
 );
-const outFontsDir = fileURLToPath(new URL("./dist/excalidraw-assets/fonts", import.meta.url));
+const outFontsDir = fileURLToPath(
+  new URL("../backend/internal/web/dist/excalidraw-assets/fonts", import.meta.url),
+);
 
 // Excalidraw resolves its canvas fonts at runtime from EXCALIDRAW_ASSET_PATH
 // (set in main.ts) as `<base>fonts/<Family>/<file>.woff2` — it does NOT
@@ -61,6 +63,13 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist",
+    // The Go binary embeds this directory (backend/main.go), and go:embed
+    // cannot reach a parent directory — so the bundle is written into the
+    // backend tree rather than copied there afterwards. frontend/ and
+    // backend/ stay siblings; only the build artifact crosses over.
+    // emptyOutDir is explicit because the target is outside Vite's root,
+    // which Vite refuses to clear without being told.
+    outDir: "../backend/internal/web/dist",
+    emptyOutDir: true,
   },
 });

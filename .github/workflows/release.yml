@@ -25,7 +25,7 @@ jobs:
           npm run build
       - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
           cache: true
       - name: Build binaries
         run: |
@@ -38,7 +38,7 @@ jobs:
             name="watch-your-ai-code_${version}_${goos}_${goarch}"
             echo "Building ${name}"
             GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
-              go build -trimpath -ldflags "-s -w" -o "dist/${name}" .
+              go build -C backend -trimpath -ldflags "-s -w" -o "../dist/${name}" .
             tar -czf "dist/${name}.tar.gz" -C dist "${name}"
             rm "dist/${name}"
           done

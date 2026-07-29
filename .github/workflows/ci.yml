@@ -35,9 +35,10 @@ jobs:
         run: npm test
       - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
           cache: true
       - name: gofmt
+        working-directory: backend
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
@@ -47,8 +48,11 @@ jobs:
             exit 1
           fi
       - name: go vet
+        working-directory: backend
         run: go vet ./...
       - name: go test
+        working-directory: backend
         run: go test ./...
       - name: go build
+        working-directory: backend
         run: go build ./...
