@@ -15,6 +15,7 @@
 import { getSummaries, postSummarize } from "../api";
 import type { Milestone, MilestoneGroup, SessionDetail } from "../api";
 import { escapeHtml, truncate } from "../domain/format";
+import { createSummaryFetchGate } from "./summaryGate";
 
 // One accent + glyph + noun per kind. Distinct from the action-flow palette so
 // a milestone never reads as a phase node.
@@ -70,6 +71,8 @@ function chunk<T>(arr: T[], size: number): T[][] {
 const sumState = new Map<string, { summaries: string[]; fresh: boolean }>();
 // An in-flight generation; re-renders show "summarizing…" instead of resetting.
 const inflight = new Map<string, Promise<string[]>>();
+// Whether a repaint should re-read the summaries cache — see summaryGate.ts.
+const needsSummaryFetch = createSummaryFetchGate();
 
 // --- rendering ---------------------------------------------------------------
 
@@ -144,8 +147,15 @@ function rootCard(session: SessionDetail, groupCount: number, msCount: number): 
 
 /** Patch summaries + button state into whatever wrapper is currently mounted —
  * the SSE re-render may have replaced the one a request started from. */
-function applySummaries(sessionId: string): void {
-  const wrapper = document.querySelector<HTMLElement>(`[data-ms-session="${sessionId}"]`);
+function applySummaries(sessionId: string, into?: HTMLElement): void {
+  // `into` is the wrapper currently being built, which is not in the document
+  // yet — the caller appends it after we return. Without it this lookup finds
+  // nothing on a fresh render, and the summaries and the summarize button stay
+  // in their hidden template state. That used to be masked by the summaries
+  // fetch below: its .then() ran after the append and painted everything. Now
+  // that the fetch is gated on the milestones, a repaint may not fetch at all,
+  // so painting must not depend on it.
+  const wrapper = into ?? document.querySelector<HTMLElement>(`[data-ms-session="${sessionId}"]`);
   if (!wrapper) return;
   const state = sumState.get(sessionId);
   const sums = state?.summaries ?? [];
@@ -278,8 +288,12 @@ export function renderSessionMilestones(session: SessionDetail): HTMLElement {
   // Show what we already know, then refresh from the server's cache (a local
   // disk read). Skip while a generation is in flight so its result can't be
   // overwritten by a pre-write read racing back late.
-  applySummaries(session.id);
-  if (!inflight.has(session.id)) {
+  //
+  // The read is gated on the milestones rather than on the render: this view
+  // re-renders on every session-updated event, which on a running session is
+  // continuous, and the cache can only have changed when the milestones did.
+  applySummaries(session.id, wrapper);
+  if (!inflight.has(session.id) && needsSummaryFetch(session.id, ms)) {
     void getSummaries(session.id)
       .then((res) => {
         if (inflight.has(session.id)) return;
