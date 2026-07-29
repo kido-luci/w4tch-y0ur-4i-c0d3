@@ -1,4 +1,4 @@
-package main
+package index
 
 import (
 	"os"
@@ -34,6 +34,23 @@ func countRows(t *testing.T, ix *Index, table string) int {
 	return n
 }
 
+// newSearchIndex builds an Index over root with a real index.db in a temp
+// config dir, scanned and persisted — the full path a live search takes.
+func newSearchIndex(t *testing.T, root string) *Index {
+	t.Helper()
+	db, err := OpenDB(filepath.Join(t.TempDir(), "cfg"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	ix := New(root)
+	ix.db = db
+	if _, err := ix.Rescan(); err != nil {
+		t.Fatal(err)
+	}
+	return ix
+}
+
 // The core promise of the cache: a second boot serves the stored parse and
 // never re-reads the transcript. Proven by corrupting the file in place
 // (same size, same mtime) — a re-parse would see garbage, the cache doesn't.
@@ -42,11 +59,11 @@ func TestWarmLoadServesCacheWithoutReparse(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "cfg")
 	path := dbRoot(t, root, "11111111-aaaa-bbbb-cccc-000000000001", "warm title")
 
-	db1, err := openIndexDB(cfg, root)
+	db1, err := OpenDB(cfg, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ix1 := NewIndex(root)
+	ix1 := New(root)
 	ix1.db = db1
 	updated, err := ix1.Rescan()
 	if err != nil || len(updated) != 1 {
@@ -66,12 +83,12 @@ func TestWarmLoadServesCacheWithoutReparse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db2, err := openIndexDB(cfg, root)
+	db2, err := OpenDB(cfg, root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db2.Close()
-	ix2 := NewIndex(root)
+	ix2 := New(root)
 	ix2.db = db2
 	updated, err = ix2.Rescan()
 	if err != nil {
@@ -115,11 +132,11 @@ func TestGenerationChangeWipes(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "cfg")
 	dbRoot(t, rootA, "33333333-aaaa-bbbb-cccc-000000000003", "gen A")
 
-	db1, err := openIndexDB(cfg, rootA)
+	db1, err := OpenDB(cfg, rootA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ix1 := NewIndex(rootA)
+	ix1 := New(rootA)
 	ix1.db = db1
 	if _, err := ix1.Rescan(); err != nil {
 		t.Fatal(err)
@@ -129,12 +146,12 @@ func TestGenerationChangeWipes(t *testing.T) {
 	}
 	db1.Close()
 
-	db2, err := openIndexDB(cfg, t.TempDir()) // same file, different root
+	db2, err := OpenDB(cfg, t.TempDir()) // same file, different root
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db2.Close()
-	ix2 := NewIndex("unused")
+	ix2 := New("unused")
 	ix2.db = db2
 	if n := countRows(t, ix2, "sessions"); n != 0 {
 		t.Errorf("generation change kept %d stale rows, want 0", n)

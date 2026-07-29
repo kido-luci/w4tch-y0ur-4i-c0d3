@@ -4,6 +4,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"watch-your-ai-code/internal/index"
 )
 
 // The cache round-trips through store/Cached, and freshness requires BOTH the
@@ -11,7 +13,7 @@ import (
 // read as stale, not serve the old model's output as current forever.
 func TestSummaryCacheFreshness(t *testing.T) {
 	su := &Summarizer{dir: t.TempDir(), locks: map[string]*sync.Mutex{}}
-	ms := []Milestone{{Kind: "branch", Label: "feat/a"}}
+	ms := []index.Milestone{{Kind: "branch", Label: "feat/a"}}
 
 	if sums, fresh := su.Cached("s1", ms); sums != nil || fresh {
 		t.Fatalf("empty cache should read as nothing: %v, %v", sums, fresh)
@@ -33,7 +35,7 @@ func TestSummaryCacheFreshness(t *testing.T) {
 	// Grown milestones → stale too.
 	su.store("s1", &summaryFile{Hash: milestonesHash(ms), Model: summaryModel,
 		CreatedAt: time.Now(), Summaries: []string{"did a thing"}})
-	grown := append(ms, Milestone{Kind: "release", Label: "v1.0.0"})
+	grown := append(ms, index.Milestone{Kind: "release", Label: "v1.0.0"})
 	if _, fresh := su.Cached("s1", grown); fresh {
 		t.Fatal("grown milestone list should read stale")
 	}
@@ -58,7 +60,7 @@ func TestParseSummaries(t *testing.T) {
 }
 
 func TestMilestonesHash(t *testing.T) {
-	ms := []Milestone{{Kind: "branch", Label: "feat/a"}, {Kind: "commit", Label: "feat: x"}}
+	ms := []index.Milestone{{Kind: "branch", Label: "feat/a"}, {Kind: "commit", Label: "feat: x"}}
 	if milestonesHash(ms) == milestonesHash(ms[:1]) {
 		t.Error("hash must change when milestones are added")
 	}

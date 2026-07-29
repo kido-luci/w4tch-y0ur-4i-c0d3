@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"watch-your-ai-code/internal/index"
 )
 
 const (
@@ -59,7 +61,7 @@ func NewSummarizer() *Summarizer {
 // milestonesHash pins a summary set to the exact milestone list it was
 // generated from; groups derive deterministically from that list, so the one
 // hash covers both.
-func milestonesHash(ms []Milestone) string {
+func milestonesHash(ms []index.Milestone) string {
 	h := sha256.New()
 	for _, m := range ms {
 		fmt.Fprintf(h, "%s|%s\n", m.Kind, m.Label)
@@ -106,7 +108,7 @@ func (su *Summarizer) store(id string, sf *summaryFile) {
 // offering to re-summarize. Freshness also requires the model that wrote
 // them to still be the configured one, so a model bump re-summarizes
 // instead of serving the old model's output as current forever.
-func (su *Summarizer) Cached(id string, ms []Milestone) (summaries []string, fresh bool) {
+func (su *Summarizer) Cached(id string, ms []index.Milestone) (summaries []string, fresh bool) {
 	sf := su.load(id)
 	if sf == nil {
 		return nil, false
@@ -127,7 +129,7 @@ func (su *Summarizer) lockFor(id string) *sync.Mutex {
 
 // Summarize returns one sentence per milestone group, generating and caching
 // them when the cache is missing or stale.
-func (su *Summarizer) Summarize(ctx context.Context, id string, groups []MilestoneGroup, ms []Milestone) ([]string, error) {
+func (su *Summarizer) Summarize(ctx context.Context, id string, groups []index.MilestoneGroup, ms []index.Milestone) ([]string, error) {
 	l := su.lockFor(id)
 	l.Lock()
 	defer l.Unlock()
@@ -149,7 +151,7 @@ func (su *Summarizer) Summarize(ctx context.Context, id string, groups []Milesto
 	return sums, nil
 }
 
-func summaryPrompt(groups []MilestoneGroup) string {
+func summaryPrompt(groups []index.MilestoneGroup) string {
 	var b strings.Builder
 	b.WriteString("Below are groups of git milestones from one AI coding session, in order.\n")
 	b.WriteString("For each group, write one plain sentence (max 14 words) stating what that group accomplished.\n")

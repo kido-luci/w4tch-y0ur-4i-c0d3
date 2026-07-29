@@ -1,4 +1,4 @@
-package main
+package index
 
 import (
 	"database/sql"
@@ -48,7 +48,7 @@ type Index struct {
 	hasStore  bool
 }
 
-func NewIndex(root string) *Index {
+func New(root string) *Index {
 	return &Index{
 		root:      root,
 		sessions:  map[string]*Session{},
@@ -58,8 +58,8 @@ func NewIndex(root string) *Index {
 	}
 }
 
-// refreshArchived reloads the active-session set from the app's session store.
-func (ix *Index) refreshArchived() {
+// RefreshArchived reloads the active-session set from the app's session store.
+func (ix *Index) RefreshArchived() {
 	active, ok := loadActiveIDs()
 	ix.archMu.Lock()
 	ix.activeIDs = active
@@ -308,8 +308,8 @@ func (s *Session) withRunning(now time.Time) *Session {
 	return &c
 }
 
-// withStatus returns a copy of s with its live (Running) and Archived flags set.
-func (ix *Index) withStatus(s *Session, now time.Time) *Session {
+// WithStatus returns a copy of s with its live (Running) and Archived flags set.
+func (ix *Index) WithStatus(s *Session, now time.Time) *Session {
 	c := s.withRunning(now)
 	c.Archived = ix.archived(c.ID, c.Running)
 	return c
@@ -326,7 +326,7 @@ func (ix *Index) Sessions(days int, project, status string) []*Session {
 		cutoff = now.AddDate(0, 0, -days)
 	}
 	var projects map[string]bool
-	if list := splitProjects(project); list != nil {
+	if list := SplitProjects(project); list != nil {
 		projects = make(map[string]bool, len(list))
 		for _, p := range list {
 			projects[p] = true
@@ -342,7 +342,7 @@ func (ix *Index) Sessions(days int, project, status string) []*Session {
 		if projects != nil && !projects[s.Project] {
 			continue
 		}
-		c := ix.withStatus(s, now)
+		c := ix.WithStatus(s, now)
 		switch status {
 		case "active":
 			if c.Archived {
@@ -368,10 +368,10 @@ func (ix *Index) Sessions(days int, project, status string) []*Session {
 	return out
 }
 
-// splitProjects parses a project query param — one name, or several
+// SplitProjects parses a project query param — one name, or several
 // comma-separated (a group scope: the group's name plus its members) — into a
 // list, dropping empties; nil means unfiltered.
-func splitProjects(project string) []string {
+func SplitProjects(project string) []string {
 	if project == "" {
 		return nil
 	}
@@ -392,10 +392,10 @@ func (ix *Index) Session(id string) *Session {
 	if !ok {
 		return nil
 	}
-	return ix.withStatus(s, time.Now())
+	return ix.WithStatus(s, time.Now())
 }
 
-// The three accessors below are what lets repo resolution, search and the ship
+// The five accessors below are what lets repo resolution, search and the ship
 // records live outside this package: a method must sit with its receiver's
 // type, a plain function needn't. Each consumer declares the one-method
 // interface it needs and takes that instead of the whole index.
@@ -432,6 +432,16 @@ func (ix *Index) SessionRef(id string) *Session {
 // it rather than reaching into the index. nil when the cache is disabled,
 // which every caller treats as "no rows", never as an error.
 func (ix *Index) DB() *sql.DB { return ix.db }
+
+// Root returns the transcripts root directory this index was built from.
+func (ix *Index) Root() string { return ix.root }
+
+// UseCache points the index at its on-disk cache (index.db), opened
+// separately from New since opening it needs the config dir, which
+// construction doesn't take — same reasoning as TodoStore's UseStates and
+// UseEvents. nil is fine: every reader already treats a nil db as "cache
+// disabled", never as an error.
+func (ix *Index) UseCache(db *sql.DB) { ix.db = db }
 
 // Churn pivots the index by file instead of by session: which files were
 // edited across how many sessions, and the lines those edits moved. Like the

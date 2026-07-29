@@ -25,6 +25,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"watch-your-ai-code/internal/index"
 	"watch-your-ai-code/internal/sse"
 )
 
@@ -71,7 +72,7 @@ func defaultShipsDir() string {
 // this rather than the whole *Index lets ship records live outside the
 // index's package.
 type shipSessions interface {
-	Snapshot() []*Session
+	Snapshot() []*index.Session
 }
 
 // shipStore is the ships table of index.db (whose schema the index owns, see
@@ -237,7 +238,7 @@ func (st *shipStore) joinSessions(ships []ShipRecord) {
 		if r.Ts.IsZero() {
 			continue
 		}
-		var best *Session
+		var best *index.Session
 		for _, s := range sessions {
 			if s.Project != r.Project || r.Ts.Before(s.StartedAt) || r.Ts.After(s.EndedAt.Add(slack)) {
 				continue

@@ -14,6 +14,7 @@ import (
 
 	"watch-your-ai-code/internal/cowork"
 	"watch-your-ai-code/internal/httpx"
+	"watch-your-ai-code/internal/index"
 	"watch-your-ai-code/internal/sse"
 )
 
@@ -118,7 +119,7 @@ func unknownDocID(docs *DocStore, ids []string) string {
 // todoSessions is the slice of the session index the board reads when it
 // freezes a card's cost snapshot: the totals of the sessions linked to it.
 type todoSessions interface {
-	Session(id string) *Session
+	Session(id string) *index.Session
 }
 
 // refreezeTodo keeps a card's cost snapshot in step with the status it just
@@ -164,7 +165,7 @@ func refreezeTodo(todos *TodoStore, sessions todoSessions, todo Todo, status str
 	return todo
 }
 
-func registerAPI(mux *http.ServeMux, ix *Index, hub *sse.Hub, su *Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
+func registerAPI(mux *http.ServeMux, ix *index.Index, hub *sse.Hub, su *Summarizer, todos *TodoStore, states *StateStore, cycles *CycleStore, events *EventStore, views *ViewStore, drawings *DrawingStore, docs *DocStore, groups *GroupStore, projects *ProjectStore) {
 	// Repo resolution, ship records and transcript search read the index but are
 	// not part of it — each takes the narrow slice of it that it needs, so none
 	// of them (nor the handlers below, nor MCP) depends on the whole index.
@@ -1271,7 +1272,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sse.Hub, su *Summarizer, to
 	// broadcasts need the freshly parsed session.
 	rescans := newRescanCoalescer(func(path string) {
 		if s := ix.RescanSession(path); s != nil {
-			hub.Broadcast("session-updated", ix.withStatus(s, time.Now()))
+			hub.Broadcast("session-updated", ix.WithStatus(s, time.Now()))
 		}
 	})
 	mux.HandleFunc("POST /api/hook", func(w http.ResponseWriter, r *http.Request) {
@@ -1285,7 +1286,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sse.Hub, su *Summarizer, to
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if !httpx.WithinRoot(ix.root, ev.TranscriptPath) {
+		if !httpx.WithinRoot(ix.Root(), ev.TranscriptPath) {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -1295,7 +1296,7 @@ func registerAPI(mux *http.ServeMux, ix *Index, hub *sse.Hub, su *Summarizer, to
 		// Stop = a turn ended (the UI debounces it into a "finished" notify).
 		case "Notification", "Stop":
 			if s := ix.RescanSession(ev.TranscriptPath); s != nil {
-				hub.Broadcast("session-updated", ix.withStatus(s, time.Now()))
+				hub.Broadcast("session-updated", ix.WithStatus(s, time.Now()))
 				if ev.HookEventName == "Notification" {
 					hub.Broadcast("session-attention", map[string]any{
 						"id": s.ID, "title": s.Title, "project": s.Project, "message": ev.Message,

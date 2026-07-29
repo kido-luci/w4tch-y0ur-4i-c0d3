@@ -6,23 +6,35 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"watch-your-ai-code/internal/index"
 )
 
 // newShipsStore builds a ship store over an Index whose only job is the ships
-// table — an empty transcript root, a real index.db. The index comes back too,
-// for the one test that needs sessions to join against.
-func newShipsStore(t *testing.T) (*shipStore, *Index) {
+// table — an empty transcript root, a real index.db. TestShipsJoinSessions
+// swaps in a fakeSessions for the join case rather than reaching into this
+// index's (always-empty) session set, which now lives in another package.
+func newShipsStore(t *testing.T) *shipStore {
 	t.Helper()
 	root := t.TempDir()
-	db, err := openIndexDB(filepath.Join(t.TempDir(), "cfg"), root)
+	db, err := index.OpenDB(filepath.Join(t.TempDir(), "cfg"), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	ix := NewIndex(root)
-	ix.db = db
-	return newShipStore(ix.DB(), ix), ix
+	ix := index.New(root)
+	ix.UseCache(db)
+	return newShipStore(ix.DB(), ix)
 }
+
+// fakeSessions satisfies any of the narrow Snapshot() []*index.Session
+// interfaces this package declares (shipSessions here, repoSessions in
+// codegraph.go — also used by codegraph_test.go). It hands a test exact
+// session data without needing write access to an Index's session map, which
+// is unexported and now lives in another package.
+type fakeSessions []*index.Session
+
+func (f fakeSessions) Snapshot() []*index.Session { return f }
 
 func writeShip(t *testing.T, dir, name string, r ShipRecord) {
 	t.Helper()
@@ -36,7 +48,7 @@ func writeShip(t *testing.T, dir, name string, r ShipRecord) {
 }
 
 func TestShipsLifecycle(t *testing.T) {
-	sh, _ := newShipsStore(t)
+	sh := newShipsStore(t)
 	dir := t.TempDir()
 	now := time.Now()
 	writeShip(t, dir, "100-1-proj-a-release.json", ShipRecord{
@@ -84,7 +96,7 @@ func TestShipsLifecycle(t *testing.T) {
 }
 
 func TestShipsSkipsForeignFiles(t *testing.T) {
-	sh, _ := newShipsStore(t)
+	sh := newShipsStore(t)
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "broken.json"), []byte("{not json"), 0o644)
 	os.WriteFile(filepath.Join(dir, "foreign.json"), []byte(`{"hello":"world"}`), 0o644)
@@ -100,7 +112,7 @@ func TestShipsSkipsForeignFiles(t *testing.T) {
 }
 
 func TestShipsFilters(t *testing.T) {
-	sh, _ := newShipsStore(t)
+	sh := newShipsStore(t)
 	dir := t.TempDir()
 	now := time.Now()
 	writeShip(t, dir, "1-1-proj-a-release.json", ShipRecord{
@@ -131,7 +143,7 @@ func TestShipsFilters(t *testing.T) {
 }
 
 func TestShipsJoinSessions(t *testing.T) {
-	sh, ix := newShipsStore(t)
+	sh := newShipsStore(t)
 	dir := t.TempDir()
 	now := time.Now()
 	// Ran mid-session: joined. Ran an hour after any session ended: not.
@@ -151,13 +163,11 @@ func TestShipsJoinSessions(t *testing.T) {
 
 	// Two overlapping proj-a sessions cover the release; the later-started one
 	// must win. Both ended well before the second record's ts.
-	ix.sessions["s-early"] = &Session{
-		ID: "s-early", Project: "proj-a", Title: "early",
-		StartedAt: now.Add(-3 * time.Hour), EndedAt: now.Add(-50 * time.Minute),
-	}
-	ix.sessions["s-late"] = &Session{
-		ID: "s-late", Project: "proj-a", Title: "late",
-		StartedAt: now.Add(-2 * time.Hour), EndedAt: now.Add(-50 * time.Minute),
+	sh.sessions = fakeSessions{
+		{ID: "s-early", Project: "proj-a", Title: "early",
+			StartedAt: now.Add(-3 * time.Hour), EndedAt: now.Add(-50 * time.Minute)},
+		{ID: "s-late", Project: "proj-a", Title: "late",
+			StartedAt: now.Add(-2 * time.Hour), EndedAt: now.Add(-50 * time.Minute)},
 	}
 
 	res := sh.List("", 0, 10, false)

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"watch-your-ai-code/internal/httpx"
+	"watch-your-ai-code/internal/index"
 	"watch-your-ai-code/internal/sse"
 )
 
@@ -39,14 +40,14 @@ func main() {
 		cfgDir = defaultConfigDir()
 	}
 
-	ix := NewIndex(*root)
-	if db, err := openIndexDB(cfgDir, *root); err != nil {
+	ix := index.New(*root)
+	if db, err := index.OpenDB(cfgDir, *root); err != nil {
 		// No cache is a slower boot and an empty search, never a dead viewer.
 		log.Printf("index cache disabled: %v", err)
 	} else {
-		ix.db = db
+		ix.UseCache(db)
 	}
-	ix.refreshArchived()
+	ix.RefreshArchived()
 	start := time.Now()
 	updated, err := ix.Rescan()
 	if err != nil {
@@ -66,7 +67,7 @@ func main() {
 	}
 
 	hub := sse.New()
-	if err := watch(ix, hub); err != nil {
+	if err := index.Watch(ix, func(s *index.Session) { hub.Broadcast("session-updated", s) }); err != nil {
 		log.Printf("file watch disabled: %v", err)
 	}
 	if err := watchShips(shipStore, hub, sd); err != nil {
@@ -77,7 +78,7 @@ func main() {
 	// session store on its own cadence to keep active/archived status fresh.
 	go func() {
 		for range time.Tick(45 * time.Second) {
-			ix.refreshArchived()
+			ix.RefreshArchived()
 		}
 	}()
 

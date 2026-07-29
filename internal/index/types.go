@@ -1,4 +1,4 @@
-package main
+package index
 
 import (
 	"encoding/json"
@@ -236,30 +236,6 @@ type LedgerWeek struct {
 type LedgerResult struct {
 	Weeks []LedgerWeek `json:"weeks"`
 	Total LedgerWeek   `json:"total"` // Week/StartsOn empty; the window summed
-}
-
-// SearchHit is one match inside one session's transcript: where it was, when,
-// and the text around it. Snippets are cut at a fixed width — enough to
-// recognise the moment, never the whole message.
-type SearchHit struct {
-	SessionID string    `json:"sessionId"`
-	Title     string    `json:"title"`
-	Project   string    `json:"project"`
-	Ts        time.Time `json:"ts"`
-	Role      string    `json:"role"` // user | assistant
-	Snippet   string    `json:"snippet"`
-}
-
-// SearchResult is a query-time grep: nothing here is indexed, which is what
-// keeps the spec's "message text is never read into the index" literally true.
-// Matched counts every hit found, Hits carries at most `limit` of them — a
-// capped list must never read as the whole answer.
-type SearchResult struct {
-	Hits      []SearchHit `json:"hits"`
-	Matched   int         `json:"matched"`
-	Files     int         `json:"files"` // transcripts actually opened
-	Truncated bool        `json:"truncated"`
-	TookMs    int64       `json:"tookMs"`
 }
 
 // AgentRun is one subagent invocation, reconstructed from its own

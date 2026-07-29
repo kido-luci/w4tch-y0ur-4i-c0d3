@@ -1,4 +1,4 @@
-package main
+package index
 
 import (
 	"os"
@@ -397,7 +397,7 @@ func TestChurnFromEmpty(t *testing.T) {
 }
 
 func TestSessionsMultiProjectFilter(t *testing.T) {
-	ix := NewIndex("")
+	ix := New("")
 	now := time.Now()
 	for id, proj := range map[string]string{"sa": "repo-a", "sb": "repo-b", "sc": "repo-c"} {
 		ix.sessions[id] = &Session{ID: id, Project: proj, EndedAt: now}

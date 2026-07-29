@@ -189,19 +189,18 @@ func TestCGSummaryAndSymbols(t *testing.T) {
 func TestCGRepos(t *testing.T) {
 	indexed := newCGFixture(t)
 	plain := t.TempDir()
-	ix := NewIndex(t.TempDir())
 	now := time.Now()
-	ix.sessions = map[string]*Session{
+	sessions := fakeSessions{
 		// Newest session points at a plain dir, an older one at the indexed
 		// repo — the indexed root must win anyway.
-		"s1": {ID: "s1", Project: "proj", CWD: plain, EndedAt: now},
-		"s2": {ID: "s2", Project: "proj", CWD: indexed, EndedAt: now.Add(-time.Hour)},
+		{ID: "s1", Project: "proj", CWD: plain, EndedAt: now},
+		{ID: "s2", Project: "proj", CWD: indexed, EndedAt: now.Add(-time.Hour)},
 		// A folder whose cwd no longer exists resolves to nothing.
-		"s3": {ID: "s3", Project: "gone", CWD: filepath.Join(plain, "deleted"), EndedAt: now},
+		{ID: "s3", Project: "gone", CWD: filepath.Join(plain, "deleted"), EndedAt: now},
 		// Out of scope.
-		"s4": {ID: "s4", Project: "other", CWD: plain, EndedAt: now},
+		{ID: "s4", Project: "other", CWD: plain, EndedAt: now},
 	}
-	repos := newRepoResolver(ix).Repos("proj,gone")
+	repos := newRepoResolver(sessions).Repos("proj,gone")
 	if len(repos) != 1 {
 		t.Fatalf("repos = %+v", repos)
 	}
@@ -209,7 +208,7 @@ func TestCGRepos(t *testing.T) {
 		t.Errorf("repo = %+v", repos[0])
 	}
 	// Unscoped resolves every folder; "other" has no index but a live dir.
-	all := newRepoResolver(ix).Repos("")
+	all := newRepoResolver(sessions).Repos("")
 	if len(all) != 2 {
 		t.Fatalf("all = %+v", all)
 	}
@@ -228,12 +227,11 @@ func TestCGReposFallback(t *testing.T) {
 	}
 	newCGFixtureAt(t, sub) // the sub-repo carries its OWN index
 
-	ix := NewIndex(t.TempDir())
-	ix.sessions = map[string]*Session{
+	sessions := fakeSessions{
 		// Only the workspace root has a session; "admin-frontend" has none.
-		"s1": {ID: "s1", Project: filepath.Base(ws), CWD: ws, EndedAt: time.Now()},
+		{ID: "s1", Project: filepath.Base(ws), CWD: ws, EndedAt: time.Now()},
 	}
-	repos := newRepoResolver(ix).Repos("admin-frontend")
+	repos := newRepoResolver(sessions).Repos("admin-frontend")
 	if len(repos) != 1 {
 		t.Fatalf("fallback repos = %+v", repos)
 	}
@@ -241,7 +239,7 @@ func TestCGReposFallback(t *testing.T) {
 		t.Errorf("repo = %+v, want indexed %s", repos[0], sub)
 	}
 	// A folder with no matching indexed dir stays unresolved.
-	if got := newRepoResolver(ix).Repos("nonesuch"); len(got) != 0 {
+	if got := newRepoResolver(sessions).Repos("nonesuch"); len(got) != 0 {
 		t.Errorf("nonesuch resolved unexpectedly: %+v", got)
 	}
 }

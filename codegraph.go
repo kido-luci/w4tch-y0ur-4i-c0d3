@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"watch-your-ai-code/internal/httpx"
+	"watch-your-ai-code/internal/index"
 )
 
 // cgRepo is one repo a scope resolves to: where it lives, whether it carries
@@ -92,7 +93,7 @@ func cgDBPath(root string) string {
 // the working directories sessions ran in, and when. Taking this rather than
 // the whole *Index is what lets resolution live outside the index's package.
 type repoSessions interface {
-	Snapshot() []*Session
+	Snapshot() []*index.Session
 }
 
 // repoResolver maps a scope to on-disk repo roots. The git tab and the code
@@ -113,7 +114,7 @@ func newRepoResolver(ss repoSessions) *repoResolver { return &repoResolver{sessi
 // deduped across folders, indexed repos sort first.
 func (rr *repoResolver) Repos(project string) []cgRepo {
 	var want map[string]bool
-	if list := splitProjects(project); list != nil {
+	if list := index.SplitProjects(project); list != nil {
 		want = make(map[string]bool, len(list))
 		for _, p := range list {
 			want[p] = true

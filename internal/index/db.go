@@ -1,4 +1,4 @@
-package main
+package index
 
 // The on-disk index cache: parsed sessions plus searchable message text, one
 // SQLite file per config dir (<config-dir>/index.db). The cache is disposable
@@ -25,10 +25,10 @@ import (
 // wipe that must happen even when the binary didn't change — belt, suspender.
 const indexSchemaVersion = 1
 
-// openIndexDB opens <cfgDir>/index.db, creating or wiping as needed. A file
+// OpenDB opens <cfgDir>/index.db, creating or wiping as needed. A file
 // that can't even be initialized is removed and recreated once — a corrupt
 // cache must never keep the viewer from starting.
-func openIndexDB(cfgDir, root string) (*sql.DB, error) {
+func OpenDB(cfgDir, root string) (*sql.DB, error) {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package main
+package index
 
 import (
 	"log"
@@ -9,14 +9,12 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-
-	"watch-your-ai-code/internal/sse"
 )
 
-// watch re-parses sessions whose files change and broadcasts the refreshed
-// summary (with agent runs) over SSE. fsnotify is not recursive, so every
+// Watch re-parses sessions whose files change and calls onUpdate with the
+// refreshed summary (with agent runs). fsnotify is not recursive, so every
 // directory level is watched and new directories are added on Create.
-func watch(ix *Index, hub *sse.Hub) error {
+func Watch(ix *Index, onUpdate func(*Session)) error {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
@@ -41,7 +39,7 @@ func watch(ix *Index, hub *sse.Hub) error {
 		if s == nil {
 			return
 		}
-		hub.Broadcast("session-updated", ix.withStatus(s, time.Now()))
+		onUpdate(ix.WithStatus(s, time.Now()))
 	}
 
 	go func() {

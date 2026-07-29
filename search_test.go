@@ -5,19 +5,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"watch-your-ai-code/internal/index"
 )
 
 // newSearchIndex builds an Index over root with a real index.db in a temp
 // config dir, scanned and persisted — the full path a live search takes.
-func newSearchIndex(t *testing.T, root string) *Index {
+func newSearchIndex(t *testing.T, root string) *index.Index {
 	t.Helper()
-	db, err := openIndexDB(filepath.Join(t.TempDir(), "cfg"), root)
+	db, err := index.OpenDB(filepath.Join(t.TempDir(), "cfg"), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	ix := NewIndex(root)
-	ix.db = db
+	ix := index.New(root)
+	ix.UseCache(db)
 	if _, err := ix.Rescan(); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +149,7 @@ func TestSearchFiltersAndHostileInput(t *testing.T) {
 }
 
 func TestSearchWithoutDB(t *testing.T) {
-	ix := NewIndex(t.TempDir())
+	ix := index.New(t.TempDir())
 	se := newSearcher(ix.DB(), ix)
 	if res := se.Search("anything", 0, "", 10); len(res.Hits) != 0 {
 		t.Errorf("nil db must mean empty search, got %+v", res.Hits)

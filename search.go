@@ -17,7 +17,33 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	"watch-your-ai-code/internal/index"
 )
+
+// SearchHit is one match inside one session's transcript: where it was, when,
+// and the text around it. Snippets are cut at a fixed width — enough to
+// recognise the moment, never the whole message.
+type SearchHit struct {
+	SessionID string    `json:"sessionId"`
+	Title     string    `json:"title"`
+	Project   string    `json:"project"`
+	Ts        time.Time `json:"ts"`
+	Role      string    `json:"role"` // user | assistant
+	Snippet   string    `json:"snippet"`
+}
+
+// SearchResult is a query-time grep: nothing here is indexed, which is what
+// keeps the spec's "message text is never read into the index" literally true.
+// Matched counts every hit found, Hits carries at most `limit` of them — a
+// capped list must never read as the whole answer.
+type SearchResult struct {
+	Hits      []SearchHit `json:"hits"`
+	Matched   int         `json:"matched"`
+	Files     int         `json:"files"` // transcripts actually opened
+	Truncated bool        `json:"truncated"`
+	TookMs    int64       `json:"tookMs"`
+}
 
 // Search runs q against the message index, filtered by window and project,
 // newest first, at most limit hits. Matching is FTS5 token matching — every
@@ -27,7 +53,7 @@ import (
 // and project of the session a hit belongs to. SessionRef rather than Session
 // so labelling a hit doesn't copy the whole parse, agent runs included.
 type searchSessions interface {
-	SessionRef(id string) *Session
+	SessionRef(id string) *index.Session
 }
 
 // searcher queries the message FTS table of index.db (whose schema the index
@@ -62,7 +88,7 @@ func (se *searcher) Search(q string, days int, project string, limit int) Search
 	// when unfiltered.
 	projFilter := ""
 	args := []any{match, cutoff}
-	if projects := splitProjects(project); projects != nil {
+	if projects := index.SplitProjects(project); projects != nil {
 		ph := strings.TrimPrefix(strings.Repeat(",?", len(projects)), ",")
 		projFilter = ` AND session_id IN (SELECT id FROM sessions WHERE project IN (` + ph + `))`
 		for _, p := range projects {
