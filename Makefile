@@ -107,15 +107,16 @@ DRY_PORT ?= 4799
 release-dry:
 	@$(MAKE) --no-print-directory release-dry-run VERSION="$(DRY_VERSION)"
 
-release-dry-run: release-guards check-run release-build
+release-dry-guards:
+	@if lsof -nP -iTCP:$(DRY_PORT) -sTCP:LISTEN >/dev/null 2>&1; then \
+		echo "release-dry: something already holds 127.0.0.1:$(DRY_PORT) — stop it, or pass DRY_PORT=<free port>"; \
+		exit 1; fi
+
+release-dry-run: release-dry-guards release-guards check-run release-build
 	@set -e; \
 	host="watch-your-ai-code_$(VERSION)_$$(go env GOOS)_$$(go env GOARCH)"; \
 	tgz="dist/$$host.tar.gz"; \
 	[ -f "$$tgz" ] || { echo "release-dry: no tarball for this host ($$tgz)"; exit 1; }; \
-	if curl -s --max-time 2 -o /dev/null "http://127.0.0.1:$(DRY_PORT)/" 2>/dev/null \
-		|| lsof -nP -iTCP:$(DRY_PORT) -sTCP:LISTEN >/dev/null 2>&1; then \
-		echo "release-dry: something already holds 127.0.0.1:$(DRY_PORT) — stop it, or pass DRY_PORT=<free port>"; \
-		exit 1; fi; \
 	work="$(CURDIR)/.dev/relcheck"; rm -rf "$$work"; mkdir -p "$$work/cfg"; \
 	tar -xzf "$$tgz" -C "$$work"; \
 	bin="$$work/$$host"; chmod +x "$$bin"; \
@@ -170,4 +171,4 @@ dev:
 	wait
 
 .PHONY: build test run check check-run release-guards release release-build release-run \
-	release-dry release-dry-run dev dev-api dev-web
+	release-dry release-dry-guards release-dry-run dev dev-api dev-web
