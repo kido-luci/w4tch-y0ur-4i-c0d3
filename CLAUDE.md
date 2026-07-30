@@ -29,6 +29,14 @@ what breaks, silently, at build time.
   whitelist every git/GitHub drill-down validates `?repo` against.
 - `git`, `github`, `codegraph` — the three read-only repo views, each with its
   own handlers. `search`, `ships` — query layers over `index.db`'s handle.
+- `figfiles` — the `.fig`/`.pen` documents under each repo's `design/`, and the
+  **one place the server launches something on your machine** (`open -a
+  OpenPencil`). Everything else here only reads, so its whitelist is load-
+  bearing rather than decorative: `Open` re-lists the scope and refuses any path
+  that is not in the result, so `open` only ever sees a path the scope itself
+  produced. It validates *before* checking the platform, which is what lets that
+  test run on CI's Linux runner and not only on a Mac. Darwin-only by nature —
+  the release cross-compiles four platforms, so every other one answers 501.
 - `board` — the nine stores plus `data.db`'s schema and migrations, plus scope
   resolution. They share one database, so they share one package.
 - `httpapi` / `mcpserver` — the two transports, siblings. Neither imports the

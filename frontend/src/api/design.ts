@@ -1,4 +1,4 @@
-import { getJSON, sendJSON } from "./client";
+import { buildQuery, getJSON, sendJSON } from "./client";
 
 // --- design library ---------------------------------------------------------
 
@@ -124,4 +124,34 @@ export function renameDrawing(id: string, name: string): Promise<Drawing> {
 
 export function deleteDrawing(id: string): Promise<void> {
   return sendJSON<void>(`/api/drawings/${encodeURIComponent(id)}`, "DELETE");
+}
+
+// --- design files -----------------------------------------------------------
+
+/**
+ * One `.fig`/`.pen` document under a repo's `design/` folder. Unlike a Drawing
+ * these are plain files on disk, not library entries: the server lists them and
+ * hands one to the OpenPencil desktop app, and owns nothing about their content.
+ */
+export interface DesignFile {
+  root: string;
+  folder: string;
+  name: string;
+  path: string;
+  size: number;
+  modifiedAt: string;
+}
+
+/** The scope's design documents, newest first. */
+export async function getDesignFiles(project: string): Promise<DesignFile[]> {
+  const res = await getJSON<{ files: DesignFile[] }>(`/api/design-files${buildQuery({ project })}`);
+  return res.files ?? [];
+}
+
+/**
+ * Opens the file in OpenPencil. `path` must come from getDesignFiles — the
+ * server re-resolves the scope and rejects anything else.
+ */
+export function openDesignFile(project: string, path: string): Promise<void> {
+  return sendJSON<void>(`/api/design-files/open${buildQuery({ project, path })}`, "POST");
 }
