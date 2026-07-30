@@ -142,16 +142,23 @@ export interface DesignFile {
   modifiedAt: string;
 }
 
-/** The scope's design documents, newest first. */
-export async function getDesignFiles(project: string): Promise<DesignFile[]> {
+/**
+ * The scope's design documents, newest first. `project` is the Claude FOLDER
+ * list from getScopeParam() — the server matches it against session folders,
+ * so a rail label like `memoirme-app` finds nothing while its folder
+ * `memoirme copy` does. Undefined = unscoped, every repo.
+ */
+export async function getDesignFiles(project: string | undefined): Promise<DesignFile[]> {
   const res = await getJSON<{ files: DesignFile[] }>(`/api/design-files${buildQuery({ project })}`);
   return res.files ?? [];
 }
 
 /**
  * Opens the file in OpenPencil. `path` must come from getDesignFiles — the
- * server re-resolves the scope and rejects anything else.
+ * server re-resolves the scope and rejects anything else — and `project` must
+ * be the same folder param the listing used, or the re-resolve sees a
+ * different repo set than the one that produced the path.
  */
-export function openDesignFile(project: string, path: string): Promise<void> {
+export function openDesignFile(project: string | undefined, path: string): Promise<void> {
   return sendJSON<void>(`/api/design-files/open${buildQuery({ project, path })}`, "POST");
 }
