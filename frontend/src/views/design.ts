@@ -30,7 +30,7 @@ import {
 import type { DesignFile, Drawing, Todo } from "../api";
 import { escapeHtml, formatRelativeTime, truncate } from "../domain/format";
 import { announce, showError } from "../app/live";
-import { getScope, getScopeSet, navigate } from "../scope";
+import { getScope, getScopeParam, getScopeSet, navigate } from "../scope";
 import { getTheme } from "../app/theme";
 import type { ExcalidrawIsland } from "../ui/excalidrawIsland";
 
@@ -48,6 +48,12 @@ export function renderDesignView(container: HTMLElement): () => void {
   // scope covers its name plus its members), the label feeds "+ new".
   const scope = getScope();
   const scopeSet = getScopeSet();
+  // The Claude FOLDERS the scope covers — what the design-files endpoints
+  // match against, like every other repo-backed endpoint. The label is not it:
+  // `memoirme-app` is a rail label whose folder is `memoirme copy`, and the
+  // one smoke-tested scope had the two spelled identically, which is how
+  // passing `scope` here survived review.
+  const scopeParam = getScopeParam();
 
   container.innerHTML = `
     <div class="page">
@@ -416,7 +422,7 @@ export function renderDesignView(container: HTMLElement): () => void {
   }
 
   function loadDesignFiles(): void {
-    getDesignFiles(scope)
+    getDesignFiles(scopeParam)
       .then(renderFiles)
       .catch(() => {
         // A failure here must not take the library down with it — the drawings
@@ -431,7 +437,7 @@ export function renderDesignView(container: HTMLElement): () => void {
     if (!btn) return;
     const path = btn.dataset.path ?? "";
     const name = btn.querySelector(".design-file-name")?.textContent ?? "file";
-    openDesignFile(scope, path)
+    openDesignFile(scopeParam, path)
       .then(() => {
         filesMsgEl.replaceChildren();
         announce(`opening ${name}`);
