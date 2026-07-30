@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"watch-your-ai-code/internal/board"
+	"watch-your-ai-code/internal/fdgauge"
 	"watch-your-ai-code/internal/httpapi"
 	"watch-your-ai-code/internal/httpx"
 	"watch-your-ai-code/internal/index"
@@ -78,6 +79,13 @@ func main() {
 	if err := ships.Watch(shipStore, sd, func(r *ships.ShipRecord) { hub.Broadcast("ship-recorded", r) }); err != nil {
 		log.Printf("ships watch disabled: %v", err)
 	}
+
+	// After both watchers, so the boot census includes their baseline: on
+	// macOS kqueue holds an fd per WATCHED FILE, which makes this process's
+	// fd count scale with the transcript tree. When fds run out the failures
+	// look unrelated (empty design library, accept errors) and a restart
+	// destroys the evidence — the census in the log is the post-mortem.
+	fdgauge.Every(10 * time.Minute)
 
 	// Archiving happens in the app, not via transcript writes, so poll the
 	// session store on its own cadence to keep active/archived status fresh.

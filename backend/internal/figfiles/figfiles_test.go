@@ -1,9 +1,13 @@
 package figfiles
 
 import (
+	"bytes"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +78,38 @@ func TestListSkipsRepoWithoutDesignDir(t *testing.T) {
 
 	if got := names(List([]repos.Repo{without, with})); len(got) != 1 || got[0] != "a.fig" {
 		t.Errorf("got %v, want only [a.fig]", got)
+	}
+}
+
+// A missing design/ is the normal case and stays out of the log; any other
+// read error must land in it — an empty answer caused by an error (fd
+// exhaustion, permissions) must be distinguishable from an empty library.
+func TestListLogsReadErrors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs unix permission modes")
+	}
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prev)
+
+	List([]repos.Repo{{Root: t.TempDir(), Folder: "bare"}})
+	if buf.Len() != 0 {
+		t.Fatalf("missing design/ logged %q, want silence", buf.String())
+	}
+
+	repo := repoWith(t, "proj", "home.fig")
+	dir := filepath.Join(repo.Root, designDir)
+	if err := os.Chmod(dir, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) }) // or TempDir cleanup cannot delete it
+
+	if got := List([]repos.Repo{repo}); len(got) != 0 {
+		t.Fatalf("unreadable design/ returned %v, want nothing", got)
+	}
+	if !strings.Contains(buf.String(), "figfiles: list") {
+		t.Fatalf("unreadable design/ logged %q, want a figfiles: list error", buf.String())
 	}
 }
 
