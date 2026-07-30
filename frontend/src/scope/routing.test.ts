@@ -126,6 +126,22 @@ describe("parseLocation", () => {
     expect(loc.detail).toBe("a/b");
   });
 
+  it("still admits `design`, the pre-rename spelling of `wireframe`", () => {
+    // The wireframe tab was spelled `design` before the OpenPencil `ui` tab
+    // split off. Old bookmarks and drawing links must keep parsing as a TAB;
+    // dropping the alias would re-read them as scope="design" and dead-land
+    // every one of them.
+    expect(parseLocation("/project/design").tab).toBe("design");
+    expect(parseLocation("/project/x/design/abc")).toEqual({
+      family: "project",
+      scope: "x",
+      tab: "design",
+      detail: "abc",
+    });
+    expect(parseLocation("/project/wireframe").tab).toBe("wireframe");
+    expect(parseLocation("/project/ui").tab).toBe("ui");
+  });
+
   it("returns an empty family for the root and for unknown families", () => {
     expect(parseLocation("/")).toEqual({ family: "", scope: "", tab: "", detail: "" });
     expect(parseLocation("/nonsense/x").family).toBe("");
