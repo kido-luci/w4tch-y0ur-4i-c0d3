@@ -478,7 +478,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         const d = drawingList.find((x) => x.id === id);
         return `
           <div class="panel-draw-row">
-            <a class="panel-draw" href="/project/design/${encodeURIComponent(id)}" title="open in design">
+            <a class="panel-draw" href="/project/wireframe/${encodeURIComponent(id)}" title="open in design">
               ✎ ${escapeHtml(truncate(d?.name ?? `${id.slice(0, 8)}…`, 34))}
             </a>
             <button type="button" class="panel-draw-unlink" data-did="${escapeHtml(id)}" title="unlink">✕</button>
@@ -872,7 +872,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         .then(async (d) => {
           const cur = todos.find((x) => x.id === t.id);
           await patchTodo(t.id, { linkedDrawingIds: [...(cur?.linkedDrawingIds ?? []), d.id] });
-          navigate(`/project/design/${encodeURIComponent(d.id)}`);
+          navigate(`/project/wireframe/${encodeURIComponent(d.id)}`);
         })
         .catch((err: unknown) => console.error("new wireframe failed", err));
     });

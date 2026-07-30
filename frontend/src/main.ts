@@ -10,6 +10,7 @@ import { renderBoardView } from "./views/board";
 import { renderCodegraphView } from "./views/codegraph";
 import { renderCyclesView } from "./views/cycles";
 import { renderDesignEditorView, renderDesignView } from "./views/design";
+import { renderUIView } from "./views/ui";
 import { renderSessionDetailView } from "./views/detail";
 import { renderDocsView } from "./views/docs";
 import { renderGitView } from "./views/git";
@@ -64,7 +65,8 @@ app.innerHTML = `
     <a class="px-subnav-link" href="/claude/search" data-nav="search" data-fam="claude">search</a>
     <a class="px-subnav-link" href="/project/board" data-nav="board" data-fam="project">board</a>
     <a class="px-subnav-link" href="/project/cycles" data-nav="cycles" data-fam="project">cycles</a>
-    <a class="px-subnav-link" href="/project/design" data-nav="design" data-fam="project">design</a>
+    <a class="px-subnav-link" href="/project/wireframe" data-nav="design" data-fam="project">wireframe</a>
+    <a class="px-subnav-link" href="/project/ui" data-nav="ui" data-fam="project">ui</a>
     <a class="px-subnav-link" href="/project/docs" data-nav="docs" data-fam="project">docs</a>
     <a class="px-subnav-link" href="/project/ships" data-nav="ships" data-fam="project">ships</a>
     <a class="px-subnav-link" href="/project/codegraph" data-nav="codegraph" data-fam="project">code graph</a>
@@ -126,6 +128,8 @@ function render(): void {
         ? "cycles"
       : route.view === "design" || route.view === "designEditor"
         ? "design"
+        : route.view === "ui"
+          ? "ui"
         : route.view === "docs"
           ? "docs"
           : route.view === "insights"
@@ -167,6 +171,7 @@ function render(): void {
   railEl.hidden = !(
     route.view === "board" ||
     route.view === "design" ||
+    route.view === "ui" ||
     route.view === "docs" ||
     route.view === "codegraph" ||
     route.view === "git" ||
@@ -184,6 +189,8 @@ function render(): void {
           ? renderDesignView(view)
           : route.view === "designEditor"
             ? renderDesignEditorView(view, route.id)
+          : route.view === "ui"
+            ? renderUIView(view)
             : route.view === "docs"
               ? renderDocsView(view, route.id)
               : route.view === "insights"

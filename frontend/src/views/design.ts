@@ -1,4 +1,4 @@
-// View 4 — design library (routes `/project/design` and `/project/design/<id>`): local
+// View 4 — design library (routes `/project/wireframe` and `/project/wireframe/<id>`): local
 // Excalidraw wireframes. The library is a plain grid over /api/drawings
 // metadata (SSE-synced like the board); opening a drawing lazy-loads the
 // React/Excalidraw island (see ui/excalidrawIsland.ts) so the rest of the app
@@ -11,7 +11,6 @@ import {
   DrawingConflictError,
   drawingThumbnailURL,
   duplicateDrawing,
-  getDesignFiles,
   getDrawingContent,
   getDrawings,
   getProjects,
@@ -20,17 +19,16 @@ import {
   isPublished,
   isPublishFresh,
   moveDrawing,
-  openDesignFile,
   publishDrawing,
   putDrawingContent,
   renameDrawing,
   setDrawingTopics,
   subscribeRawEvents,
 } from "../api";
-import type { DesignFile, Drawing, Todo } from "../api";
+import type { Drawing, Todo } from "../api";
 import { escapeHtml, formatRelativeTime, truncate } from "../domain/format";
 import { announce, showError } from "../app/live";
-import { getScope, getScopeParam, getScopeSet, navigate } from "../scope";
+import { getScope, getScopeSet, navigate } from "../scope";
 import { getTheme } from "../app/theme";
 import type { ExcalidrawIsland } from "../ui/excalidrawIsland";
 
@@ -48,12 +46,6 @@ export function renderDesignView(container: HTMLElement): () => void {
   // scope covers its name plus its members), the label feeds "+ new".
   const scope = getScope();
   const scopeSet = getScopeSet();
-  // The Claude FOLDERS the scope covers — what the design-files endpoints
-  // match against, like every other repo-backed endpoint. The label is not it:
-  // `memoirme-app` is a rail label whose folder is `memoirme copy`, and the
-  // one smoke-tested scope had the two spelled identically, which is how
-  // passing `scope` here survived review.
-  const scopeParam = getScopeParam();
 
   container.innerHTML = `
     <div class="page">
@@ -63,10 +55,6 @@ export function renderDesignView(container: HTMLElement): () => void {
           <button type="button" class="nav-link" id="dw-create">+ new</button>
         </div>
       </header>
-      <section class="design-files" id="dw-files" hidden>
-        <div id="dw-files-msg"></div>
-        <div id="dw-files-list"></div>
-      </section>
       <section class="design-sections" id="dw-grid">
         <div class="empty-state">loading…</div>
       </section>
@@ -75,11 +63,6 @@ export function renderDesignView(container: HTMLElement): () => void {
   `;
 
   const gridEl = container.querySelector<HTMLElement>("#dw-grid")!;
-  const filesEl = container.querySelector<HTMLElement>("#dw-files")!;
-  // A failed open must not take the list down with it, so the message gets its
-  // own host — showError replaces its host's children.
-  const filesMsgEl = container.querySelector<HTMLElement>("#dw-files-msg")!;
-  const filesListEl = container.querySelector<HTMLElement>("#dw-files-list")!;
   const datalistEl = container.querySelector<HTMLDataListElement>("#design-groups")!;
   const nameEl = container.querySelector<HTMLInputElement>("#dw-name")!;
   const createBtn = container.querySelector<HTMLButtonElement>("#dw-create")!;
@@ -95,7 +78,7 @@ export function renderDesignView(container: HTMLElement): () => void {
       // unscoped creation stays ungrouped.
       const d = await createDrawing(name, scope);
       nameEl.value = "";
-      navigate(`/project/design/${encodeURIComponent(d.id)}`);
+      navigate(`/project/wireframe/${encodeURIComponent(d.id)}`);
     } catch (err) {
       console.error("create drawing failed", err);
     }
@@ -358,7 +341,7 @@ export function renderDesignView(container: HTMLElement): () => void {
       return;
     }
     if (renamingId !== d.id && movingId !== d.id && taggingId !== d.id) {
-      navigate(`/project/design/${encodeURIComponent(d.id)}`);
+      navigate(`/project/wireframe/${encodeURIComponent(d.id)}`);
     }
   });
 
@@ -375,75 +358,6 @@ export function renderDesignView(container: HTMLElement): () => void {
       });
   }
   loadDrawings();
-
-  // --- design files ---------------------------------------------------------
-  // The `.fig`/`.pen` documents in the scope's repos (`<repo>/design/`), opened
-  // in OpenPencil rather than here. They are files on disk, not library entries,
-  // so there is no SSE channel to follow: the list is what it was at mount, and
-  // a reload picks up new ones. The section stays hidden unless the scope has
-  // some — a heading over nothing would read as a broken feature.
-  function renderFiles(files: DesignFile[]): void {
-    filesMsgEl.replaceChildren();
-    if (files.length === 0) {
-      filesEl.hidden = true;
-      filesListEl.innerHTML = "";
-      return;
-    }
-    // One group per repo, in first-seen (most-recent-file) order; a single-repo
-    // scope is the common case and gets no heading it cannot use.
-    const byRepo = new Map<string, DesignFile[]>();
-    for (const f of files) {
-      const group = byRepo.get(f.folder);
-      if (group) group.push(f);
-      else byRepo.set(f.folder, [f]);
-    }
-    const rows = (group: DesignFile[]): string =>
-      group
-        .map(
-          (f) => `
-            <button type="button" class="design-file" data-path="${escapeHtml(f.path)}">
-              <span class="design-file-name">${escapeHtml(f.name)}</span>
-              <span class="design-file-meta">${formatRelativeTime(f.modifiedAt)}</span>
-            </button>`,
-        )
-        .join("");
-    filesListEl.innerHTML = `
-      <h2 class="design-topic-head">design files<span class="design-topic-count">${files.length}</span></h2>
-      ${[...byRepo]
-        .map(([folder, group]) =>
-          byRepo.size > 1
-            ? `<div class="design-file-repo"><span class="design-file-repo-name">${escapeHtml(
-                folder,
-              )}</span>${rows(group)}</div>`
-            : `<div class="design-file-repo">${rows(group)}</div>`,
-        )
-        .join("")}`;
-    filesEl.hidden = false;
-  }
-
-  function loadDesignFiles(): void {
-    getDesignFiles(scopeParam)
-      .then(renderFiles)
-      .catch(() => {
-        // A failure here must not take the library down with it — the drawings
-        // grid is the view's main content and loads independently.
-        filesEl.hidden = true;
-      });
-  }
-  loadDesignFiles();
-
-  filesEl.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".design-file");
-    if (!btn) return;
-    const path = btn.dataset.path ?? "";
-    const name = btn.querySelector(".design-file-name")?.textContent ?? "file";
-    openDesignFile(scopeParam, path)
-      .then(() => {
-        filesMsgEl.replaceChildren();
-        announce(`opening ${name}`);
-      })
-      .catch((err: Error) => showError(filesMsgEl, err.message, loadDesignFiles));
-  });
 
   // Project names feed the move/create group datalist; a failure just leaves
   // the datalist to the groups already in use.
@@ -468,7 +382,7 @@ export function renderDesignEditorView(container: HTMLElement, id: string): () =
   container.innerHTML = `
     <div class="page design-editor-page">
       <div class="design-editor-head">
-        <a class="nav-link" href="/project/design">← design</a>
+        <a class="nav-link" href="/project/wireframe">← wireframe</a>
         <span class="design-editor-name" id="dw-title"></span>
         <span class="design-editor-cards" id="dw-cards"></span>
         <span class="design-save" id="dw-save"></span>
@@ -630,7 +544,7 @@ export function renderDesignEditorView(container: HTMLElement, id: string): () =
       // Deleted elsewhere — nothing left to save to, so leave the editor rather
       // than letting the next save 404 into an endless "retrying…" (matches the
       // docs wiki, which navigates away on a foreign delete).
-      navigate("/project/design");
+      navigate("/project/wireframe");
       return;
     }
     titleEl.textContent = meta.name;

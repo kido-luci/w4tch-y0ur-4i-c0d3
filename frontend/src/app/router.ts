@@ -6,6 +6,7 @@ export type Route =
   | { view: "board"; cardId?: string }
   | { view: "design" }
   | { view: "designEditor"; id: string }
+  | { view: "ui" }
   | { view: "docs"; id?: string }
   | { view: "insights" }
   | { view: "search" }
@@ -34,8 +35,14 @@ export function parseRoute(pathname: string): Route {
         return loc.detail ? { view: "board", cardId: loc.detail } : { view: "board" };
       case "cycles":
         return { view: "cycles" };
+      // `design` is the pre-split spelling of `wireframe`; parseLocation still
+      // admits it so a pre-rename bookmark (or a drawing link in an old doc)
+      // lands on the same views instead of the default.
+      case "wireframe":
       case "design":
         return loc.detail ? { view: "designEditor", id: loc.detail } : { view: "design" };
+      case "ui":
+        return { view: "ui" };
       case "docs":
         return loc.detail ? { view: "docs", id: loc.detail } : { view: "docs" };
       case "ships":
@@ -67,8 +74,12 @@ export function migrateLegacyHash(): void {
     case "session":
       path = buildPath("claude", scope, tab, detail);
       break;
-    case "board":
     case "design":
+      // Hash-era URLs predate the design → wireframe rename; migrate straight
+      // to the new spelling rather than minting a fresh legacy path.
+      path = buildPath("project", scope, "wireframe", detail);
+      break;
+    case "board":
     case "docs":
     case "ships":
     case "codegraph":

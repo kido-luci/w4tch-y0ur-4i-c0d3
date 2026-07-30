@@ -3,7 +3,20 @@
 // The tab sets let parseLocation tell a scope-less transient path (/project/git,
 // before syncScopeToURL injects the scope) apart from a scoped one (/project/x/git):
 // if the segment after the family names a known tab, there's no scope segment.
-const PROJECT_TABS = new Set(["board", "cycles", "design", "docs", "ships", "codegraph", "git"]);
+// `design` is the legacy spelling of `wireframe` (renamed when the OpenPencil
+// `ui` tab split off) — still parsed so old bookmarks and drawing deep links
+// resolve; the router maps it to the same views and nothing links to it.
+const PROJECT_TABS = new Set([
+  "board",
+  "cycles",
+  "wireframe",
+  "design",
+  "ui",
+  "docs",
+  "ships",
+  "codegraph",
+  "git",
+]);
 const CLAUDE_TABS = new Set(["sessions", "insights", "search", "session"]);
 
 export interface Loc {
