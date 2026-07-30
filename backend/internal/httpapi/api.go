@@ -15,6 +15,7 @@ import (
 	"watch-your-ai-code/internal/board"
 	"watch-your-ai-code/internal/codegraph"
 	"watch-your-ai-code/internal/cowork"
+	"watch-your-ai-code/internal/figfiles"
 	"watch-your-ai-code/internal/git"
 	"watch-your-ai-code/internal/github"
 	"watch-your-ai-code/internal/httpx"
@@ -1072,6 +1073,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	})
 
 	codegraph.Register(mux, rr)
+	figfiles.Register(mux, rr)
 	git.Register(mux, rr)
 	github.Register(mux, rr)
 

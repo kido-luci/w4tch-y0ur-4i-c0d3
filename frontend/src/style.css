@@ -3615,6 +3615,61 @@ a.flow-node {
   color: var(--text);
 }
 
+/* ---------- design files (.fig / .pen, opened in OpenPencil) ---------- */
+
+/* A list, not a grid: these have no thumbnail to show and the scope rarely has
+   many. Sits above the wireframe library and hides itself when empty. */
+.design-files {
+  margin-bottom: var(--px-sp-7);
+}
+
+.design-file-repo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: var(--px-sp-5);
+}
+
+.design-file-repo-name {
+  font: 400 10px var(--mono);
+  color: var(--text-muted);
+  opacity: 0.7;
+  margin-bottom: var(--px-sp-3);
+}
+
+.design-file {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--px-sp-5);
+  width: 100%;
+  padding: var(--px-sp-4) var(--px-sp-5);
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.design-file:hover {
+  background: var(--row-hover);
+}
+
+.design-file-name {
+  font: 400 12px var(--mono);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.design-file-meta {
+  flex: none;
+  font: 400 10px var(--mono);
+  color: var(--text-muted);
+}
+
 /* ---------- design library (Excalidraw wireframes) ---------- */
 
 /* The grid sectioned by topic tag: a heading per tag, its cards below.
