@@ -265,6 +265,26 @@ stale assets. Confirm the served bundle changed:
 The hash only moves when the built bundle changed — a Go-only fix legitimately
 leaves it identical, so check the behaviour too, not just the hash.
 
+**Skipping that restart doesn't leave you on stale assets — it leaves you with a
+server that accepts connections and never answers.** `make check` and `make
+build` write `go build -o ../watch-your-ai-code`, which is the exact path the
+agent is running, so a build replaces the live binary underneath an 18-hour-old
+process. Its accept loop survives on code already paged in; serving a request
+needs pages that no longer match the file, and the request hangs forever. What
+that looks like:
+
+    launchctl list | grep watch-your-ai-code   # running, with a pid
+    lsof -nP -iTCP -sTCP:LISTEN -p <pid>       # LISTEN on 127.0.0.1:4777
+    curl -sv -m 5 http://127.0.0.1:4777/       # "Connected" … then nothing
+    ps -o stat,pcpu -p <pid>                   # S, 0.0%
+
+Every signal says the server is up, which is what makes it expensive: the
+tempting reading is "the process died" and the tempting fix is to `kill` it —
+the one move the paragraph above rules out. It is not down, it is a build
+artifact. `kickstart -k` is the whole fix. So the restart above is not hygiene
+for the frontend's sake; it is what stops a `make check` from taking your
+everyday instance down until you notice.
+
 ## Tests — two things that pass locally and fail on CI
 
 **A send on a shared unbuffered channel goes to whichever goroutine parked
