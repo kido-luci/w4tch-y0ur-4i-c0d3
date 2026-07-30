@@ -20,13 +20,37 @@ func Watch(ix *Index, onUpdate func(*Session)) error {
 		return err
 	}
 
+	// On macOS a directory watch is kqueue underneath, which holds an open fd
+	// for the directory AND every file in it — so Add failing here is the
+	// first symptom of fd exhaustion, and one summary line per walk keeps the
+	// log bounded even when every single Add fails.
 	addTree := func(dir string) {
+		var added, failed int
+		var firstErr error
 		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-			if err == nil && d.IsDir() {
-				w.Add(path)
+			if err != nil {
+				failed++
+				if firstErr == nil {
+					firstErr = err
+				}
+				return nil
 			}
+			if !d.IsDir() {
+				return nil
+			}
+			if werr := w.Add(path); werr != nil {
+				failed++
+				if firstErr == nil {
+					firstErr = werr
+				}
+				return nil
+			}
+			added++
 			return nil
 		})
+		if failed > 0 {
+			log.Printf("watch: %d of %d watches failed under %s (first: %v)", failed, added+failed, dir, firstErr)
+		}
 	}
 	addTree(ix.root)
 

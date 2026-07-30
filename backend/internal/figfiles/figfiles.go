@@ -15,6 +15,8 @@ package figfiles
 import (
 	"errors"
 	"fmt"
+	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -71,6 +73,13 @@ func List(rs []repos.Repo) []File {
 		dir := filepath.Join(repo.Root, designDir)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
+			// A repo without design/ contributes nothing, silently. Any other
+			// error must reach the log: fd exhaustion (EMFILE) once made every
+			// scope answer an empty library, indistinguishable from the normal
+			// case until the process was restarted.
+			if !errors.Is(err, fs.ErrNotExist) {
+				log.Printf("figfiles: list %s: %v", dir, err)
+			}
 			continue
 		}
 		for _, e := range entries {
