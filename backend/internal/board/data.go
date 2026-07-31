@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-const dataSchemaVersion = 13
+const dataSchemaVersion = 14
 
 // OpenDB opens (creating if needed) <cfgDir>/data.db and migrates its
 // schema forward. Unlike the index cache, an error here is fatal to the
@@ -433,6 +433,35 @@ CREATE TABLE IF NOT EXISTS settings(
 	value TEXT NOT NULL DEFAULT ''
 );
 PRAGMA user_version = 13;`); err != nil {
+			return err
+		}
+	}
+	if v < 14 {
+		// The repo a project is bound to, recorded rather than re-resolved per
+		// request: resolution stats the filesystem for every candidate session
+		// cwd, which is fine on a five-minute sync and not fine on the session
+		// endpoints' hot path. link_kind is how the binding was reached
+		// (linked/local/guessed/none — see ProjectStore.SetRepoLink), so a
+		// name-guessed match can never read as a proven one; repo_count says how
+		// many repos the project's folders resolve to, since root/slug describe
+		// only the first. Guarded ADD COLUMNs like the ones above.
+		for _, col := range []struct{ name, ddl string }{
+			{"repo_root", `ALTER TABLE projects ADD COLUMN repo_root TEXT NOT NULL DEFAULT ''`},
+			{"repo_slug", `ALTER TABLE projects ADD COLUMN repo_slug TEXT NOT NULL DEFAULT ''`},
+			{"link_kind", `ALTER TABLE projects ADD COLUMN link_kind TEXT NOT NULL DEFAULT 'none'`},
+			{"repo_count", `ALTER TABLE projects ADD COLUMN repo_count INTEGER NOT NULL DEFAULT 0`},
+		} {
+			has, err := columnExists(db, "projects", col.name)
+			if err != nil {
+				return err
+			}
+			if !has {
+				if _, err := db.Exec(col.ddl); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := db.Exec(`PRAGMA user_version = 14`); err != nil {
 			return err
 		}
 	}

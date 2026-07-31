@@ -148,17 +148,28 @@ func main() {
 	})
 	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, settingsStore, shipStore, ix, hub))
 
-	// syncPrivate derives every project's private flag from its GitHub repo's
-	// visibility: every resolved repo public → public; a private repo, no
-	// GitHub remote, no resolvable repo at all, or a failed gh call → private —
-	// the safe answer for what presentation mode exists to do (public
-	// screenshots must only ever show work that is already public). The gh
-	// answer is cached per slug (github.IsPrivate), so a tick is cheap.
+	// syncProjectRepos derives, in one pass over the registry, the two things a
+	// project cannot state about itself: which repo it is bound to, and whether
+	// that repo is public. Both come out of the same resolution, and both are
+	// STORED on the row rather than recomputed per request — resolving stats the
+	// filesystem once per candidate session cwd, which is fine on a five-minute
+	// tick and not fine on the session endpoints' hot path.
+	//
+	// Visibility keeps its safe default: every resolved repo public → public; a
+	// private repo, no GitHub remote, no resolvable repo at all, or a failed gh
+	// call → private — public screenshots must only ever show work that is
+	// already public. The gh answer is cached per slug (github.IsPrivate), so a
+	// tick is cheap.
+	//
+	// The link records how far the binding could be PROVEN: a root the name
+	// fallback guessed stays `guessed` and carries no slug, so nothing
+	// downstream can mistake it for ownership.
 	rr := repos.New(ix)
-	syncPrivate := func() bool {
+	syncProjectRepos := func() bool {
 		changed := false
 		for _, p := range projectStore.List() {
 			private := true
+			root, slug, kind, count := "", "", board.LinkNone, 0
 			if len(p.Folders) > 0 { // Repos("") would mean ALL folders, not none
 				if roots := rr.Repos(strings.Join(p.Folders, ",")); len(roots) > 0 {
 					allPublic := true
@@ -170,9 +181,21 @@ func main() {
 						}
 					}
 					private = !allPublic
+					first := roots[0]
+					root, count = first.Root, len(roots)
+					if first.Guessed {
+						kind = board.LinkGuessed
+					} else if s, ok := github.Slug(first.Root); ok {
+						slug, kind = s, board.LinkLinked
+					} else {
+						kind = board.LinkLocal
+					}
 				}
 			}
 			if projectStore.SetPrivate(p.Name, private) {
+				changed = true
+			}
+			if projectStore.SetRepoLink(p.Name, root, slug, kind, count) {
 				changed = true
 			}
 		}
@@ -182,15 +205,16 @@ func main() {
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
 	// under an unselectable scope for long. Add-only; broadcast only on change.
-	// The same tick re-derives GitHub visibility, and boot runs one sync
-	// immediately so presentation mode doesn't spend its first minutes wrong.
+	// The same tick re-derives each project's repo link and GitHub visibility,
+	// and boot runs one sync immediately so presentation mode doesn't spend its
+	// first minutes wrong.
 	go func() {
-		if syncPrivate() {
+		if syncProjectRepos() {
 			hub.Broadcast("projects-updated", projectStore.List())
 		}
 		for range time.Tick(5 * time.Minute) {
 			changed := board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0
-			if syncPrivate() {
+			if syncProjectRepos() {
 				changed = true
 			}
 			if changed {

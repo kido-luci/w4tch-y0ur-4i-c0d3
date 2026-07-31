@@ -116,6 +116,50 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     return visibleProjects()[0]?.name ?? "";
   }
 
+  // feather "git-branch" — the mark that says this project is bound to a repo
+  // on disk, and the server proved it.
+  const GIT_SVG =
+    `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" ` +
+    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/>` +
+    `<circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`;
+
+  /** The rail's git mark, drawn from the link the server derived (linkKind).
+      A `guessed` link — repos matched a directory by NAME alone — draws faint
+      and says so, because a guess that looks like a proof is precisely how a
+      stale registry row passed for an empty project. `none` draws nothing: the
+      absence is the signal in a narrow rail, and the manager panel below
+      spells the state out in words. */
+  const gitMark = (p: Project): string => {
+    const kind = p.linkKind ?? "none";
+    if (kind === "none") return "";
+    const more = p.repoCount > 1 ? ` · +${p.repoCount - 1} more` : "";
+    const title =
+      kind === "linked"
+        ? `${p.repoSlug ?? ""}${more}`
+        : kind === "guessed"
+          ? `unverified — matched by folder name · ${p.repoRoot ?? ""}`
+          : `no GitHub remote · ${p.repoRoot ?? ""}`;
+    const weak = kind === "linked" ? "" : " rail-git--weak";
+    return `<span class="rail-git${weak}" title="${escapeHtml(title)}">${GIT_SVG}</span>`;
+  };
+
+  /** The same state in words, for the manager's wider rows — where you go to
+      fix a project, so `none` has to be said out loud rather than implied by a
+      missing icon. */
+  const repoNote = (p: Project): string => {
+    switch (p.linkKind ?? "none") {
+      case "linked":
+        return ` · ${p.repoSlug ?? ""}${p.repoCount > 1 ? ` +${p.repoCount - 1}` : ""}`;
+      case "local":
+        return " · repo, no remote";
+      case "guessed":
+        return " · repo unverified";
+      default:
+        return " · no repo";
+    }
+  };
+
   function renderRows(): void {
     const current = getScope();
     const projs = visibleProjects();
@@ -151,7 +195,13 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       scope: string,
       label: string,
       depth: number,
-      opts: { logo?: string; nodeId?: string; expandable?: boolean; folded?: boolean } = {},
+      opts: {
+        logo?: string;
+        nodeId?: string;
+        expandable?: boolean;
+        folded?: boolean;
+        mark?: string;
+      } = {},
     ): string => {
       const isActive = scope === current;
       const active = isActive ? " rail-item--active" : "";
@@ -169,7 +219,9 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           : `<span class="rail-tree-spacer"></span>`;
       return `<button type="button" class="rail-item${active}"${cur} data-scope="${escapeHtml(
         scope,
-      )}" style="padding-left:${pad}px">${lead}${opts.logo ?? ""}${escapeHtml(label)}</button>`;
+      )}" style="padding-left:${pad}px">${lead}${opts.logo ?? ""}<span class="rail-item-label">${escapeHtml(
+        label,
+      )}</span>${opts.mark ?? ""}</button>`;
     };
 
     // A project and, unless folded, its descendant subtree.
@@ -182,6 +234,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
         nodeId,
         expandable: children.length > 0,
         folded,
+        mark: gitMark(p),
       });
       if (!children.length || folded) return row;
       return row + children.map((c) => renderProject(c, depth + 1)).join("");
@@ -411,7 +464,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       .map(
         (p) => `
       <div class="scope-panel-row">
-        <button type="button" class="scope-panel-name${p.hidden ? " scope-panel-name--off" : ""}" data-act="edit" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}${p.hidden ? " · hidden" : ""}${p.private ? " · private" : ""}</button>
+        <button type="button" class="scope-panel-name${p.hidden ? " scope-panel-name--off" : ""}" data-act="edit" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}${p.hidden ? " · hidden" : ""}${p.private ? " · private" : ""}${escapeHtml(repoNote(p))}</button>
         <span class="scope-panel-count">${(p.folders ?? []).length}</span>
         <button type="button" class="scope-panel-del" data-act="del" data-name="${escapeHtml(p.name)}" title="delete project">✕</button>
       </div>`,

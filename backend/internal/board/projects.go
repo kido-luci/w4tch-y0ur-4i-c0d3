@@ -38,7 +38,17 @@ type Project struct {
 	// in main, never set by hand. Presentation mode hides private projects
 	// app-wide. Orthogonal to Hidden, which is "off the rail always".
 	Private bool `json:"private"`
-	Ord     int  `json:"ord"`
+	// RepoRoot / RepoSlug / LinkKind / RepoCount say which on-disk repo this
+	// project resolves to and how firmly. Derived by the sync loop in main —
+	// SetRepoLink is the only writer, like Private — and stored rather than
+	// resolved per request, because resolution stats the filesystem per
+	// candidate session cwd. RepoCount > 1 means the project's folders span
+	// several repos and Root/Slug describe only the first.
+	RepoRoot  string `json:"repoRoot,omitempty"`
+	RepoSlug  string `json:"repoSlug,omitempty"`
+	LinkKind  string `json:"linkKind"`
+	RepoCount int    `json:"repoCount"`
+	Ord       int    `json:"ord"`
 	// Parent is the name of the project this one nests under in the rail tree,
 	// "" for a top-level project. It is a display-only edge (the scope of a
 	// parent covers its subtree); a folder still belongs to exactly one project.
@@ -58,11 +68,28 @@ func (p *Project) clone() Project {
 		Folders:     append([]string{}, p.Folders...),
 		Hidden:      p.Hidden,
 		Private:     p.Private,
+		RepoRoot:    p.RepoRoot,
+		RepoSlug:    p.RepoSlug,
+		LinkKind:    p.LinkKind,
+		RepoCount:   p.RepoCount,
 		Ord:         p.Ord,
 		Parent:      p.Parent,
 		LogoVersion: p.LogoVersion,
 	}
 }
+
+// How a project's binding to an on-disk repo was reached, ordered by how much
+// it proves. LinkGuessed matched a directory by NAME alone (repos' fallback)
+// and says nothing about ownership; LinkLocal came from a real session cwd but
+// carries no GitHub remote; LinkLinked has both. They render differently on
+// purpose — a guessed link that looked proven is exactly how a stale registry
+// row passed for an empty project.
+const (
+	LinkNone    = "none"
+	LinkGuessed = "guessed"
+	LinkLocal   = "local"
+	LinkLinked  = "linked"
+)
 
 var (
 	ErrProjectNotFound = errors.New("project not found")
@@ -86,7 +113,7 @@ func NewProjectStore(db *sql.DB) *ProjectStore {
 
 func (ps *ProjectStore) loadDB() {
 	// The logo blob itself stays on disk; only its version rides in memory.
-	rows, err := ps.db.Query(`SELECT name, folders, hidden, private, ord, parent, logo_updated_at FROM projects`)
+	rows, err := ps.db.Query(`SELECT name, folders, hidden, private, repo_root, repo_slug, link_kind, repo_count, ord, parent, logo_updated_at FROM projects`)
 	if err != nil {
 		log.Printf("projects: load: %v", err)
 		return
@@ -96,7 +123,8 @@ func (ps *ProjectStore) loadDB() {
 		p := &Project{}
 		var folders string
 		var hidden, private, ord int
-		if err := rows.Scan(&p.Name, &folders, &hidden, &private, &ord, &p.Parent, &p.LogoVersion); err != nil {
+		if err := rows.Scan(&p.Name, &folders, &hidden, &private,
+			&p.RepoRoot, &p.RepoSlug, &p.LinkKind, &p.RepoCount, &ord, &p.Parent, &p.LogoVersion); err != nil {
 			log.Printf("projects: load row: %v", err)
 			continue
 		}
@@ -174,9 +202,9 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	}
 	defer tx.Rollback()
 
-	// `private` is deliberately absent on both sides of the upsert: the sync
-	// loop deriving it from GitHub visibility is the column's only writer, so
-	// a manager save can never clobber what the sync found.
+	// `private` and the repo-link columns are deliberately absent on both sides
+	// of the upsert: the sync loop deriving them is their only writer, so a
+	// manager save can never clobber what the sync found.
 	if _, err := tx.Exec(
 		`INSERT INTO projects(name, folders, hidden, ord, parent) VALUES(?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET folders=excluded.folders, hidden=excluded.hidden, ord=excluded.ord, parent=excluded.parent`,
@@ -229,7 +257,10 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	}
 	p := ps.find(name)
 	if p == nil {
-		p = &Project{Name: name}
+		// LinkKind spelled out to match the column's default: a row read back
+		// from the db says "none", and a row this call just created would
+		// otherwise say "" until the next sync — same state, two spellings.
+		p = &Project{Name: name, LinkKind: LinkNone}
 		ps.projects = append(ps.projects, p)
 	}
 	p.Folders, p.Hidden, p.Ord, p.Parent = cleaned, hidden, ord, parent
@@ -251,6 +282,31 @@ func (ps *ProjectStore) SetPrivate(name string, private bool) bool {
 		return false
 	}
 	p.Private = private
+	return true
+}
+
+// SetRepoLink records which repo a project resolves to, and how firmly (kind is
+// one of the Link* constants above). Like SetPrivate this is the sync loop's
+// column alone — the manager's own saves leave it untouched — and it reports
+// whether the stored value changed, so a tick that finds nothing new stays
+// silent instead of broadcasting.
+func (ps *ProjectStore) SetRepoLink(name, root, slug, kind string, count int) bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	p := ps.find(name)
+	if p == nil {
+		return false
+	}
+	if p.RepoRoot == root && p.RepoSlug == slug && p.LinkKind == kind && p.RepoCount == count {
+		return false
+	}
+	if _, err := ps.db.Exec(
+		`UPDATE projects SET repo_root=?, repo_slug=?, link_kind=?, repo_count=? WHERE name=?`,
+		root, slug, kind, count, name); err != nil {
+		log.Printf("projects: set repo link: %v", err)
+		return false
+	}
+	p.RepoRoot, p.RepoSlug, p.LinkKind, p.RepoCount = root, slug, kind, count
 	return true
 }
 

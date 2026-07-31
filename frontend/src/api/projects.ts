@@ -9,6 +9,16 @@ export interface Project {
   // Mirrors the GitHub repo's visibility (derived server-side; private repo,
   // no GitHub remote, or no repo → true). Presentation mode hides these.
   private: boolean;
+  // Which repo on disk this project resolves to, and how firmly the server
+  // could prove it: "linked" = resolved from a session cwd with a GitHub
+  // remote (repoSlug is owner/name), "local" = resolved but no remote,
+  // "guessed" = matched a directory by NAME alone and proves nothing,
+  // "none" = no repo. Derived by the sync loop; repoCount > 1 means the
+  // project's folders span several repos and root/slug name only the first.
+  linkKind: "none" | "guessed" | "local" | "linked";
+  repoRoot?: string;
+  repoSlug?: string;
+  repoCount: number;
   ord: number;
   parent: string; // name of the project this nests under in the rail tree, "" = top-level
   logoVersion: number; // ms of the last logo write, 0 = no logo (also the cache-buster)

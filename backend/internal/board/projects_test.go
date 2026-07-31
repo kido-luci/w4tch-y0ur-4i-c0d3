@@ -50,6 +50,35 @@ func TestProjectStoreCRUDAndPersistence(t *testing.T) {
 	}
 }
 
+// The repo link is the sync loop's column: it survives a restart, reports only
+// real changes, and a manager save must not clobber it.
+func TestProjectRepoLink(t *testing.T) {
+	db := newTestDataDB(t)
+	ps := NewProjectStore(db)
+	if _, err := ps.Upsert("proj", []string{"f1"}, false, 0, ""); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if got := ps.List()[0].LinkKind; got != LinkNone {
+		t.Fatalf("a fresh project should start unlinked, got %q", got)
+	}
+
+	if !ps.SetRepoLink("proj", "/repos/proj", "owner/proj", LinkLinked, 1) {
+		t.Fatal("first link should report a change")
+	}
+	if ps.SetRepoLink("proj", "/repos/proj", "owner/proj", LinkLinked, 1) {
+		t.Fatal("an unchanged link must stay silent — a tick would broadcast on every pass")
+	}
+
+	// A manager save (folders/hidden/ord) leaves the derived columns alone.
+	if _, err := ps.Upsert("proj", []string{"f1", "f2"}, true, 3, ""); err != nil {
+		t.Fatalf("re-upsert: %v", err)
+	}
+	got := NewProjectStore(db).List()[0] // reload = a restart
+	if got.RepoSlug != "owner/proj" || got.LinkKind != LinkLinked || got.RepoRoot != "/repos/proj" || got.RepoCount != 1 {
+		t.Fatalf("the link should survive an upsert and a reload, got %+v", got)
+	}
+}
+
 // A folder belongs to exactly one project: claiming it for B strips it off A.
 func TestProjectStoreExclusiveOwnership(t *testing.T) {
 	db := newTestDataDB(t)

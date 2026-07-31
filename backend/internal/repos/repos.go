@@ -14,8 +14,14 @@ import (
 // an index, and — when it does — the index's size and age plus how many
 // commits the repo has seen since it was written (-1 = git couldn't answer).
 type Repo struct {
-	Root         string    `json:"root"`
-	Folder       string    `json:"folder"` // the Claude folder that led here
+	Root   string `json:"root"`
+	Folder string `json:"folder"` // the Claude folder that led here
+	// Guessed marks a root the NAME fallback found rather than a session cwd —
+	// see the fallback in Repos. It is a directory that merely shares the
+	// folder's name, so nothing about it proves the folder belongs to it;
+	// anything deriving ownership from a repo must exclude these, and the UI
+	// renders them as unverified.
+	Guessed      bool      `json:"guessed,omitempty"`
 	HasIndex     bool      `json:"hasIndex"`
 	IndexedAt    time.Time `json:"indexedAt"`
 	Files        int       `json:"files"`
@@ -119,7 +125,7 @@ func (rr *Resolver) Repos(project string) []Repo {
 				root := findIndexedDir(folder, anchors)
 				if root != "" && !seen[root] {
 					seen[root] = true
-					out = append(out, Repo{Root: root, Folder: folder, HasIndex: true, CommitsSince: -1})
+					out = append(out, Repo{Root: root, Folder: folder, Guessed: true, HasIndex: true, CommitsSince: -1})
 				}
 			}
 		}

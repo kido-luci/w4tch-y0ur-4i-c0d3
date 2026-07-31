@@ -236,8 +236,14 @@ a {
   color: var(--text-muted);
 }
 
+/* A row is a flex line, not a block, so the trailing git mark survives a long
+   name: the LABEL truncates and the mark holds its place. As one block with
+   ellipsis on the button, the overflow ate the mark — a project with a long
+   name silently showed no link at all, which is the one thing the mark exists
+   to prevent. */
 .proj-rail .rail-item {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
   text-align: left;
   background: none;
@@ -247,6 +253,9 @@ a {
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
+  overflow: hidden;
+}
+.rail-item-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -260,6 +269,7 @@ a {
 .rail-tree-toggle,
 .rail-tree-spacer {
   display: inline-block;
+  flex: 0 0 auto;
   width: 12px;
   margin-right: var(--px-sp-2);
   text-align: center;
@@ -276,12 +286,32 @@ a {
 /* A project's logo, inline before its name in the rail. */
 .rail-logo {
   display: inline-block;
+  flex: 0 0 auto;
   width: 16px;
   height: 16px;
   object-fit: contain;
   vertical-align: -3px;
   margin-right: var(--px-sp-3);
   border-radius: 2px;
+}
+
+/* The git mark trailing a project name: this project is bound to a repo the
+   server resolved. It sits quiet — a scope's own name is what you read the
+   rail for — so it takes the muted ink and only nudges to full ink on hover.
+   --weak is the unproven binding (matched by folder name, or no remote): same
+   glyph at half opacity, because it must not read as the proven one. */
+.rail-git {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: var(--px-sp-2);
+  color: var(--text-muted);
+  vertical-align: -1px;
+}
+.rail-git--weak {
+  opacity: 0.45;
+}
+.rail-item:hover .rail-git {
+  color: var(--text);
 }
 
 /* Active scope is a purple left bar and a purple word, not a box — the 2px
