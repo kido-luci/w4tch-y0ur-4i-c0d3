@@ -50,7 +50,7 @@ app.innerHTML = `
   <div class="px-chrome">
   <nav class="px-nav">
     <div class="px-nav__mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-    <span class="px-nav__word">W4tch y0ur 4I c0d3</span>
+    <span class="px-nav__word">Watch Your AI Code</span>
     <div class="px-nav__links">
       <a class="px-nav-link" href="/" data-fam="claude">claude</a>
       <a class="px-nav-link" href="/project/board" data-fam="project">project</a>
@@ -211,7 +211,7 @@ function render(): void {
   // screen. document.title moves with it so the browser's own view of "where
   // am I" stays right for history and tab lists.
   const label = navLinks.find((l) => l.dataset.nav === active)?.textContent?.trim() ?? "sessions";
-  document.title = `${label} — W4tch y0ur 4I c0d3`;
+  document.title = `${label} — Watch Your AI Code`;
   announce(`${label} view`);
 }
 

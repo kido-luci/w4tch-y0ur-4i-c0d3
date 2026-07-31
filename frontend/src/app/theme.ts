@@ -45,12 +45,12 @@ export function toggleTheme(): Theme {
   return next;
 }
 
-/** Wire a button to reflect and toggle the theme. Icon shows the theme you'd
- *  switch TO: sun while dark, moon while light. */
+/** Wire a button to reflect and toggle the theme. The editorial glyph pair:
+ *  ◐ while light, ◑ while dark — monochrome, per the mock's chrome. */
 export function mountThemeToggle(btn: HTMLElement): void {
   const sync = (): void => {
     const dark = getTheme() === "dark";
-    btn.textContent = dark ? "☀️" : "🌙";
+    btn.textContent = dark ? "◑" : "◐";
     btn.title = dark ? "switch to light" : "switch to dark";
   };
   sync();

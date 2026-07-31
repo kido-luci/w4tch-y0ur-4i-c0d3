@@ -495,6 +495,7 @@
   font: 500 var(--px-body) var(--px-sans);
   color: var(--px-muted);
   text-decoration: none;
+  text-transform: capitalize;
   cursor: pointer;
 }
 

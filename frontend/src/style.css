@@ -228,7 +228,11 @@ a {
 
 .rail-heading {
   margin: var(--px-sp-4) var(--px-sp-2) var(--px-sp-1);
-  font-size: var(--px-label);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -280,11 +284,12 @@ a {
   border-radius: 2px;
 }
 
+/* Active scope is a purple left bar and a purple word, not a box — the 2px
+   transparent border on .rail-item reserves the room so nothing shifts. */
 .proj-rail .rail-item--active {
-  border-color: var(--border);
-  background: var(--card);
-  color: var(--text);
-  box-shadow: var(--px-shadow-sm);
+  border-left-color: var(--px-purple);
+  color: var(--px-purple-text);
+  font-weight: 600;
 }
 
 .rail-manage {
@@ -2503,7 +2508,7 @@ a.flow-node {
 
 .notify-btn {
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--px-r-card);
   font-size: var(--px-word);
   line-height: 1;
@@ -2531,17 +2536,24 @@ a.flow-node {
 
 /* ---------- theme toggle ---------- */
 
+/* A bare glyph in the chrome, per the mock — no frame. The transparent
+   border keeps the hit area. */
 .theme-btn {
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--px-r-card);
-  font-size: var(--px-word);
+  color: var(--text-muted);
+  font-size: var(--px-title);
   line-height: 1;
   padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
   /* Same 24px floor as .notify-btn above. */
   min-width: 26px;
   min-height: 26px;
+}
+
+.theme-btn:hover {
+  color: var(--text);
 }
 
 .theme-btn:hover {
@@ -3372,20 +3384,30 @@ a.flow-node {
   margin: var(--px-sp-4) 0;
 }
 
+/* Editorial table, straight from the mock's property map: a heavy rule above
+   and below, hairlines between rows, no cell walls and no header fill. */
 .md table {
   border-collapse: collapse;
-  font-size: var(--px-meta);
+  font-size: var(--px-body);
+  border-top: var(--px-rule-heavy);
+  border-bottom: var(--px-rule-heavy);
 }
 
 .md th,
 .md td {
-  border: 1px solid var(--border);
-  padding: var(--px-sp-2) var(--px-sp-4);
+  border: none;
+  border-bottom: var(--px-edge-inner);
+  padding: var(--px-sp-4) var(--px-sp-6) var(--px-sp-4) 0;
   text-align: left;
 }
 
 .md th {
-  background: var(--row-hover);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .panel-foot {
@@ -4929,11 +4951,18 @@ a.flow-node {
    so the layout is just the main pane plus (read mode only) a sticky "on this
    page" toc, as a grid so the toc column can come and go without reflow. */
 
+/* The docs view is ONE sheet — the mock draws index, page and toc as columns
+   of a single surface split by hairlines, not as separate panels on the
+   ground. Columns stretch so the separators run the sheet's full height;
+   that costs the index/toc their stickiness (a stretched grid item cannot
+   stick), which the mock also doesn't have. */
 .doc-layout {
   display: grid;
   grid-template-columns: 220px 1fr;
-  gap: var(--px-sp-5);
-  align-items: start;
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-panel);
+  box-shadow: var(--px-shadow);
 }
 
 .doc-layout.doc-layout--toc {
@@ -4961,42 +4990,49 @@ a.flow-node {
     grid-template-columns: 1fr;
   }
 
-  .doc-index,
-  .doc-toc {
-    position: static;
-    max-height: none;
+  /* One column: the index's separator rotates from a right edge to a rule
+     under the list. */
+  .doc-index {
+    border-right: none;
+    border-bottom: var(--px-edge);
   }
 }
 
+/* The mock's new-page affordance is an underline, not a box. */
+#doc-new {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--px-line-strong);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#doc-new::placeholder {
+  font-style: italic;
+}
+
 /* Page index — the flat, scope-filtered list of pages, the docs view's own
-   navigation now that the rail is pure project scope. */
+   navigation now that the rail is pure project scope. A column of the sheet:
+   no box of its own, a hairline to its right. */
 .doc-index {
-  background: var(--card);
-  border: var(--px-edge);
-  box-shadow: var(--px-shadow);
-  padding: var(--px-sp-4);
-  position: sticky;
-  top: calc(var(--chrome-h) + 16px);
-  max-height: calc(100vh - var(--chrome-h) - 100px);
-  overflow-y: auto;
+  border-right: var(--px-edge);
+  padding: var(--px-sp-6) var(--px-sp-5);
   display: flex;
   flex-direction: column;
-  gap: var(--px-sp-1);
 }
 
 .doc-index-item {
   display: block;
   width: 100%;
-  /* Keep natural height: without this the flex column shrinks all rows to
-     fit the max-height instead of letting the container scroll. */
   flex: 0 0 auto;
   text-align: left;
   background: none;
-  border: 2px solid transparent;
+  border: none;
+  border-bottom: var(--px-edge-inner);
   color: var(--text-muted);
   font-family: var(--px-sans);
   font-size: var(--px-body);
-  padding: var(--px-sp-2) var(--px-sp-4);
+  padding: var(--px-sp-3) var(--px-sp-1);
   cursor: pointer;
   /* Wrap to a second line instead of ellipsing. These titles share long
      prefixes — "luci-studio.com — Blog…", "api.luci-studio.com — B…",
@@ -5010,13 +5046,13 @@ a.flow-node {
 
 .doc-index-item:hover {
   color: var(--text);
-  background: var(--row-hover);
 }
 
+/* Active is a weight, not a box — the mock's list marks the open page by
+   setting it in ink. */
 .doc-index-item--active {
-  border-color: var(--border);
-  background: var(--bg);
   color: var(--text);
+  font-weight: 600;
 }
 
 .doc-index-empty {
@@ -5026,38 +5062,30 @@ a.flow-node {
   color: var(--text-muted);
 }
 
-.doc-toc,
-.doc-main {
-  background: var(--card);
-  border: var(--px-edge);
-  border-radius: var(--px-r-panel);
-  box-shadow: var(--px-shadow);
-}
-
 .doc-toc {
-  padding: var(--px-sp-5);
-  position: sticky;
-  top: calc(var(--chrome-h) + 16px);
-  max-height: calc(100vh - var(--chrome-h) - 100px);
-  overflow-y: auto;
+  border-left: var(--px-edge);
+  padding: var(--px-sp-6) var(--px-sp-5);
 }
 
 .doc-main {
-  padding: var(--px-sp-6) var(--px-sp-7) var(--px-sp-7);
+  padding: var(--px-sp-7) var(--px-sp-8) var(--px-sp-8);
   min-height: 300px;
+  min-width: 0;
 }
 
 /* -- read mode -- */
 
 .doc-breadcrumbs {
-  font-family: var(--mono);
+  font-family: var(--px-sans);
   font-size: var(--px-meta);
   color: var(--text-muted);
   margin-bottom: var(--px-sp-4);
 }
 
+/* The group segment carries the weight; the title segment stays quiet. */
 .doc-crumb {
   color: var(--text-muted);
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -5066,7 +5094,8 @@ a.flow-node {
 }
 
 .doc-crumb-current {
-  color: var(--text);
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 .doc-crumb-sep {
@@ -5217,8 +5246,9 @@ a.flow-node {
   text-align: left;
   width: 100%;
   color: var(--text-muted);
-  font-family: var(--mono);
-  font-size: var(--px-meta);
+  font-family: var(--px-sans);
+  font-size: var(--px-body);
+  line-height: 1.4;
   padding: var(--px-sp-2) 0;
   cursor: pointer;
   overflow: hidden;
@@ -5228,6 +5258,12 @@ a.flow-node {
 
 .doc-toc-link:hover {
   color: var(--text);
+}
+
+/* The section you're reading speaks purple — set by the scroll spy. */
+.doc-toc-link--active {
+  color: var(--px-purple-text);
+  font-weight: 600;
 }
 
 .doc-toc-link--h2 {
