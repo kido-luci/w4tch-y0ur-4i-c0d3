@@ -209,7 +209,7 @@ export function renderDocsView(container: HTMLElement, initialId?: string): () =
     const project = meta.group
       ? `<span class="doc-crumb">${escapeHtml(meta.group)}</span>`
       : `<span class="doc-crumb">no project</span>`;
-    return `${project}<span class="doc-crumb-sep">/</span><span class="doc-crumb-current">${escapeHtml(meta.title)}</span>`;
+    return `${project}<span class="doc-crumb-sep">·</span><span class="doc-crumb-current">${escapeHtml(meta.title)}</span>`;
   }
 
   /** Board cards linking to the open page, as chips right after the
@@ -227,7 +227,14 @@ export function renderDocsView(container: HTMLElement, initialId?: string): () =
       .join("");
   }
 
+  /** Scroll spy for the toc — the observer must be torn down before each
+   *  rebuild or every re-render leaks one and stale callbacks fight over the
+   *  active class. */
+  let tocSpy: IntersectionObserver | null = null;
+
   function clearToc(): void {
+    tocSpy?.disconnect();
+    tocSpy = null;
     layoutEl.classList.remove("doc-layout--toc");
     layoutEl.querySelector("#doc-toc")?.remove();
   }
@@ -278,6 +285,25 @@ export function renderDocsView(container: HTMLElement, initialId?: string): () =
         document.getElementById(btn.dataset["target"]!)?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
+    // The section under the reading line speaks purple in the toc.
+    const links = [...tocEl.querySelectorAll<HTMLButtonElement>(".doc-toc-link")];
+    const mark = (id: string): void => {
+      for (const b of links) b.classList.toggle("doc-toc-link--active", b.dataset["target"] === id);
+    };
+    if (items[0]) mark(items[0].id);
+    tocSpy?.disconnect();
+    tocSpy = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) mark(e.target.id);
+      },
+      // A band near the top of the viewport: a heading crossing it is the one
+      // being read.
+      { rootMargin: "0% 0% -75% 0%" },
+    );
+    for (const it of items) {
+      const el = document.getElementById(it.id);
+      if (el) tocSpy.observe(el);
+    }
   }
 
   // --- main pane: read mode ------------------------------------------------

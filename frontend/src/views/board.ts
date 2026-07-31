@@ -215,8 +215,8 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       : "";
     return `
       <div class="todo-card${sel}${t.parentId ? " todo-child" : ""}" draggable="true" data-id="${escapeHtml(t.id)}">
-        ${labels}
         <div class="todo-title md-inline">${kindInd}${prio}${renderInlineMarkdown(t.title)}</div>
+        ${labels}
         ${roll}
         ${sessLinksHtml(t, sessCache)}
         ${sessMetricsHtml(t, sessCache)}
@@ -363,7 +363,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         .map((s) => {
           const cards = byColumn(s.id);
           return `
-        <div class="board-col">
+        <div class="board-col board-col--${escapeHtml(s.category)}">
           ${colHeadHtml(s, cards)}
           <div class="board-cards" data-status="${escapeHtml(s.id)}">${cards.map(cardHtml).join("")}</div>
           ${composerHtml(s.id)}
