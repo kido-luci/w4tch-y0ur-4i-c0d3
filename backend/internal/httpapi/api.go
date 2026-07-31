@@ -962,6 +962,11 @@ func Register(mux *http.ServeMux, d Deps) {
 			Hidden  bool     `json:"hidden"`
 			Ord     int      `json:"ord"`
 			Parent  string   `json:"parent"`
+			// RepoRoot is the project's binding to a repo. A pointer so that
+			// omitting the field leaves the binding alone: every other caller
+			// of this endpoint (rename, reorder, a folder edit) would otherwise
+			// send "" and silently unbind the project.
+			RepoRoot *string `json:"repoRoot"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
@@ -972,8 +977,96 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		if in.RepoRoot != nil {
+			root := strings.TrimSpace(*in.RepoRoot)
+			// Only a real checkout may be bound: the git and code-graph
+			// endpoints will operate on whatever is stored here, so this is the
+			// gate that keeps them pointed at repos instead of at any path a
+			// request cared to name. Stored canonical, so a worktree binds to
+			// the repo it belongs to.
+			if root != "" {
+				if !git.IsRepo(root) {
+					httpx.WriteJSONError(w, http.StatusBadRequest, "that path is not a git repository")
+					return
+				}
+				root = git.CanonicalRoot(root)
+			}
+			if err := projects.SetRepoRoot(p.Name, root); err != nil {
+				httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			p.RepoRoot = root
+			if root != "" {
+				// Read the remote here rather than leaving the row unresolved
+				// until the next five-minute tick: that window would render as
+				// "no GitHub remote", which is a claim, not a wait. Visibility
+				// stays with the sync — it is the gh round-trip, and a save
+				// should not block on the network.
+				slug, kind := "", board.LinkLocal
+				if s, ok := github.Slug(root); ok {
+					slug, kind = s, board.LinkLinked
+				}
+				projects.SetRepoDerived(p.Name, slug, kind)
+				p.RepoSlug, p.LinkKind = slug, kind
+			} else {
+				// Upsert built this reply before the binding was cleared, so
+				// without this the response still advertises the old link.
+				p.RepoSlug, p.LinkKind = "", board.LinkNone
+			}
+		}
 		hub.Broadcast("projects-updated", projects.List())
 		httpx.WriteJSON(w, p)
+	})
+
+	// The repos this machine knows about, for the manager's binding picker:
+	// every root the sessions resolve to, canonical and deduped, with the name
+	// the repo calls itself. It is a SUGGESTION list — /project stores whatever
+	// binding you choose, and a repo that has never seen a session can still be
+	// bound by path — so reading the session index here creates no dependency
+	// the project page has to keep.
+	mux.HandleFunc("GET /api/repos", func(w http.ResponseWriter, r *http.Request) {
+		type known struct {
+			Root    string `json:"root"`
+			Name    string `json:"name"`
+			Slug    string `json:"slug,omitempty"`
+			BoundBy string `json:"boundBy,omitempty"` // project already on this repo
+			ByName  bool   `json:"byName,omitempty"`  // only found by matching the folder's name
+		}
+		bound := map[string]string{}
+		for _, p := range projects.List() {
+			if p.RepoRoot != "" {
+				bound[p.RepoRoot] = p.Name
+			}
+		}
+		seen, out := map[string]bool{}, []known{}
+		add := func(rp repos.Repo) {
+			root := git.CanonicalRoot(rp.Root)
+			if seen[root] {
+				return
+			}
+			seen[root] = true
+			k := known{Root: root, Name: git.RepoName(root), BoundBy: bound[root], ByName: rp.Guessed}
+			if s, ok := github.Slug(root); ok {
+				k.Slug = s
+			}
+			out = append(out, k)
+		}
+		for _, rp := range rr.Repos("") {
+			add(rp)
+		}
+		// Repos("") cannot reach the name-matching fallback (it only runs for a
+		// scoped call), so the repos that most need binding — the ones with no
+		// session cwd of their own — would be missing from the very list that
+		// exists to bind them. Ask per folder to reach them, and mark them: a
+		// suggestion the user picks becomes an explicit binding, which is the
+		// difference between offering a name match and acting on one.
+		for _, folder := range ix.Projects() {
+			for _, rp := range rr.Repos(folder) {
+				add(rp)
+			}
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		httpx.WriteJSON(w, out)
 	})
 
 	mux.HandleFunc("DELETE /api/projects/{name}", func(w http.ResponseWriter, r *http.Request) {

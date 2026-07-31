@@ -62,6 +62,22 @@ func TestCanonicalRootCollapsesAWorktree(t *testing.T) {
 	if strings.Contains(CanonicalRoot(wt), ".git") {
 		t.Fatalf("the trailing /.git must be stripped, got %q", CanonicalRoot(wt))
 	}
+
+	// A submodule keeps its storage at <super>/.git/modules/<name>, so the
+	// common dir is NOT "<root>/.git" and trimming it yields a path that is not
+	// a working tree at all. The answer has to be the submodule's own checkout.
+	sub := filepath.Join(main, "sub") // submodule add runs inside main
+	git(main, "-c", "protocol.file.allow=always", "submodule", "add", "-q", main, "sub")
+	got := CanonicalRoot(sub)
+	if strings.Contains(got, "/.git/") {
+		t.Fatalf("a submodule must not resolve into the superproject's storage, got %q", got)
+	}
+	if !IsRepo(got) {
+		t.Fatalf("what CanonicalRoot returns must itself be a working tree, got %q", got)
+	}
+	if filepath.Base(got) != "sub" {
+		t.Fatalf("a submodule must resolve to its own checkout, got %q", got)
+	}
 }
 
 func TestParseGitStatus(t *testing.T) {

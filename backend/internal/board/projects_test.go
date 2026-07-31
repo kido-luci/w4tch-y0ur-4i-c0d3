@@ -50,66 +50,53 @@ func TestProjectStoreCRUDAndPersistence(t *testing.T) {
 	}
 }
 
-// The repo link is the sync loop's column: it survives a restart, reports only
-// real changes, and a manager save must not clobber it.
-func TestProjectRepoLink(t *testing.T) {
+// The binding is the user's column and the derived pair is the sync's: a
+// manager save must not clear either, and the sync's opening offer is made
+// once — a binding the user cleared is theirs to leave cleared.
+func TestProjectRepoBinding(t *testing.T) {
 	db := newTestDataDB(t)
 	ps := NewProjectStore(db)
 	if _, err := ps.Upsert("proj", []string{"f1"}, false, 0, ""); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if got := ps.List()[0].LinkKind; got != LinkNone {
-		t.Fatalf("a fresh project should start unlinked, got %q", got)
+	if got := ps.List()[0].LinkKind; got != LinkUnset {
+		t.Fatalf("a fresh row must read as never-resolved, got %q", got)
 	}
 
-	if !ps.SetRepoLink("proj", "/repos/proj", "owner/proj", LinkLinked, 1) {
-		t.Fatal("first link should report a change")
+	// The opening offer takes on a row nobody has touched...
+	if !ps.AdoptRepoRoot("proj", "/repos/proj") {
+		t.Fatal("an unresolved row should accept the first offer")
 	}
-	if ps.SetRepoLink("proj", "/repos/proj", "owner/proj", LinkLinked, 1) {
-		t.Fatal("an unchanged link must stay silent — a tick would broadcast on every pass")
+	if ps.AdoptRepoRoot("proj", "/repos/other") {
+		t.Fatal("a row that already has a binding must refuse a second offer")
 	}
 
-	// A manager save (folders/hidden/ord) leaves the derived columns alone.
+	if !ps.SetRepoDerived("proj", "owner/proj", LinkLinked) {
+		t.Fatal("first derivation should report a change")
+	}
+	if ps.SetRepoDerived("proj", "owner/proj", LinkLinked) {
+		t.Fatal("an unchanged derivation must stay silent — a tick would broadcast every pass")
+	}
+
+	// A manager save (folders/hidden/ord) leaves binding and derivation alone.
 	if _, err := ps.Upsert("proj", []string{"f1", "f2"}, true, 3, ""); err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
 	got := NewProjectStore(db).List()[0] // reload = a restart
-	if got.RepoSlug != "owner/proj" || got.LinkKind != LinkLinked || got.RepoRoot != "/repos/proj" || got.RepoCount != 1 {
-		t.Fatalf("the link should survive an upsert and a reload, got %+v", got)
-	}
-}
-
-// Seeding from a repo names the project after the REPO while owning the FOLDER
-// the sessions ran in — the two differ whenever a checkout's directory is not
-// the repo's name, which is the case this exists for.
-func TestProjectSeedRepo(t *testing.T) {
-	db := newTestDataDB(t)
-	ps := NewProjectStore(db)
-
-	if !ps.SeedRepo("luci_dev", "luci_web_blog-frontend") {
-		t.Fatal("a new repo should seed a project")
-	}
-	got := NewProjectStore(db).List() // reload = a restart
-	if len(got) != 1 || got[0].Name != "luci_dev" || len(got[0].Folders) != 1 ||
-		got[0].Folders[0] != "luci_web_blog-frontend" || got[0].LinkKind != LinkNone {
-		t.Fatalf("want luci_dev owning luci_web_blog-frontend, unlinked; got %+v", got)
+	if got.RepoRoot != "/repos/proj" || got.RepoSlug != "owner/proj" || got.LinkKind != LinkLinked {
+		t.Fatalf("the binding should survive an upsert and a reload, got %+v", got)
 	}
 
-	// Add-only: seeding the same repo again changes nothing.
-	if ps.SeedRepo("luci_dev", "luci_web_blog-frontend") {
-		t.Error("an existing project must not be re-seeded")
+	// Clearing is a statement, not an absence: it must not be re-offered.
+	if err := ps.SetRepoRoot("proj", ""); err != nil {
+		t.Fatalf("clear: %v", err)
 	}
-	// A taken name belongs to some other repo — widening it is exactly the
-	// unchecked guessing this replaces.
-	if ps.SeedRepo("luci_dev", "another-folder") {
-		t.Error("a taken name must not adopt a second folder")
+	cleared := NewProjectStore(db).List()[0]
+	if cleared.RepoRoot != "" || cleared.RepoSlug != "" || cleared.LinkKind != LinkNone {
+		t.Fatalf("clearing should leave an explicit none, got %+v", cleared)
 	}
-	// And a folder someone already owns stays owned.
-	if _, err := ps.Upsert("manual", []string{"claimed"}, false, 0, ""); err != nil {
-		t.Fatal(err)
-	}
-	if ps.SeedRepo("some-repo", "claimed") {
-		t.Error("an owned folder must not be seeded away from its project")
+	if ps.AdoptRepoRoot("proj", "/repos/proj") {
+		t.Fatal("a binding the user cleared must never be re-offered")
 	}
 }
 

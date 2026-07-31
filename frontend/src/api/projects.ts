@@ -9,16 +9,14 @@ export interface Project {
   // Mirrors the GitHub repo's visibility (derived server-side; private repo,
   // no GitHub remote, or no repo → true). Presentation mode hides these.
   private: boolean;
-  // Which repo on disk this project resolves to, and how firmly the server
-  // could prove it: "linked" = resolved from a session cwd with a GitHub
-  // remote (repoSlug is owner/name), "local" = resolved but no remote,
-  // "guessed" = matched a directory by NAME alone and proves nothing,
-  // "none" = no repo. Derived by the sync loop; repoCount > 1 means the
-  // project's folders span several repos and root/slug name only the first.
-  linkKind: "none" | "guessed" | "local" | "linked";
+  // repoRoot is the repo this project IS — YOUR binding, set in the manager,
+  // never inferred from the Claude folders. linkKind is what the server could
+  // confirm about it: "" = never resolved, "none" = deliberately unbound,
+  // "missing" = bound to a path that is gone, "local" = a repo with no GitHub
+  // remote, "linked" = repoSlug (owner/name) is filled and visibility known.
   repoRoot?: string;
   repoSlug?: string;
-  repoCount: number;
+  linkKind: "" | "none" | "missing" | "local" | "linked";
   ord: number;
   parent: string; // name of the project this nests under in the rail tree, "" = top-level
   logoVersion: number; // ms of the last logo write, 0 = no logo (also the cache-buster)
@@ -46,9 +44,24 @@ export function getUnmappedFolders(): Promise<string[]> {
     and rail order. Claimed folders are stripped from other projects server-side. */
 export function putProject(
   name: string,
-  body: { folders: string[]; hidden: boolean; ord: number; parent: string },
+  body: { folders: string[]; hidden: boolean; ord: number; parent: string; repoRoot?: string },
 ): Promise<Project> {
   return sendJSON<Project>(`/api/projects/${encodeURIComponent(name)}`, "PUT", body);
+}
+
+/** One repo this machine knows about — the manager's binding suggestions.
+    Purely a convenience list: the binding you pick is stored on the project,
+    and a repo with no sessions can still be bound by typing its path. */
+export interface KnownRepo {
+  root: string;
+  name: string;
+  slug?: string;
+  boundBy?: string; // the project already bound to it, if any
+  byName?: boolean; // only found by matching a folder's name — worth confirming
+}
+
+export function getKnownRepos(): Promise<KnownRepo[]> {
+  return getJSON<KnownRepo[]>("/api/repos");
 }
 
 /** Presentation mode — the server-side switch that hides private projects

@@ -437,19 +437,20 @@ PRAGMA user_version = 13;`); err != nil {
 		}
 	}
 	if v < 14 {
-		// The repo a project is bound to, recorded rather than re-resolved per
-		// request: resolution stats the filesystem for every candidate session
-		// cwd, which is fine on a five-minute sync and not fine on the session
-		// endpoints' hot path. link_kind is how the binding was reached
-		// (linked/local/guessed/none — see ProjectStore.SetRepoLink), so a
-		// name-guessed match can never read as a proven one; repo_count says how
-		// many repos the project's folders resolve to, since root/slug describe
-		// only the first. Guarded ADD COLUMNs like the ones above.
+		// Which repo a project IS. repo_root is the binding and it is the user's
+		// to set (see ProjectStore.SetRepoRoot); repo_slug and link_kind are
+		// derived from it by the sync in main and describe only what the
+		// filesystem could confirm — bound and on GitHub, bound with no remote,
+		// bound to a path that is gone, or not bound at all.
+		//
+		// link_kind's default is the empty string on purpose: it means "never
+		// resolved", which is what lets the first sync offer an initial binding
+		// without ever re-offering one the user has since cleared (clearing
+		// writes 'none'). Guarded ADD COLUMNs like the ones above.
 		for _, col := range []struct{ name, ddl string }{
 			{"repo_root", `ALTER TABLE projects ADD COLUMN repo_root TEXT NOT NULL DEFAULT ''`},
 			{"repo_slug", `ALTER TABLE projects ADD COLUMN repo_slug TEXT NOT NULL DEFAULT ''`},
-			{"link_kind", `ALTER TABLE projects ADD COLUMN link_kind TEXT NOT NULL DEFAULT 'none'`},
-			{"repo_count", `ALTER TABLE projects ADD COLUMN repo_count INTEGER NOT NULL DEFAULT 0`},
+			{"link_kind", `ALTER TABLE projects ADD COLUMN link_kind TEXT NOT NULL DEFAULT ''`},
 		} {
 			has, err := columnExists(db, "projects", col.name)
 			if err != nil {

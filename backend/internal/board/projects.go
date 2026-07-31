@@ -38,17 +38,15 @@ type Project struct {
 	// in main, never set by hand. Presentation mode hides private projects
 	// app-wide. Orthogonal to Hidden, which is "off the rail always".
 	Private bool `json:"private"`
-	// RepoRoot / RepoSlug / LinkKind / RepoCount say which on-disk repo this
-	// project resolves to and how firmly. Derived by the sync loop in main —
-	// SetRepoLink is the only writer, like Private — and stored rather than
-	// resolved per request, because resolution stats the filesystem per
-	// candidate session cwd. RepoCount > 1 means the project's folders span
-	// several repos and Root/Slug describe only the first.
-	RepoRoot  string `json:"repoRoot,omitempty"`
-	RepoSlug  string `json:"repoSlug,omitempty"`
-	LinkKind  string `json:"linkKind"`
-	RepoCount int    `json:"repoCount"`
-	Ord       int    `json:"ord"`
+	// RepoRoot is which repo this project IS — the one binding /project needs,
+	// and the user's to set. RepoSlug and LinkKind are derived from it by the
+	// sync loop in main and say only what the filesystem could confirm.
+	// Deliberately NOT resolved from the Claude folders below: the project page
+	// is its own taxonomy, and a binding nobody stated is a guess.
+	RepoRoot string `json:"repoRoot,omitempty"`
+	RepoSlug string `json:"repoSlug,omitempty"`
+	LinkKind string `json:"linkKind"`
+	Ord      int    `json:"ord"`
 	// Parent is the name of the project this one nests under in the rail tree,
 	// "" for a top-level project. It is a display-only edge (the scope of a
 	// parent covers its subtree); a folder still belongs to exactly one project.
@@ -71,22 +69,22 @@ func (p *Project) clone() Project {
 		RepoRoot:    p.RepoRoot,
 		RepoSlug:    p.RepoSlug,
 		LinkKind:    p.LinkKind,
-		RepoCount:   p.RepoCount,
 		Ord:         p.Ord,
 		Parent:      p.Parent,
 		LogoVersion: p.LogoVersion,
 	}
 }
 
-// How a project's binding to an on-disk repo was reached, ordered by how much
-// it proves. LinkGuessed matched a directory by NAME alone (repos' fallback)
-// and says nothing about ownership; LinkLocal came from a real session cwd but
-// carries no GitHub remote; LinkLinked has both. They render differently on
-// purpose — a guessed link that looked proven is exactly how a stale registry
-// row passed for an empty project.
+// What the sync could confirm about a project's binding. LinkNone is not bound
+// (and, unlike the empty string a fresh row carries, it means the user said
+// so — see the migration); LinkMissing is bound to a path that is no longer
+// there, which must read differently from unbound or a moved checkout silently
+// looks abandoned; LinkLocal is a real repo with no GitHub remote; LinkLinked
+// has a remote, so RepoSlug is filled and visibility is knowable.
 const (
+	LinkUnset   = ""
 	LinkNone    = "none"
-	LinkGuessed = "guessed"
+	LinkMissing = "missing"
 	LinkLocal   = "local"
 	LinkLinked  = "linked"
 )
@@ -113,7 +111,7 @@ func NewProjectStore(db *sql.DB) *ProjectStore {
 
 func (ps *ProjectStore) loadDB() {
 	// The logo blob itself stays on disk; only its version rides in memory.
-	rows, err := ps.db.Query(`SELECT name, folders, hidden, private, repo_root, repo_slug, link_kind, repo_count, ord, parent, logo_updated_at FROM projects`)
+	rows, err := ps.db.Query(`SELECT name, folders, hidden, private, repo_root, repo_slug, link_kind, ord, parent, logo_updated_at FROM projects`)
 	if err != nil {
 		log.Printf("projects: load: %v", err)
 		return
@@ -124,7 +122,7 @@ func (ps *ProjectStore) loadDB() {
 		var folders string
 		var hidden, private, ord int
 		if err := rows.Scan(&p.Name, &folders, &hidden, &private,
-			&p.RepoRoot, &p.RepoSlug, &p.LinkKind, &p.RepoCount, &ord, &p.Parent, &p.LogoVersion); err != nil {
+			&p.RepoRoot, &p.RepoSlug, &p.LinkKind, &ord, &p.Parent, &p.LogoVersion); err != nil {
 			log.Printf("projects: load row: %v", err)
 			continue
 		}
@@ -257,10 +255,10 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	}
 	p := ps.find(name)
 	if p == nil {
-		// LinkKind spelled out to match the column's default: a row read back
-		// from the db says "none", and a row this call just created would
-		// otherwise say "" until the next sync — same state, two spellings.
-		p = &Project{Name: name, LinkKind: LinkNone}
+		// LinkKind is left at LinkUnset ("") to match the column's default:
+		// a brand-new row has never been resolved, which is the state that
+		// lets the sync make its opening binding offer exactly once.
+		p = &Project{Name: name}
 		ps.projects = append(ps.projects, p)
 	}
 	p.Folders, p.Hidden, p.Ord, p.Parent = cleaned, hidden, ord, parent
@@ -285,28 +283,75 @@ func (ps *ProjectStore) SetPrivate(name string, private bool) bool {
 	return true
 }
 
-// SetRepoLink records which repo a project resolves to, and how firmly (kind is
-// one of the Link* constants above). Like SetPrivate this is the sync loop's
-// column alone — the manager's own saves leave it untouched — and it reports
-// whether the stored value changed, so a tick that finds nothing new stays
-// silent instead of broadcasting.
-func (ps *ProjectStore) SetRepoLink(name, root, slug, kind string, count int) bool {
+// SetRepoRoot binds a project to a repo, or clears the binding with "". This
+// one is the USER's write — the manager's repo picker — which is what makes
+// the project page independent of the session index: the binding is stated,
+// not inferred. Clearing it stamps LinkNone rather than the empty "never
+// resolved" state, so the sync's initial offer is not made a second time.
+func (ps *ProjectStore) SetRepoRoot(name, root string) error {
+	root = strings.TrimSpace(root)
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	p := ps.find(name)
 	if p == nil {
-		return false
+		return ErrProjectNotFound
 	}
-	if p.RepoRoot == root && p.RepoSlug == slug && p.LinkKind == kind && p.RepoCount == count {
+	if p.RepoRoot == root {
+		return nil
+	}
+	kind, slug := LinkNone, ""
+	if root != "" {
+		// The sync fills in what the filesystem says on its next pass; until
+		// then the row states the binding without claiming more than that.
+		kind = LinkUnset
+	}
+	if _, err := ps.db.Exec(
+		`UPDATE projects SET repo_root=?, repo_slug=?, link_kind=? WHERE name=?`,
+		root, slug, kind, name); err != nil {
+		return fmt.Errorf("set repo root: %w", err)
+	}
+	p.RepoRoot, p.RepoSlug, p.LinkKind = root, slug, kind
+	return nil
+}
+
+// SetRepoDerived records what the sync could confirm about the binding — the
+// slug and the kind, never the root itself, which belongs to the user. Reports
+// whether anything changed, so a tick that finds nothing new stays silent
+// instead of broadcasting.
+func (ps *ProjectStore) SetRepoDerived(name, slug, kind string) bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	p := ps.find(name)
+	if p == nil || (p.RepoSlug == slug && p.LinkKind == kind) {
 		return false
 	}
 	if _, err := ps.db.Exec(
-		`UPDATE projects SET repo_root=?, repo_slug=?, link_kind=?, repo_count=? WHERE name=?`,
-		root, slug, kind, count, name); err != nil {
-		log.Printf("projects: set repo link: %v", err)
+		`UPDATE projects SET repo_slug=?, link_kind=? WHERE name=?`, slug, kind, name); err != nil {
+		log.Printf("projects: set repo derived: %v", err)
 		return false
 	}
-	p.RepoRoot, p.RepoSlug, p.LinkKind, p.RepoCount = root, slug, kind, count
+	p.RepoSlug, p.LinkKind = slug, kind
+	return true
+}
+
+// AdoptRepoRoot offers a project its FIRST binding — the one place the project
+// page still learns anything from the session index, and only for a row whose
+// link has never been resolved (LinkUnset). Once the user has bound or cleared
+// it the row is theirs, so a cleared binding is never re-offered. Reports
+// whether it took.
+func (ps *ProjectStore) AdoptRepoRoot(name, root string) bool {
+	root = strings.TrimSpace(root)
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	p := ps.find(name)
+	if p == nil || root == "" || p.RepoRoot != "" || p.LinkKind != LinkUnset {
+		return false
+	}
+	if _, err := ps.db.Exec(`UPDATE projects SET repo_root=? WHERE name=?`, root, name); err != nil {
+		log.Printf("projects: adopt repo root: %v", err)
+		return false
+	}
+	p.RepoRoot = root
 	return true
 }
 
@@ -512,55 +557,11 @@ func (ps *ProjectStore) Seed(names []string) int {
 			log.Printf("projects: seed %q: %v", name, err)
 			continue
 		}
-		ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{name}, LinkKind: LinkNone, Ord: next})
+		ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{name}, Ord: next})
 		next++
 		added++
 	}
 	return added
-}
-
-// SeedRepo adds one project for a repo the index has sessions for but no
-// project owns. `name` is what the REPO calls itself and `folder` the Claude
-// folder whose sessions resolved there — two different things whenever a
-// checkout's directory is not the repo's name, which is the whole reason the
-// registry could not be maintained by typing folder names.
-//
-// Add-only, like Seed: it refuses when the name is taken, because that row
-// belongs to some other repo and silently widening it would be exactly the
-// unchecked guessing this replaces. It refuses an already-owned folder too —
-// the caller only offers unowned ones, but exclusivity is the store's rule to
-// keep, not the caller's. Reports whether it created a row.
-func (ps *ProjectStore) SeedRepo(name, folder string) bool {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	name, folder = strings.TrimSpace(name), strings.TrimSpace(folder)
-	if name == "" || folder == "" || strings.Contains(name, "/") || ps.find(name) != nil {
-		return false
-	}
-	next := 0
-	for _, p := range ps.projects {
-		if p.Ord >= next {
-			next = p.Ord + 1
-		}
-		for _, f := range p.Folders {
-			if f == folder {
-				return false
-			}
-		}
-	}
-	raw, err := json.Marshal([]string{folder})
-	if err != nil {
-		return false
-	}
-	if _, err := ps.db.Exec(
-		`INSERT INTO projects(name, folders, hidden, ord) VALUES(?, ?, 0, ?)
-		 ON CONFLICT(name) DO NOTHING`,
-		name, string(raw), next); err != nil {
-		log.Printf("projects: seed repo %q: %v", name, err)
-		return false
-	}
-	ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{folder}, LinkKind: LinkNone, Ord: next})
-	return true
 }
 
 // SeedProjects mirrors the CONTENT taxonomy into the registry: every label

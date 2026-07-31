@@ -104,6 +104,14 @@ func repoNameFromURL(url string) string {
 	return s
 }
 
+// IsRepo reports whether dir is inside a git work tree — the check a stored
+// binding needs before anything downstream trusts it, since a bound path can
+// be moved or deleted long after it was chosen.
+func IsRepo(dir string) bool {
+	out, ok := runGit(dir, "rev-parse", "--is-inside-work-tree")
+	return ok && out == "true"
+}
+
 // CanonicalRoot answers which REPO a directory belongs to, which is not the
 // same question as which directory you are standing in: a linked worktree has
 // its own path and its own top-level, so two cwds in one repo look like two
@@ -116,11 +124,21 @@ func repoNameFromURL(url string) string {
 // folder could ever match. Falls back to dir when git cannot answer (not a
 // repo, or a git too old for --path-format).
 func CanonicalRoot(dir string) string {
-	out, ok := runGit(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if !ok || out == "" {
-		return dir
+	// The common dir points INSIDE the repo's storage, and only a plain
+	// checkout keeps that at "<root>/.git". A submodule keeps it at
+	// "<super>/.git/modules/<name>", so trimming blindly hands back a path that
+	// is not a working tree at all — which is what the binding picker offered
+	// until this checked. Trim only the shape it can trim; otherwise ask where
+	// the working tree actually starts.
+	if out, ok := runGit(dir, "rev-parse", "--path-format=absolute", "--git-common-dir"); ok {
+		if root, cut := strings.CutSuffix(out, "/.git"); cut && root != "" {
+			return root
+		}
 	}
-	return strings.TrimSuffix(out, "/.git")
+	if top, ok := runGit(dir, "rev-parse", "--show-toplevel"); ok && top != "" {
+		return top
+	}
+	return dir
 }
 
 // gitSnapshot fills one repo from its root. The work-tree check gates the rest;

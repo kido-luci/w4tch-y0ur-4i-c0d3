@@ -4,6 +4,7 @@ import {
   deleteProjectLogo,
   getGroups,
   getPresentation,
+  getKnownRepos,
   getProjectRegistry,
   getUnmappedFolders,
   projectLogoURL,
@@ -13,7 +14,7 @@ import {
   renameProject,
   subscribeRawEvents,
 } from "../api";
-import type { Project, ProjectGroup } from "../api";
+import type { KnownRepo, Project, ProjectGroup } from "../api";
 import { escapeHtml } from "../domain/format";
 import {
   getKnownGroups,
@@ -83,6 +84,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // Unmapped Claude folders (owned by no project) — loaded when the project
   // manager opens, offered there to be claimed or merged.
   let unmapped: string[] = [];
+  // The manager's repo suggestions. Loaded when the panel opens, not at boot:
+  // it walks every session cwd on disk, which is not work the rail owes on a
+  // page load where nobody has asked to edit a project.
+  let knownRepos: KnownRepo[] = [];
 
   // Presentation mode — server-side state, mirrored here for the rail's own
   // filtering. The PUT's SSE echo is the only writer after boot, so every tab
@@ -124,23 +129,25 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     `<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/>` +
     `<circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`;
 
-  /** The rail's git mark, drawn from the link the server derived (linkKind).
-      A `guessed` link — repos matched a directory by NAME alone — draws faint
-      and says so, because a guess that looks like a proof is precisely how a
-      stale registry row passed for an empty project. `none` draws nothing: the
-      absence is the signal in a narrow rail, and the manager panel below
+  /** The rail's git mark: this project is bound to a repo, and — full ink vs
+      faint — whether the server could confirm a GitHub remote for it. A binding
+      whose path has gone missing draws faint too and says so on hover, because
+      a moved checkout must not read like a healthy one. No binding draws
+      nothing: absence is the signal in a narrow rail, and the manager panel
       spells the state out in words. */
   const gitMark = (p: Project): string => {
-    const kind = p.linkKind ?? "none";
-    if (kind === "none") return "";
-    const more = p.repoCount > 1 ? ` · +${p.repoCount - 1} more` : "";
+    if (!p.repoRoot) return "";
     const title =
-      kind === "linked"
-        ? `${p.repoSlug ?? ""}${more}`
-        : kind === "guessed"
-          ? `unverified — matched by folder name · ${p.repoRoot ?? ""}`
-          : `no GitHub remote · ${p.repoRoot ?? ""}`;
-    const weak = kind === "linked" ? "" : " rail-git--weak";
+      p.linkKind === "linked"
+        ? (p.repoSlug ?? p.repoRoot)
+        : p.linkKind === "missing"
+          ? `bound path is missing · ${p.repoRoot}`
+          : p.linkKind === "local"
+            ? `no GitHub remote · ${p.repoRoot}`
+            : // "" — bound, not resolved yet. Saying "no remote" here would be
+              // a claim where the truth is that nothing has looked.
+              `checking… · ${p.repoRoot}`;
+    const weak = p.linkKind === "linked" ? "" : " rail-git--weak";
     return `<span class="rail-git${weak}" title="${escapeHtml(title)}">${GIT_SVG}</span>`;
   };
 
@@ -148,15 +155,16 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       fix a project, so `none` has to be said out loud rather than implied by a
       missing icon. */
   const repoNote = (p: Project): string => {
-    switch (p.linkKind ?? "none") {
+    if (!p.repoRoot) return " · no repo";
+    switch (p.linkKind) {
       case "linked":
-        return ` · ${p.repoSlug ?? ""}${p.repoCount > 1 ? ` +${p.repoCount - 1}` : ""}`;
+        return ` · ${p.repoSlug ?? ""}`;
+      case "missing":
+        return " · repo path missing";
       case "local":
         return " · repo, no remote";
-      case "guessed":
-        return " · repo unverified";
       default:
-        return " · no repo";
+        return " · repo, checking…";
     }
   };
 
@@ -325,7 +333,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       renderProjectPanel();
       groupPanel.hidden = true;
       projPanel.hidden = !projPanel.hidden;
-      if (!projPanel.hidden) refreshUnmapped();
+      if (!projPanel.hidden) {
+        refreshUnmapped();
+        refreshKnownRepos();
+      }
       return;
     }
     const scope = btn.dataset["scope"];
@@ -426,6 +437,22 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
 
   // --- project manager panel -----------------------------------------------
 
+  function refreshKnownRepos(): void {
+    getKnownRepos()
+      .then((r) => {
+        knownRepos = r;
+        // Only when a form is open — a repaint would otherwise throw away
+        // whatever the user has typed into it.
+        if (!projPanel.hidden && projPanel.querySelector(".scope-panel-form")) {
+          const cur = projPanel.querySelector<HTMLFormElement>(".scope-panel-form")?.dataset["editing"];
+          renderProjectPanel(cur);
+        }
+      })
+      .catch(() => {
+        /* the path field still works without suggestions */
+      });
+  }
+
   function refreshUnmapped(): void {
     getUnmappedFolders()
       .then((u) => {
@@ -525,10 +552,34 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
         .join("");
       const parentSection = `<div class="scope-panel-sub">parent</div>
         <select class="scope-panel-input scope-panel-parent" name="parent">${parentOpts}</select>`;
+      // The repo this project IS. The list is a suggestion (every repo the
+      // machine has seen); the field below it takes any checkout's path, so a
+      // repo nobody has opened Claude in is bindable too. Picking from the list
+      // just fills the field — the path is what gets saved.
+      const curRoot = p?.repoRoot ?? "";
+      const repoOpts = [`<option value="">(pick a repo…)</option>`]
+        .concat(
+          knownRepos.map((k) => {
+            const taken = k.boundBy && k.boundBy !== editing ? ` — bound to ${k.boundBy}` : "";
+            // Found only by a name match: still worth offering, but say so —
+            // picking it is what turns a guess into a binding you stated.
+            const byName = k.byName ? " (name match)" : "";
+            return `<option value="${escapeHtml(k.root)}">${escapeHtml(k.name)}${escapeHtml(byName)}${escapeHtml(taken)}</option>`;
+          }),
+        )
+        .join("");
+      const repoSection = `<div class="scope-panel-sub">repo${
+        p && p.linkKind === "missing" ? " — bound path is missing" : ""
+      }</div>
+        <select class="scope-panel-input scope-panel-repo-pick">${repoOpts}</select>
+        <input class="scope-panel-input scope-panel-repo" name="repoRoot" value="${escapeHtml(
+          curRoot,
+        )}" placeholder="/path/to/repo (empty = not bound)">`;
       form = `
       <form class="scope-panel-form" data-editing="${escapeHtml(editing)}">
         ${nameField}
         <label class="scope-panel-check"><input type="checkbox" name="hidden"${p?.hidden ? " checked" : ""}> hidden (keep off the rail)</label>
+        ${repoSection}
         ${parentSection}
         ${logoSection}
         <div class="scope-panel-sub">folders${checks ? "" : " — none unmapped"}</div>
@@ -568,6 +619,14 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // Picking a file uploads the logo immediately (its own endpoint), separate
   // from the form's save; the preview updates in place.
   projPanel.addEventListener("change", (e) => {
+    // Picking a suggestion fills the path field rather than saving: the path is
+    // what the project stores, so it stays visible and editable before the save.
+    const pick = (e.target as HTMLElement).closest<HTMLSelectElement>(".scope-panel-repo-pick");
+    if (pick) {
+      const field = pick.closest("form")?.querySelector<HTMLInputElement>(".scope-panel-repo");
+      if (field && pick.value) field.value = pick.value;
+      return;
+    }
     const input = (e.target as HTMLElement).closest<HTMLInputElement>(".scope-panel-logo-input");
     const file = input?.files?.[0];
     const name = input?.closest<HTMLFormElement>(".scope-panel-form")?.dataset["editing"];
@@ -596,6 +655,9 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     );
     const hidden = form.querySelector<HTMLInputElement>('input[name="hidden"]')?.checked ?? false;
     const parent = form.querySelector<HTMLSelectElement>('select[name="parent"]')?.value ?? "";
+    // The binding rides the same save. Sent only from this form, so every other
+    // caller of putProject leaves it alone (the field is optional server-side).
+    const repoRoot = form.querySelector<HTMLInputElement>('input[name="repoRoot"]')?.value.trim() ?? "";
     // ord is preserved on an edit/rename (from the original row), fresh on a new one.
     const cur = getKnownProjects().find((k) => k.name === editing);
     const ord = cur ? cur.ord : getKnownProjects().reduce((m, p) => Math.max(m, p.ord), -1) + 1;
@@ -614,7 +676,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           await renameProject(editing, name);
           if (getScope() === editing) setScope(name, true);
         }
-        await putProject(name, { folders, hidden, ord, parent });
+        await putProject(name, { folders, hidden, ord, parent, repoRoot });
         renderProjectPanel();
       } catch (err) {
         console.error("save project failed", err);

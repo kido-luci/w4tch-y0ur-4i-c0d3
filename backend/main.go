@@ -149,114 +149,69 @@ func main() {
 	})
 	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, settingsStore, shipStore, ix, hub))
 
-	// syncProjectRepos derives, in one pass over the registry, the two things a
-	// project cannot state about itself: which repo it is bound to, and whether
-	// that repo is public. Both come out of the same resolution, and both are
-	// STORED on the row rather than recomputed per request — resolving stats the
-	// filesystem once per candidate session cwd, which is fine on a five-minute
-	// tick and not fine on the session endpoints' hot path.
+	// syncRegistry keeps the two things a project cannot state about itself in
+	// step with the binding the user gave it: what the filesystem says about
+	// that repo, and whether it is public. Both are STORED on the row rather
+	// than recomputed per request, so nothing on a request path shells out to
+	// git or waits on gh.
 	//
-	// Visibility keeps its safe default: every resolved repo public → public; a
-	// private repo, no GitHub remote, no resolvable repo at all, or a failed gh
-	// call → private — public screenshots must only ever show work that is
-	// already public. The gh answer is cached per slug (github.IsPrivate), so a
-	// tick is cheap.
+	// The binding itself is never inferred here — the project page is its own
+	// taxonomy and a repo nobody named is a guess. The one exception is the
+	// FIRST pass over a row that has never been resolved (LinkUnset): it may
+	// adopt the repo the project's Claude folders resolve to, as an opening
+	// offer. Clearing a binding stamps LinkNone, so the offer is never made
+	// twice; see ProjectStore.AdoptRepoRoot.
 	//
-	// The link records how far the binding could be PROVEN: a root the name
-	// fallback guessed stays `guessed` and carries no slug, so nothing
-	// downstream can mistake it for ownership.
+	// Visibility keeps its safe default: bound to a public GitHub repo → public;
+	// anything else — private repo, no remote, no binding, a path that has gone
+	// missing, or a failed gh call → private, because public screenshots must
+	// only ever show work that is already public. The gh answer is cached per
+	// slug (github.IsPrivate), so a tick is cheap.
 	rr := repos.New(ix)
-	syncProjectRepos := func() bool {
+	syncRegistry := func() bool {
 		changed := false
 		for _, p := range projectStore.List() {
-			private := true
-			root, slug, kind, count := "", "", board.LinkNone, 0
-			if len(p.Folders) > 0 { // Repos("") would mean ALL folders, not none
-				if roots := rr.Repos(strings.Join(p.Folders, ",")); len(roots) > 0 {
-					allPublic := true
-					for _, r := range roots {
-						// A guessed root is a directory that merely shares the
-						// folder's name — calling a project public on that
-						// basis would let presentation mode show work off a
-						// repo nobody proved is this project's.
-						if r.Guessed {
-							allPublic = false
-							break
-						}
-						priv, ok := github.IsPrivate(r.Root)
-						if !ok || priv {
-							allPublic = false
-							break
-						}
-					}
-					private = !allPublic
-					first := roots[0]
-					// The repo, not the directory the session happened to run
-					// in: a linked worktree has its own path, so without this a
-					// folder working in one binds to a root nothing else can
-					// ever match.
-					root, count = git.CanonicalRoot(first.Root), len(roots)
-					if first.Guessed {
-						kind = board.LinkGuessed
-					} else if s, ok := github.Slug(first.Root); ok {
-						slug, kind = s, board.LinkLinked
-					} else {
-						kind = board.LinkLocal
+			if p.LinkKind == board.LinkUnset && p.RepoRoot == "" && len(p.Folders) > 0 {
+				// Repos("") would mean ALL folders, not none — hence the guard.
+				// A name-matched root is not evidence of anything, so it is
+				// never adopted — it is offered in the manager's picker instead,
+				// labelled as such, where accepting it makes the binding yours.
+				if rs := rr.Repos(strings.Join(p.Folders, ",")); len(rs) > 0 && !rs[0].Guessed {
+					if projectStore.AdoptRepoRoot(p.Name, git.CanonicalRoot(rs[0].Root)) {
+						p.RepoRoot = git.CanonicalRoot(rs[0].Root)
+						changed = true
 					}
 				}
 			}
+
+			private := true
+			if p.RepoRoot != "" {
+				slug, kind := "", board.LinkLocal
+				switch {
+				case !git.IsRepo(p.RepoRoot):
+					// Bound to a path that is gone or no longer a checkout.
+					// Saying "missing" rather than dropping the binding is the
+					// point: a moved repo must not look like one nobody bound.
+					kind = board.LinkMissing
+				default:
+					if s, ok := github.Slug(p.RepoRoot); ok {
+						slug, kind = s, board.LinkLinked
+						if priv, ok := github.IsPrivate(p.RepoRoot); ok && !priv {
+							private = false
+						}
+					}
+				}
+				if projectStore.SetRepoDerived(p.Name, slug, kind) {
+					changed = true
+				}
+			}
+			// An unbound row is deliberately NOT stamped: LinkNone means the
+			// user cleared the binding, and writing it here would erase the
+			// never-resolved state on the first tick — foreclosing the opening
+			// offer for every project whose repo only appears later.
 			if projectStore.SetPrivate(p.Name, private) {
 				changed = true
 			}
-			if projectStore.SetRepoLink(p.Name, root, slug, kind, count) {
-				changed = true
-			}
-		}
-		return changed
-	}
-
-	// seedRepoProjects grows the registry from the code instead of waiting for
-	// someone to type a folder name: a Claude folder no project owns, whose
-	// sessions resolve to a real repo, becomes a project named after that REPO
-	// (the checkout's directory is often not the repo's name). Folders that
-	// resolve to nothing — a directory since deleted, work outside any repo —
-	// are left alone, because inventing a project for them would be the
-	// unchecked guessing this replaces; so is a `guessed` root, which only
-	// matched a directory by name.
-	//
-	// Add-only, the contract SeedProjects already has for labels: the sessions
-	// are the evidence, so a row deleted while its folder keeps producing
-	// sessions comes back on the next tick.
-	seedRepoProjects := func() bool {
-		owned := map[string]bool{}
-		for _, p := range projectStore.List() {
-			for _, f := range p.Folders {
-				owned[f] = true
-			}
-		}
-		added := false
-		for _, folder := range ix.Projects() {
-			if owned[folder] {
-				continue
-			}
-			rs := rr.Repos(folder)
-			if len(rs) == 0 || rs[0].Guessed {
-				continue
-			}
-			root := git.CanonicalRoot(rs[0].Root)
-			if projectStore.SeedRepo(git.RepoName(root), folder) {
-				added = true
-			}
-		}
-		return added
-	}
-
-	// Seeding first, so a row created this pass gets its repo link and its
-	// visibility in the same tick rather than five minutes later.
-	syncRegistry := func() bool {
-		changed := seedRepoProjects()
-		if syncProjectRepos() {
-			changed = true
 		}
 		return changed
 	}
