@@ -70,8 +70,8 @@ URL, so any view you are looking at is a link you can paste.
 
 - **Live + notifications** — instant updates via Claude Code hooks (below),
   plus optional OS notifications when a session finishes or needs input.
-- **MCP server** — create and update board cards, docs pages and drawings from
-  inside a Claude Code session, so the agent files its own work.
+- **MCP server** — create and update board cards, cycles, docs pages and
+  drawings from inside a Claude Code session, so the agent files its own work.
 
 ## Build & run
 

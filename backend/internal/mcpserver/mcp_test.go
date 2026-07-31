@@ -70,7 +70,8 @@ func TestMCPListsDesignAndBoardTools(t *testing.T) {
 	}
 	for _, name := range []string{
 		"list_drawings", "get_drawing", "create_drawing", "rename_drawing", "update_drawing", "set_drawing_topics",
-		"list_todos", "create_todo", "update_todo", "list_board_states", "list_cycles",
+		"list_todos", "create_todo", "update_todo", "list_board_states",
+		"list_cycles", "create_cycle", "update_cycle",
 		"list_docs", "get_doc", "create_doc", "update_doc", "move_doc",
 		"list_ships",
 		"list_groups", "upsert_group",
@@ -79,8 +80,8 @@ func TestMCPListsDesignAndBoardTools(t *testing.T) {
 			t.Errorf("tool %q missing (got %v)", name, res.Tools)
 		}
 	}
-	if len(res.Tools) != 19 {
-		t.Errorf("want exactly 19 tools (delete stays UI-only across stores), got %d", len(res.Tools))
+	if len(res.Tools) != 21 {
+		t.Errorf("want exactly 21 tools (delete stays UI-only across stores), got %d", len(res.Tools))
 	}
 }
 
@@ -274,6 +275,116 @@ func TestMCPBoardRoundTrip(t *testing.T) {
 		}
 		if !res.IsError {
 			t.Fatalf("update_todo(%v) should be a tool error", args)
+		}
+	}
+}
+
+func TestMCPCycleRoundTrip(t *testing.T) {
+	session, _, _, _ := dialMCP(t)
+	ctx := context.Background()
+
+	// Bare dates land in the server's zone: midnight to 23:59:59.
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "create_cycle",
+		Arguments: map[string]any{
+			"name": "  Sprint 1  ", "goal": "ship the cycle tools",
+			"startsAt": "2026-07-27", "endsAt": "2026-08-09",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create_cycle: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("create_cycle failed: %v", res.Content)
+	}
+	cyc, ok := res.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("create_cycle structured content: %#v", res.StructuredContent)
+	}
+	id, _ := cyc["id"].(string)
+	if id == "" || cyc["name"] != "Sprint 1" {
+		t.Fatalf("unexpected cycle: %#v", cyc)
+	}
+	starts, err := time.Parse(time.RFC3339, cyc["startsAt"].(string))
+	if err != nil {
+		t.Fatalf("startsAt did not round-trip as RFC3339: %v", err)
+	}
+	if want := time.Date(2026, 7, 27, 0, 0, 0, 0, time.Local); !starts.Equal(want) {
+		t.Fatalf("bare start date should land at local midnight, got %v", starts)
+	}
+	ends, _ := time.Parse(time.RFC3339, cyc["endsAt"].(string))
+	if want := time.Date(2026, 8, 9, 23, 59, 59, 0, time.Local); !ends.Equal(want) {
+		t.Fatalf("bare end date should land at local 23:59:59, got %v", ends)
+	}
+
+	// Close it; the server picks the moment.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "update_cycle",
+		Arguments: map[string]any{"id": id, "closed": true},
+	})
+	if err != nil {
+		t.Fatalf("update_cycle: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("update_cycle failed: %v", res.Content)
+	}
+	cyc = res.StructuredContent.(map[string]any)
+	if at, _ := cyc["closedAt"].(string); at == "" {
+		t.Fatalf("closing should stamp closedAt: %#v", cyc)
+	}
+	if cyc["goal"] != "ship the cycle tools" {
+		t.Fatalf("update_cycle touched fields it wasn't sent: %#v", cyc)
+	}
+
+	// Reopen, and move the end with an RFC3339 stamp taken as-is.
+	endAt := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "update_cycle",
+		Arguments: map[string]any{"id": id, "closed": false, "endsAt": endAt},
+	})
+	if err != nil {
+		t.Fatalf("update_cycle: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("update_cycle failed: %v", res.Content)
+	}
+	cyc = res.StructuredContent.(map[string]any)
+	if _, closed := cyc["closedAt"]; closed {
+		t.Fatalf("reopening should clear closedAt: %#v", cyc)
+	}
+	if ends, _ = time.Parse(time.RFC3339, cyc["endsAt"].(string)); !ends.Equal(time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("an RFC3339 end should be taken as-is, got %v", ends)
+	}
+
+	// list_cycles carries the new row.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "list_cycles", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("list_cycles: %v", err)
+	}
+	out, _ := res.StructuredContent.(map[string]any)
+	list, _ := out["cycles"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("want the created cycle listed, got %#v", out)
+	}
+
+	// A window that ends before it starts, an unknown id and a bad date are
+	// all tool errors.
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"create_cycle", map[string]any{"name": "x", "startsAt": "2026-08-09", "endsAt": "2026-07-27"}},
+		{"create_cycle", map[string]any{"name": "x", "startsAt": "soon", "endsAt": "2026-08-09"}},
+		{"create_cycle", map[string]any{"name": "x", "startsAt": "", "endsAt": "2026-08-09"}},
+		{"update_cycle", map[string]any{"id": "nope", "closed": true}},
+		{"update_cycle", map[string]any{"id": id, "endsAt": "2026-07-01"}},
+	} {
+		res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.tool, Arguments: tc.args})
+		if err != nil {
+			t.Fatalf("%s(%v): %v", tc.tool, tc.args, err)
+		}
+		if !res.IsError {
+			t.Fatalf("%s(%v) should be a tool error", tc.tool, tc.args)
 		}
 	}
 }
