@@ -251,9 +251,9 @@ func TestScopeSetWithExcludeHidesPrivateProjects(t *testing.T) {
 	if !ps.SetPrivate("blog-backend", true) {
 		t.Fatal("SetPrivate should report a change")
 	}
-	private, _ := ps.PrivateSets()
+	private := ps.PrivateNames()
 	if !private["blog-backend"] || len(private) != 1 {
-		t.Fatalf("PrivateSets should name exactly blog-backend, got %v", private)
+		t.Fatalf("PrivateNames should name exactly blog-backend, got %v", private)
 	}
 
 	// A group scope keeps its public members and loses the private one.

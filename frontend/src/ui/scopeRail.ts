@@ -116,6 +116,26 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     return visibleProjects()[0]?.name ?? "";
   }
 
+  /** While presenting, the active scope must not sit on something the mode
+      hides — a private project, or a label whose coverage it emptied. Moves to
+      the default scope and reports whether it moved; run it AFTER
+      loadScopeIndex, since the "covers nothing" half reads the trimmed index.
+
+      `replace` for the boot path (no history entry, and no popstate — so that
+      caller re-renders itself); a push otherwise, which re-renders through
+      popstate. Without the boot call the chip and the URL kept printing a
+      private project's name across a reload, and — its coverage being empty —
+      the views fell back to every public folder instead of that scope. */
+  function bounceOffHidden(replace: boolean): boolean {
+    const cur = getScope();
+    if (!presentationOn || !cur) return false;
+    if (!isPrivateName(cur) && (getScopeSet()?.size ?? 0) > 0) return false;
+    const def = firstScope();
+    if (!def || def === cur) return false;
+    setScope(def, replace);
+    return true;
+  }
+
   function renderRows(): void {
     const current = getScope();
     const projs = visibleProjects();
@@ -583,16 +603,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       // projects while the mode is on) — refetch, then either bounce off a
       // scope the mode just hid or re-render the view where it stands.
       void loadScopeIndex().then(() => {
-        const cur = getScope();
-        const covered = getScopeSet()?.size ?? 0;
-        if (presentationOn && cur && (isPrivateName(cur) || covered === 0)) {
-          const def = firstScope();
-          if (def && def !== cur) {
-            setScope(def); // popstate re-renders the view and the rows
-            return;
-          }
-        }
-        onChange();
+        if (!bounceOffHidden(false)) onChange();
       });
       return;
     }
@@ -653,16 +664,21 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       presentationOn = !!pres.hidden;
       setKnownTaxonomy(projects, groups);
       // No "all projects" anymore: a fresh load (or a cleared scope) lands on a
-      // default project so a scope is always active.
+      // default project so a scope is always active. A remembered one may be a
+      // scope presentation mode hides — a reload is the other way into that
+      // state, and until this ran only the toggle itself bounced off it.
+      let bounced = false;
       if (!hadScope) {
         const def = firstScope();
         if (def) setScope(def, true);
+      } else {
+        bounced = bounceOffHidden(true);
       }
       renderRows();
       // Re-render the views when the load changed what the active scope resolves
       // to: a default was applied, a group scope expanded to its members, or a
       // merged project now owns more than its own name.
-      if (getScopeParam() !== beforeParam) onChange();
+      if (bounced || getScopeParam() !== beforeParam) onChange();
     })
     .catch(() => {
       /* the persisted-scope-only rows stay */

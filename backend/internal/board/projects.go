@@ -254,24 +254,42 @@ func (ps *ProjectStore) SetPrivate(name string, private bool) bool {
 	return true
 }
 
-// PrivateSets returns the private projects' names and the union of the folders
-// they own — the two shapes presentation-mode filtering needs (labels for the
-// board family and /api/scopes, folders for the session-derived endpoints).
-// Both maps are non-nil and freshly built, safe for the caller to hold.
-func (ps *ProjectStore) PrivateSets() (names, folders map[string]bool) {
+// PrivateNames returns the private projects' names — the label subtraction the
+// board family and /api/scopes apply while presentation mode is on. Non-nil and
+// freshly built, safe for the caller to hold.
+func (ps *ProjectStore) PrivateNames() map[string]bool {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	names, folders = map[string]bool{}, map[string]bool{}
+	names := map[string]bool{}
 	for _, p := range ps.projects {
-		if !p.Private {
+		if p.Private {
+			names[p.Name] = true
+		}
+	}
+	return names
+}
+
+// PublicFolders returns the Claude folders owned by projects that are NOT
+// private — the ALLOWLIST the session-derived endpoints filter to while
+// presentation mode is on.
+//
+// An allowlist, deliberately, and not the complement of the private folders: a
+// folder no project owns is not covered by anything that could be public, so
+// subtracting only the known-private ones left every unclaimed folder on screen
+// mid-demo, raw folder name and all. Claiming a folder is what makes it public.
+func (ps *ProjectStore) PublicFolders() map[string]bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	folders := map[string]bool{}
+	for _, p := range ps.projects {
+		if p.Private {
 			continue
 		}
-		names[p.Name] = true
 		for _, f := range p.Folders {
 			folders[f] = true
 		}
 	}
-	return names, folders
+	return folders
 }
 
 // wouldCycle reports whether making parent the parent of name would create a

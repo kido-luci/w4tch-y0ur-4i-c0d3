@@ -142,8 +142,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		if settings == nil || !settings.PresentationHidden() {
 			return nil
 		}
-		names, _ := projects.PrivateSets()
-		return names
+		return projects.PrivateNames()
 	}
 
 	// Every scope question below goes through here, so a group label expands the
@@ -1371,21 +1370,23 @@ func Register(mux *http.ServeMux, d Deps) {
 	})
 }
 
-// PresentationGuard hides private projects from the session-derived endpoint
-// family while presentation mode is on. Those endpoints share one convention —
+// PresentationGuard narrows the session-derived endpoint family to the public
+// projects while presentation mode is on. Those endpoints share one convention —
 // a `project` query param carrying comma-separated Claude folders, empty
 // meaning all of them — and the guard rewrites that param in place: an empty
-// param becomes every folder the index knows minus the private ones, and a
-// non-empty one loses its private folders. The handlers (sessions, insights,
-// stats, search, git, code graph) never learn the toggle exists.
+// param becomes every PUBLIC project's folders, and a non-empty one keeps only
+// the folders among them. The handlers (sessions, insights, stats, search, git,
+// code graph) never learn the toggle exists.
+//
+// It is an allowlist rather than a subtraction of the private folders, because
+// the folders no project owns are neither: subtracting left every unclaimed
+// folder — raw name, session titles and all — on screen mid-demo. Which is also
+// why there is no "no private projects, pass through" shortcut here.
 //
 // /api/ships is the one exception: its `project` values are Makefile-reported
 // names, a different namespace, so its handler subtracts by project NAME
 // itself. Writes, non-/api paths and the SSE stream pass through untouched.
-//
-// `folders` supplies every folder the index knows (ix.Projects at the call
-// site) — a func, not a slice, because the index rescans behind this handler.
-func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectStore, folders func() []string, next http.Handler) http.Handler {
+func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if settings == nil || !settings.PresentationHidden() ||
 			r.Method != http.MethodGet ||
@@ -1394,25 +1395,20 @@ func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectSto
 			next.ServeHTTP(w, r)
 			return
 		}
-		_, private := projects.PrivateSets()
-		if len(private) == 0 {
-			next.ServeHTTP(w, r)
-			return
-		}
+		public := projects.PublicFolders()
 		q := r.URL.Query()
 		var keep []string
 		if cur := q.Get("project"); cur != "" {
 			for _, f := range index.SplitProjects(cur) {
-				if !private[f] {
+				if public[f] {
 					keep = append(keep, f)
 				}
 			}
 		} else {
-			for _, f := range folders() {
-				if !private[f] {
-					keep = append(keep, f)
-				}
+			for f := range public {
+				keep = append(keep, f)
 			}
+			sort.Strings(keep) // map order is random; keep the param stable
 		}
 		if len(keep) == 0 {
 			// An empty param means "all folders" — the opposite of what an

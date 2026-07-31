@@ -80,8 +80,7 @@ func presentationFixture(t *testing.T) (settings *board.SettingsStore, guard htt
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		*got = r.URL.Query().Get("project")
 	})
-	folders := func() []string { return []string{"secret-folder", "open-folder"} }
-	return settings, PresentationGuard(settings, projects, folders, next), got
+	return settings, PresentationGuard(settings, projects, next), got
 }
 
 func TestPresentationGuardRewritesTheProjectParam(t *testing.T) {
@@ -101,7 +100,7 @@ func TestPresentationGuardRewritesTheProjectParam(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// An empty param means "all folders" — it becomes all minus the private ones.
+	// An empty param means "all folders" — it becomes the public ones.
 	serve("GET", "/api/sessions")
 	if *got != "open-folder" {
 		t.Fatalf("empty param should become the public folders, handler saw %q", *got)
@@ -111,6 +110,14 @@ func TestPresentationGuardRewritesTheProjectParam(t *testing.T) {
 	serve("GET", "/api/stats?project=open-folder,secret-folder")
 	if *got != "open-folder" {
 		t.Fatalf("scoped param should lose the private folder, handler saw %q", *got)
+	}
+
+	// A folder NO project owns is not public either. It is not in the private
+	// set, so subtracting instead of allowlisting left it — and its sessions,
+	// under its raw folder name — on screen mid-demo.
+	serve("GET", "/api/stats?project=open-folder,loose-folder")
+	if *got != "open-folder" {
+		t.Fatalf("an unowned folder must not survive, handler saw %q", *got)
 	}
 
 	// A param left with nothing must NOT become the all-folders empty string.
