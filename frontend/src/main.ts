@@ -1,5 +1,5 @@
 import "./style.css";
-import "./pixel.css";
+import "./editorial.css";
 import { migrateLegacyHash, parseRoute } from "./app/router";
 import { announce } from "./app/live";
 import { initNotifications } from "./app/notify";

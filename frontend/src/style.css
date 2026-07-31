@@ -1,16 +1,15 @@
-/* W4tch y0ur 4I c0d3 — pixel design system (dark + light) */
+/* W4tch y0ur 4I c0d3 — Paper Editorial Cool design system (dark + light) */
 
 /* These names are the app's original vocabulary; every screen and every
    visualisation already speaks it. Rather than restyle 300 classes one by
-   one, the names now alias the pixel tokens in pixel.css — repointing them
-   moves the whole app, bespoke chart chrome included.
+   one, the names alias the editorial tokens in editorial.css — repointing
+   them moves the whole app, bespoke chart chrome included.
 
-   Colour lives in ONE place: pixel.css defines the light values and the dark
-   overrides, so there is no per-theme block here to keep in sync. theme.ts
-   still sets data-theme on <html> exactly as before. */
+   Colour lives in ONE place: editorial.css defines the light values and the
+   dark overrides, so there is no per-theme block here to keep in sync.
+   theme.ts still sets data-theme on <html> exactly as before. */
 :root {
   --bg: var(--px-ground);
-  --bg-dot: var(--px-grid);
   --card: var(--px-surface);
   /* Frames use --px-line, never --px-ink: pointing this at the text ink drew
      every border at reading contrast, which is what made the language shout. */
@@ -49,9 +48,6 @@ body {
 
 body {
   background-color: var(--bg);
-  background-image: linear-gradient(var(--bg-dot) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-dot) 1px, transparent 1px);
-  background-size: 16px 16px;
   color: var(--text);
   font-family: var(--sans);
   font-size: var(--px-sans-sm);
@@ -97,10 +93,10 @@ a {
   z-index: 100;
   padding: var(--px-sp-4) var(--px-sp-6);
   background: var(--card);
-  border: 2px solid var(--accent);
+  border: 1px solid var(--accent);
   box-shadow: var(--px-shadow-sm);
   color: var(--text);
-  font: 400 var(--px-label) var(--px-pixel);
+  font: 600 var(--px-meta) var(--px-sans);
   text-decoration: none;
   transition: top 120ms ease;
 }
@@ -328,8 +324,8 @@ a {
 .project-select {
   background: var(--card);
   color: var(--text);
-  border: var(--px-edge);
-  border-radius: 0;
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-3) var(--px-sp-4);
@@ -474,7 +470,7 @@ a {
   background: var(--bg);
   color: var(--text);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-3) var(--px-sp-4);
@@ -513,8 +509,8 @@ a {
 .chip {
   background: transparent;
   color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: 0;
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-5);
@@ -545,7 +541,7 @@ a {
   background: var(--card);
   color: var(--text);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-3) var(--px-sp-5);
@@ -580,7 +576,7 @@ a {
   width: 280px;
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-panel);
   padding: var(--px-sp-5) var(--px-sp-6);
   box-shadow: var(--shadow);
 }
@@ -596,8 +592,11 @@ a {
 }
 
 .filter-label {
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
+  font-weight: 600;
   font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: var(--px-sp-2);
 }
@@ -611,8 +610,8 @@ a {
 .filter-chip {
   background: transparent;
   color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: 0;
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
   font-family: var(--mono);
   font-size: var(--px-meta);
   padding: var(--px-sp-2) var(--px-sp-4);
@@ -668,7 +667,7 @@ a {
 .stat-card {
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-5) var(--px-sp-5);
   box-shadow: var(--px-shadow);
 }
@@ -679,12 +678,15 @@ a {
 
 .stat-label {
   color: var(--text-muted);
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   font-size: var(--px-label);
 }
 
 .stat-value {
-  font-family: var(--px-numeral);
+  font-family: var(--mono);
   font-size: var(--px-display);
   font-weight: 600;
   margin-top: var(--px-sp-1);
@@ -706,7 +708,7 @@ a {
   gap: var(--px-sp-4);
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-4) var(--px-sp-5);
   text-decoration: none;
   flex: 0 0 auto;
@@ -744,7 +746,7 @@ a {
 .live-dot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--live);
   flex: 0 0 auto;
   animation: pulse 1.6s ease-in-out infinite;
@@ -818,7 +820,7 @@ a {
 }
 
 .scope-chip-key {
-  font-family: var(--px-pixel);
+  font-family: var(--mono);
   font-size: var(--px-label);
   color: var(--text-muted);
 }
@@ -834,7 +836,7 @@ a {
 .sessions-table-wrap {
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-panel);
   overflow-x: auto;
   box-shadow: var(--px-shadow);
 }
@@ -848,9 +850,11 @@ a {
 .sessions-table th {
   text-align: left;
   color: var(--text-muted);
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
   font-size: var(--px-label);
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   padding: var(--px-sp-4) var(--px-sp-5);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -908,7 +912,7 @@ a {
   margin-left: var(--px-sp-3);
   padding: var(--px-sp-1) var(--px-sp-3);
   background: var(--px-rule-soft);
-  border-radius: 0;
+  border-radius: 2px;
   font-family: var(--mono);
   font-size: var(--px-label-xs);
   letter-spacing: 0.04em;
@@ -970,7 +974,7 @@ a {
   line-height: 1;
   color: var(--model-color, #9ca3af);
   background: color-mix(in srgb, var(--model-color, #9ca3af) 15%, transparent);
-  border-radius: 0;
+  border-radius: var(--px-r-pill);
   padding: var(--px-sp-2) var(--px-sp-4);
   white-space: nowrap;
 }
@@ -993,7 +997,7 @@ a {
 .model-dot {
   width: 6px;
   height: 6px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--model-color, #9ca3af);
 }
 
@@ -1037,7 +1041,7 @@ a {
 .card {
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-6) var(--px-sp-6);
   margin-bottom: var(--px-sp-5);
   box-shadow: var(--px-shadow);
@@ -1172,9 +1176,11 @@ a {
 }
 
 .section-heading {
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
   font-size: var(--px-label);
   font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--text-muted);
   margin: 0 0 var(--px-sp-4);
 }
@@ -1423,7 +1429,7 @@ a {
 }
 
 .heat-l0 {
-  fill: var(--bg-dot);
+  fill: var(--px-rule-soft);
 }
 .heat-l1 {
   fill: color-mix(in srgb, var(--accent) 28%, transparent);
@@ -1530,7 +1536,7 @@ a {
 .timeline-events-btn {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
@@ -1575,7 +1581,7 @@ a {
 .timeline-swatch {
   width: 11px;
   height: 11px;
-  border-radius: 0;
+  border-radius: 2px;
   display: inline-block;
 }
 
@@ -1597,7 +1603,7 @@ a {
   gap: var(--px-sp-3);
   white-space: nowrap;
   padding: var(--px-sp-3) var(--px-sp-5);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   border: 1px solid color-mix(in srgb, var(--flow-color, #9ca3af) 45%, transparent);
   background: color-mix(in srgb, var(--flow-color, #9ca3af) 12%, transparent);
   font-family: var(--mono);
@@ -1623,7 +1629,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   background: color-mix(in srgb, var(--flow-color, #9ca3af) 25%, transparent);
   color: var(--text);
   font-size: var(--px-label);
@@ -1690,7 +1696,7 @@ a.flow-node {
 .flow-swatch {
   width: 10px;
   height: 10px;
-  border-radius: 0;
+  border-radius: 2px;
   display: inline-block;
 }
 
@@ -1788,7 +1794,7 @@ a.flow-node {
   background: var(--card);
   border: var(--px-edge-inner);
   border-top: 2px solid var(--ms-accent, var(--border));
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-4) var(--px-sp-5);
   color: var(--text);
   font-family: var(--mono);
@@ -1823,7 +1829,7 @@ a.flow-node {
 .ms-group-dot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   flex: 0 0 auto;
 }
 
@@ -1892,7 +1898,7 @@ a.flow-node {
   min-width: 18px;
   height: 18px;
   padding: 0 var(--px-sp-3);
-  border-radius: 0;
+  border-radius: var(--px-r-pill);
   background: var(--accent);
   color: #fff;
   font-family: var(--mono);
@@ -1912,7 +1918,7 @@ a.flow-node {
   width: 212px;
   background: var(--card);
   border: var(--px-edge-inner);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-4) var(--px-sp-5);
   color: var(--text);
   text-decoration: none;
@@ -1929,7 +1935,7 @@ a.flow-node {
 .ms-mcard-icon {
   width: 26px;
   height: 26px;
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -1979,7 +1985,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-label);
   padding: var(--px-sp-2) var(--px-sp-4);
@@ -2096,7 +2102,7 @@ a.flow-node {
   text-decoration: none;
   color: var(--text);
   padding: var(--px-sp-4) var(--px-sp-5);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   border: 1px solid transparent;
 }
 
@@ -2148,7 +2154,7 @@ a.flow-node {
   overflow-y: auto;
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-panel);
   padding: var(--px-sp-6) var(--px-sp-6);
   box-shadow: var(--px-shadow);
 }
@@ -2169,8 +2175,11 @@ a.flow-node {
 }
 
 .insp-eyebrow {
-  font-family: var(--px-pixel);
+  font-family: var(--mono);
+  font-weight: 600;
   font-size: var(--px-label-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -2194,7 +2203,7 @@ a.flow-node {
   font-family: var(--mono);
   font-size: var(--px-label);
   padding: var(--px-sp-1) var(--px-sp-4);
-  border-radius: 0;
+  border-radius: var(--px-r-pill);
 }
 
 .insp-pill-running {
@@ -2213,7 +2222,7 @@ a.flow-node {
 .insp-pill-dot {
   width: 6px;
   height: 6px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--live);
   animation: pulse 1.6s ease-in-out infinite;
 }
@@ -2230,8 +2239,11 @@ a.flow-node {
 }
 
 .insp-section-title {
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
+  font-weight: 600;
   font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: var(--px-sp-4);
 }
@@ -2239,8 +2251,8 @@ a.flow-node {
 .insp-track {
   position: relative;
   height: 8px;
-  background: var(--bg-dot);
-  border-radius: 0;
+  background: var(--px-rule-soft);
+  border-radius: 2px;
 }
 
 .insp-track-fill {
@@ -2249,7 +2261,7 @@ a.flow-node {
   height: 100%;
   min-width: 2px;
   background: var(--accent);
-  border-radius: 0;
+  border-radius: 2px;
 }
 
 .insp-grid {
@@ -2262,13 +2274,16 @@ a.flow-node {
 .insp-tile {
   background: var(--bg);
   border: var(--px-edge-inner);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-4) var(--px-sp-5);
 }
 
 .insp-tile-label {
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
+  font-weight: 600;
   font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -2307,9 +2322,9 @@ a.flow-node {
 .dist-bar {
   display: flex;
   height: 14px;
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   overflow: hidden;
-  background: var(--bg-dot);
+  background: var(--px-rule-soft);
 }
 
 .dist-seg {
@@ -2335,7 +2350,7 @@ a.flow-node {
 .dist-dot {
   width: 10px;
   height: 10px;
-  border-radius: 0;
+  border-radius: 50%;
 }
 
 .dist-name {
@@ -2362,7 +2377,7 @@ a.flow-node {
 .cost-card {
   background: var(--bg);
   border: var(--px-edge-inner);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-5) var(--px-sp-5);
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.15s ease,
@@ -2412,14 +2427,14 @@ a.flow-node {
 .cost-card-bar {
   margin-top: var(--px-sp-4);
   height: 4px;
-  border-radius: 0;
-  background: var(--bg-dot);
+  border-radius: 2px;
+  background: var(--px-rule-soft);
   overflow: hidden;
 }
 
 .cost-card-bar-fill {
   height: 100%;
-  border-radius: 0;
+  border-radius: 2px;
 }
 
 /* ---------- main-thread tool usage ---------- */
@@ -2447,15 +2462,15 @@ a.flow-node {
 
 .tool-bar {
   height: 8px;
-  background: var(--border);
-  border-radius: 0;
+  background: var(--px-rule-soft);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .tool-bar-fill {
   height: 100%;
   background: var(--accent);
-  border-radius: 0;
+  border-radius: 2px;
 }
 
 .tool-count {
@@ -2489,7 +2504,7 @@ a.flow-node {
 .notify-btn {
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-size: var(--px-word);
   line-height: 1;
   padding: var(--px-sp-2) var(--px-sp-4);
@@ -2519,7 +2534,7 @@ a.flow-node {
 .theme-btn {
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-size: var(--px-word);
   line-height: 1;
   padding: var(--px-sp-2) var(--px-sp-4);
@@ -2570,7 +2585,7 @@ a.flow-node {
 .tot-leg-sw {
   width: 10px;
   height: 10px;
-  border-radius: 0;
+  border-radius: 2px;
   display: inline-block;
 }
 
@@ -2598,7 +2613,7 @@ a.flow-node {
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-meta);
   padding: var(--px-sp-2) var(--px-sp-5);
@@ -2656,13 +2671,16 @@ a.flow-node {
 .tot-kpi {
   background: var(--bg);
   border: var(--px-edge-inner);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-5) var(--px-sp-5);
 }
 
 .tot-kpi-label {
   color: var(--text-muted);
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   font-size: var(--px-label);
 }
 
@@ -2730,19 +2748,22 @@ a.flow-node {
 
 /* ---------- todo board ---------- */
 
+/* Actions are underlined pink text, not boxes — the mock draws every small
+   action ("+ new task", "edit") this way. Padding stays for the hit area. */
 .nav-link {
-  font-family: var(--mono);
-  font-size: var(--px-body);
-  color: var(--text-muted);
-  text-decoration: none;
-  background: var(--card);
-  border: var(--px-edge);
-  border-radius: 0;
-  padding: var(--px-sp-3) var(--px-sp-5);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-meta);
+  color: var(--px-pink-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: none;
+  padding: var(--px-sp-2) var(--px-sp-2);
+  cursor: pointer;
 }
 
 .nav-link:hover {
-  border-color: var(--border-hover);
   color: var(--text);
 }
 
@@ -2794,7 +2815,7 @@ a.flow-node {
 .board-col {
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-5);
   display: flex;
   flex-direction: column;
@@ -2803,23 +2824,25 @@ a.flow-node {
   box-shadow: var(--px-shadow);
 }
 
-/* Column names are fixed chrome (backlog/doing/done), never user text, so
-   Silkscreen is safe here — see the label rules above. */
+/* The editorial signature: a serif column head over a heavy ink rule. Where
+   the mock colours a column (In Progress purple, Done green) the board's
+   per-state classes recolour the rule below. */
 .board-col-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: var(--px-sp-4);
-  padding: var(--px-sp-1) var(--px-sp-2);
-  font-family: var(--px-pixel);
-  font-size: var(--px-label);
-  text-transform: uppercase;
+  padding: var(--px-sp-1) var(--px-sp-2) var(--px-sp-3);
+  border-bottom: var(--px-rule-heavy);
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-sans-sm);
   color: var(--text);
 }
 
 .board-count {
   background: transparent;
   border: var(--px-edge-inner);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: 1px var(--px-sp-3);
   font-size: var(--px-label-xs);
   color: var(--text);
@@ -2835,7 +2858,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-3) var(--px-sp-4);
@@ -2859,7 +2882,7 @@ a.flow-node {
 .todo-card {
   background: var(--bg);
   border: var(--px-edge-inner);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-4) var(--px-sp-5);
   cursor: grab;
   transition: border-color 0.15s ease, transform 0.15s ease,
@@ -2885,7 +2908,7 @@ a.flow-node {
 
 .board-cards.drag-over {
   background: var(--row-hover);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   outline: 1px dashed var(--border-hover);
   outline-offset: 2px;
 }
@@ -2907,7 +2930,7 @@ a.flow-node {
   font-size: var(--px-meta);
   color: var(--px-muted-on-fill);
   background: var(--px-rule-soft);
-  border-radius: 0;
+  border-radius: 2px;
   padding: 1px var(--px-sp-4);
 }
 
@@ -2937,7 +2960,7 @@ a.flow-node {
   gap: var(--px-sp-2);
   font-family: var(--mono);
   font-size: var(--px-label);
-  border-radius: 0;
+  border-radius: var(--px-r-pill);
   padding: 0 var(--px-sp-4);
   line-height: 16px;
   color: var(--lc);
@@ -2984,7 +3007,7 @@ a.flow-node {
   cursor: pointer;
   font-size: var(--px-body);
   padding: var(--px-sp-1) var(--px-sp-3);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
 }
 
 .todo-btn:hover {
@@ -2999,7 +3022,7 @@ a.flow-node {
 .board-add {
   background: none;
   border: 1px dashed var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-4);
   color: var(--text-muted);
   font-family: var(--mono);
@@ -3019,7 +3042,7 @@ a.flow-node {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border-hover);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--sans);
   font-size: var(--px-body);
   padding: var(--px-sp-4) var(--px-sp-5);
@@ -3034,7 +3057,7 @@ a.flow-node {
   top: calc(var(--chrome-h) + 16px);
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-panel);
   padding: var(--px-sp-5);
   display: flex;
   flex-direction: column;
@@ -3051,8 +3074,8 @@ a.flow-node {
 .panel-status {
   background: var(--bg);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 0;
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-4);
@@ -3066,7 +3089,7 @@ a.flow-node {
   background: transparent;
   color: var(--text);
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--sans);
   font-size: var(--px-sans-sm);
   font-weight: 600;
@@ -3127,7 +3150,7 @@ a.flow-node {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--sans);
   font-size: var(--px-body);
   padding: var(--px-sp-3) var(--px-sp-4);
@@ -3150,7 +3173,7 @@ a.flow-node {
 
 .panel-note-md {
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-size: var(--px-body);
   padding: var(--px-sp-3) var(--px-sp-4);
   cursor: text;
@@ -3207,14 +3230,14 @@ a.flow-node {
   font-size: 0.92em;
   background: var(--row-hover);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: 0 var(--px-sp-2);
 }
 
 .md pre {
   background: var(--bg);
   border: var(--px-edge-inner);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-4);
   overflow-x: auto;
   margin: var(--px-sp-4) 0;
@@ -3228,11 +3251,17 @@ a.flow-node {
   font-size: var(--px-meta);
 }
 
+/* The editorial pull-quote: a green rule and serif italic — the mock's docs
+   abstract. */
 .md blockquote {
-  border-left: 3px solid var(--border-hover);
+  border-left: 2px solid var(--px-green);
   margin: var(--px-sp-4) 0;
   padding: var(--px-sp-1) var(--px-sp-5);
-  color: var(--text-muted);
+  color: var(--px-sub);
+  font-family: var(--px-serif);
+  font-style: italic;
+  font-size: var(--px-sans-sm);
+  line-height: 1.6;
 }
 
 .md ul,
@@ -3297,7 +3326,7 @@ a.flow-node {
 
 .md img {
   max-width: 100%;
-  border-radius: 0;
+  border-radius: var(--px-r-card);
 }
 
 .md a,
@@ -3342,7 +3371,7 @@ a.flow-node {
 .panel-delete {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--px-meta);
@@ -3375,7 +3404,7 @@ a.flow-node {
   flex-wrap: wrap;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-3) var(--px-sp-4);
   text-decoration: none;
   text-align: left;
@@ -3529,7 +3558,7 @@ a.flow-node {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-4);
@@ -3541,12 +3570,14 @@ a.flow-node {
   align-self: flex-start;
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-family: var(--mono);
+  color: var(--px-pink-text);
+  font-family: var(--px-sans);
+  font-weight: 600;
   font-size: var(--px-meta);
   padding: 0;
   cursor: pointer;
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .panel-draw-new:hover,
@@ -3646,7 +3677,7 @@ a.flow-node {
   padding: var(--px-sp-4) var(--px-sp-5);
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -3707,7 +3738,7 @@ a.flow-node {
 .design-card {
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-5);
   box-shadow: var(--px-shadow);
   cursor: pointer;
@@ -3787,8 +3818,8 @@ a.flow-node {
 .design-rename {
   background: var(--bg);
   color: var(--text);
-  border: 2px solid var(--border-hover);
-  border-radius: 0;
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-word);
   padding: var(--px-sp-1) var(--px-sp-2);
@@ -3817,9 +3848,9 @@ a.flow-node {
 }
 
 .design-editor-name {
-  font-family: var(--px-pixel);
-  font-size: var(--px-label);
-  text-transform: uppercase;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--px-meta);
   color: var(--text);
 }
 
@@ -3846,7 +3877,7 @@ a.flow-node {
   height: calc(100vh - 156px);
   min-height: 420px;
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-panel);
   box-shadow: var(--px-shadow);
   background: var(--card);
   overflow: hidden;
@@ -4964,7 +4995,7 @@ a.flow-node {
 .doc-main {
   background: var(--card);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-panel);
   box-shadow: var(--px-shadow);
 }
 
@@ -5047,7 +5078,7 @@ a.flow-node {
   background: transparent;
   color: var(--text);
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--sans);
   font-size: var(--px-display);
   font-weight: 650;
@@ -5070,7 +5101,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: var(--px-edge);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-3) var(--px-sp-4);
@@ -5104,7 +5135,7 @@ a.flow-node {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--sans);
   font-size: var(--px-word);
   line-height: 1.5;
@@ -5128,8 +5159,10 @@ a.flow-node {
 /* -- table of contents (read mode only) -- */
 
 .doc-toc-label {
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
+  font-weight: 600;
   font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: var(--px-sp-3);
@@ -5519,7 +5552,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-meta);
   padding: var(--px-sp-2) var(--px-sp-3);
@@ -5660,7 +5693,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-3);
@@ -5684,7 +5717,7 @@ a.flow-node {
   gap: var(--px-sp-3);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-2) var(--px-sp-3);
   cursor: pointer;
   text-align: left;
@@ -5709,8 +5742,10 @@ a.flow-node {
 
 .board-table th {
   text-align: left;
-  font-family: var(--px-pixel);
+  font-family: var(--px-sans);
+  font-weight: 600;
   font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
   padding: var(--px-sp-3) var(--px-sp-4);
@@ -5736,7 +5771,7 @@ a.flow-node {
 
 .bt-row.bt-overlay {
   background: var(--card);
-  border: 2px solid var(--accent);
+  border: 1px solid var(--accent);
 }
 
 .bt-grip {
@@ -5789,9 +5824,9 @@ a.flow-node {
 }
 
 .tl-name {
-  font-family: var(--px-pixel);
-  font-size: var(--px-label);
-  text-transform: uppercase;
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-title);
   display: flex;
   align-items: center;
   gap: var(--px-sp-3);
@@ -5852,7 +5887,7 @@ a.flow-node {
   max-width: 260px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   padding: var(--px-sp-2) var(--px-sp-4);
   font-size: var(--px-meta);
   color: var(--text);
@@ -5911,7 +5946,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-4);
@@ -5931,7 +5966,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-meta);
   padding: var(--px-sp-2) var(--px-sp-3);
@@ -5967,9 +6002,9 @@ a.flow-node {
 }
 
 .cy-name {
-  font-family: var(--px-pixel);
-  font-size: var(--px-label);
-  text-transform: uppercase;
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-title);
 }
 
 .cy-badge {
@@ -6192,7 +6227,7 @@ a.flow-node {
   background: var(--card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: var(--px-r-card);
   font-family: var(--mono);
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-3);
@@ -6208,9 +6243,9 @@ a.flow-node {
   width: auto;
   min-width: 0;
   flex: 1;
-  font-family: var(--px-pixel);
-  font-size: var(--px-label);
-  text-transform: uppercase;
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-sans-sm);
 }
 
 .col-f-name:focus,
