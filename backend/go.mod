@@ -3,7 +3,6 @@ module watch-your-ai-code
 go 1.26.2
 
 require (
-	github.com/fsnotify/fsnotify v1.10.1
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	modernc.org/sqlite v1.54.0
 )

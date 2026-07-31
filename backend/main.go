@@ -68,23 +68,24 @@ func main() {
 		sd = ships.DefaultDir()
 	}
 	shipStore := ships.New(ix.DB(), ix)
-	if n := shipStore.Scan(sd); n > 0 {
-		log.Printf("ships: %d records ingested", n)
+	if rs := shipStore.Scan(sd); len(rs) > 0 {
+		log.Printf("ships: %d records ingested", len(rs))
 	}
 
+	// Both watchers poll: each tick rides the stores' own change detection
+	// (session stamps, the ships known-files set), so it re-parses only what
+	// moved and doubles as the reconcile — new projects, deletions and
+	// anything missed while asleep are caught within a tick, so there is no
+	// separate safety-net rescan loop.
 	hub := sse.New()
-	if err := index.Watch(ix, func(s *index.Session) { hub.Broadcast("session-updated", s) }); err != nil {
-		log.Printf("file watch disabled: %v", err)
-	}
-	if err := ships.Watch(shipStore, sd, func(r *ships.ShipRecord) { hub.Broadcast("ship-recorded", r) }); err != nil {
+	index.Watch(ix, 2*time.Second, func(s *index.Session) { hub.Broadcast("session-updated", s) })
+	if err := ships.Watch(shipStore, sd, 2*time.Second, func(r *ships.ShipRecord) { hub.Broadcast("ship-recorded", r) }); err != nil {
 		log.Printf("ships watch disabled: %v", err)
 	}
 
-	// After both watchers, so the boot census includes their baseline: on
-	// macOS kqueue holds an fd per WATCHED FILE, which makes this process's
-	// fd count scale with the transcript tree. When fds run out the failures
-	// look unrelated (empty design library, accept errors) and a restart
-	// destroys the evidence — the census in the log is the post-mortem.
+	// When fds run out the failures look unrelated (empty design library,
+	// accept errors) and a restart destroys the evidence — the census in the
+	// log is the post-mortem, and it names the kind of fd doing the leaking.
 	fdgauge.Every(10 * time.Minute)
 
 	// Archiving happens in the app, not via transcript writes, so poll the
@@ -92,23 +93,6 @@ func main() {
 	go func() {
 		for range time.Tick(45 * time.Second) {
 			ix.RefreshArchived()
-		}
-	}()
-
-	// Safety net: the watcher can miss events (e.g. new project dirs while
-	// asleep) — a slow periodic rescan reconciles, cheap thanks to stamps.
-	go func() {
-		for range time.Tick(5 * time.Minute) {
-			if ids, err := ix.Rescan(); err == nil {
-				for _, id := range ids {
-					if s := ix.Session(id); s != nil {
-						hub.Broadcast("session-updated", s)
-					}
-				}
-			}
-			// Reconcile ship records too: deletions, and any drop the
-			// watcher missed.
-			shipStore.Scan(sd)
 		}
 	}()
 

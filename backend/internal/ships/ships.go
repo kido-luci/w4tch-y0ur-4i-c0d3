@@ -20,10 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/fsnotify/fsnotify"
 
 	"watch-your-ai-code/internal/index"
 )
@@ -87,15 +84,15 @@ func New(db *sql.DB, ss Sessions) *Store {
 }
 
 // Scan reconciles the ships table with dir: new *.json files are ingested,
-// rows whose file is gone are pruned. Returns how many records were ingested.
+// rows whose file is gone are pruned. Returns the newly ingested records.
 // Safe to call repeatedly — known files are skipped by name.
-func (st *Store) Scan(dir string) int {
+func (st *Store) Scan(dir string) []*ShipRecord {
 	if st.db == nil {
-		return 0
+		return nil
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return 0 // no dir yet: nothing shipped anywhere, not an error
+		return nil // no dir yet: nothing shipped anywhere, not an error
 	}
 	onDisk := map[string]bool{}
 	for _, e := range entries {
@@ -117,13 +114,13 @@ func (st *Store) Scan(dir string) int {
 		rows.Close()
 	}
 
-	ingested := 0
+	var ingested []*ShipRecord
 	for name := range onDisk {
 		if known[name] {
 			continue
 		}
-		if st.ingest(dir, name) != nil {
-			ingested++
+		if r := st.ingest(dir, name); r != nil {
+			ingested = append(ingested, r)
 		}
 	}
 	for f := range known {
@@ -253,59 +250,20 @@ func (st *Store) joinSessions(ships []ShipRecord) {
 	}
 }
 
-// Watch ingests new drop records as they land and calls onShip with each.
-// The dir is flat, so this stays much simpler than the transcript watcher;
-// deletions reconcile on the periodic ScanShips, not here.
-func Watch(st *Store, dir string, onShip func(*ShipRecord)) error {
+// Watch polls for new drop records and calls onShip with each. Scan is
+// already the reconcile — ReadDir plus a known-files set — so the poll just
+// runs it on a short tick; no fsnotify, whose kqueue backend held an fd per
+// file in the dir. A half-written foreign drop fails to ingest and is retried
+// whole on the next tick, which is what the old debounce approximated;
+// deletions reconcile here too, so no separate periodic Scan is needed.
+func Watch(st *Store, dir string, every time.Duration, onShip func(*ShipRecord)) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	w, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-	if err := w.Add(dir); err != nil {
-		w.Close()
-		return err
-	}
-
-	// Debounce per file: the writer mv's records in atomically, but a foreign
-	// writer might not, and a half-read drop would be skipped as invalid.
-	var mu sync.Mutex
-	pending := map[string]*time.Timer{}
-
 	go func() {
-		for {
-			select {
-			case ev, ok := <-w.Events:
-				if !ok {
-					return
-				}
-				if !ev.Has(fsnotify.Create) && !ev.Has(fsnotify.Write) {
-					continue
-				}
-				name := filepath.Base(ev.Name)
-				if !strings.HasSuffix(name, ".json") || strings.HasPrefix(name, ".") {
-					continue
-				}
-				mu.Lock()
-				if t, ok := pending[name]; ok {
-					t.Stop()
-				}
-				pending[name] = time.AfterFunc(300*time.Millisecond, func() {
-					mu.Lock()
-					delete(pending, name)
-					mu.Unlock()
-					if r := st.ingest(dir, name); r != nil {
-						onShip(r)
-					}
-				})
-				mu.Unlock()
-			case err, ok := <-w.Errors:
-				if !ok {
-					return
-				}
-				log.Printf("ships watch: %v", err)
+		for range time.Tick(every) {
+			for _, r := range st.Scan(dir) {
+				onShip(r)
 			}
 		}
 	}()
