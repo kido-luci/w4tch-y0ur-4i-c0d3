@@ -2,108 +2,44 @@ package index
 
 import (
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
 	"time"
-
-	"github.com/fsnotify/fsnotify"
 )
 
-// Watch re-parses sessions whose files change and calls onUpdate with the
-// refreshed summary (with agent runs). fsnotify is not recursive, so every
-// directory level is watched and new directories are added on Create.
-func Watch(ix *Index, onUpdate func(*Session)) error {
-	w, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-
-	// On macOS a directory watch is kqueue underneath, which holds an open fd
-	// for the directory AND every file in it — so Add failing here is the
-	// first symptom of fd exhaustion, and one summary line per walk keeps the
-	// log bounded even when every single Add fails.
-	addTree := func(dir string) {
-		var added, failed int
-		var firstErr error
-		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				failed++
-				if firstErr == nil {
-					firstErr = err
-				}
-				return nil
-			}
-			if !d.IsDir() {
-				return nil
-			}
-			if werr := w.Add(path); werr != nil {
-				failed++
-				if firstErr == nil {
-					firstErr = werr
-				}
-				return nil
-			}
-			added++
-			return nil
-		})
-		if failed > 0 {
-			log.Printf("watch: %d of %d watches failed under %s (first: %v)", failed, added+failed, dir, firstErr)
-		}
-	}
-	addTree(ix.root)
-
-	// Debounce per session: transcripts get many small appends per turn.
-	var mu sync.Mutex
-	pending := map[string]*time.Timer{}
-
-	fire := func(changedPath string) {
-		s := ix.RescanSession(changedPath)
-		if s == nil {
-			return
-		}
-		onUpdate(ix.WithStatus(s, time.Now()))
-	}
-
+// Watch polls the transcript tree and calls onUpdate with each session whose
+// on-disk inputs changed. A poll, not fsnotify, on purpose: on macOS a kqueue
+// watch holds an open fd for every watched directory AND every file inside
+// it, which made the daemon's fd baseline scale with transcript history
+// (~4.3k and growing against the process limit). Rescan already stamps every
+// session by mtime+size — including the walked subagents tree — and skips the
+// unchanged, so one tick is the same cheap stat sweep the old 5-minute
+// reconcile always ran, just often enough to feel live. The sweep re-lists
+// the tree each tick, so it doubles as the reconcile: new projects, deleted
+// files and anything missed while asleep are caught within one interval.
+// Returns a stop func so tests can end the loop; main never calls it.
+func Watch(ix *Index, every time.Duration, onUpdate func(*Session)) (stop func()) {
+	t := time.NewTicker(every)
+	done := make(chan struct{})
 	go func() {
 		for {
 			select {
-			case ev, ok := <-w.Events:
-				if !ok {
-					return
-				}
-				if ev.Has(fsnotify.Create) {
-					if fi, err := os.Stat(ev.Name); err == nil && fi.IsDir() {
-						addTree(ev.Name)
-						continue
-					}
-				}
-				if !ev.Has(fsnotify.Write) && !ev.Has(fsnotify.Create) {
-					continue
-				}
-				name := ev.Name
-				if !strings.HasSuffix(name, ".jsonl") && !strings.HasSuffix(name, ".meta.json") {
-					continue
-				}
-				mu.Lock()
-				if t, ok := pending[name]; ok {
-					t.Stop()
-				}
-				pending[name] = time.AfterFunc(500*time.Millisecond, func() {
-					mu.Lock()
-					delete(pending, name)
-					mu.Unlock()
-					fire(name)
-				})
-				mu.Unlock()
-			case err, ok := <-w.Errors:
-				if !ok {
-					return
-				}
+			case <-done:
+				return
+			case <-t.C:
+			}
+			ids, err := ix.Rescan()
+			if err != nil {
 				log.Printf("watch: %v", err)
+				continue
+			}
+			for _, id := range ids {
+				if s := ix.Session(id); s != nil {
+					onUpdate(s)
+				}
 			}
 		}
 	}()
-	return nil
+	return func() {
+		t.Stop()
+		close(done)
+	}
 }

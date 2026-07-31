@@ -59,11 +59,11 @@ func TestShipsLifecycle(t *testing.T) {
 		Ts: now.Add(-30 * time.Minute), Log: "gofmt failed",
 	})
 
-	if n := sh.Scan(dir); n != 2 {
-		t.Fatalf("ingested = %d, want 2", n)
+	if rs := sh.Scan(dir); len(rs) != 2 {
+		t.Fatalf("ingested = %d, want 2", len(rs))
 	}
-	if n := sh.Scan(dir); n != 0 {
-		t.Errorf("re-scan ingested %d, want 0 (dedupe by file name)", n)
+	if rs := sh.Scan(dir); len(rs) != 0 {
+		t.Errorf("re-scan ingested %d, want 0 (dedupe by file name)", len(rs))
 	}
 
 	res := sh.List("", 0, 10, false)
@@ -102,8 +102,8 @@ func TestShipsSkipsForeignFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, ".tmp.hidden.json"), []byte(`{}`), 0o644)
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("not a record"), 0o644)
 
-	if n := sh.Scan(dir); n != 0 {
-		t.Errorf("ingested %d foreign files, want 0", n)
+	if rs := sh.Scan(dir); len(rs) != 0 {
+		t.Errorf("ingested %d foreign files, want 0", len(rs))
 	}
 	if res := sh.List("", 0, 10, false); res.Total != 0 {
 		t.Errorf("Total=%d, want 0", res.Total)
