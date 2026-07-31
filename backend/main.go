@@ -15,6 +15,7 @@ import (
 
 	"watch-your-ai-code/internal/board"
 	"watch-your-ai-code/internal/fdgauge"
+	"watch-your-ai-code/internal/git"
 	"watch-your-ai-code/internal/github"
 	"watch-your-ai-code/internal/httpapi"
 	"watch-your-ai-code/internal/httpx"
@@ -182,7 +183,11 @@ func main() {
 					}
 					private = !allPublic
 					first := roots[0]
-					root, count = first.Root, len(roots)
+					// The repo, not the directory the session happened to run
+					// in: a linked worktree has its own path, so without this a
+					// folder working in one binds to a root nothing else can
+					// ever match.
+					root, count = git.CanonicalRoot(first.Root), len(roots)
 					if first.Guessed {
 						kind = board.LinkGuessed
 					} else if s, ok := github.Slug(first.Root); ok {

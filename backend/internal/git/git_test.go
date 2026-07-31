@@ -1,10 +1,52 @@
 package git
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+// Two cwds in one repo must answer with one root. A linked worktree has its own
+// path and its own top-level, so anything comparing paths counts it as a
+// separate repo — which is how a folder whose newest session ran in an agent
+// worktree bound itself to a root nothing else could ever match.
+func TestCanonicalRootCollapsesAWorktree(t *testing.T) {
+	git := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("git %v: %v (%s)", args, err, out)
+		}
+	}
+	base := t.TempDir()
+	main := filepath.Join(base, "main")
+	if err := os.Mkdir(main, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(main, "init", "-q")
+	git(main, "config", "user.email", "t@example.com")
+	git(main, "config", "user.name", "t")
+	if err := os.WriteFile(filepath.Join(main, "f"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(main, "add", "f")
+	git(main, "commit", "-qm", "init")
+	wt := filepath.Join(base, "wt")
+	git(main, "worktree", "add", "-q", wt, "-b", "side")
+
+	// macOS hands out /var/folders/… temp dirs that git reports as /private/var,
+	// so compare what CanonicalRoot makes of both cwds, not against `main`.
+	if got, want := CanonicalRoot(wt), CanonicalRoot(main); got != want {
+		t.Fatalf("a worktree must resolve to its main checkout: got %q, want %q", got, want)
+	}
+	if strings.Contains(CanonicalRoot(wt), ".git") {
+		t.Fatalf("the trailing /.git must be stripped, got %q", CanonicalRoot(wt))
+	}
+}
 
 func TestParseGitStatus(t *testing.T) {
 	cases := []struct {

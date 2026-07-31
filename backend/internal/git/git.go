@@ -77,6 +77,25 @@ func RemoteURL(root, remote string) (string, bool) {
 	return runGit(root, "remote", "get-url", remote)
 }
 
+// CanonicalRoot answers which REPO a directory belongs to, which is not the
+// same question as which directory you are standing in: a linked worktree has
+// its own path and its own top-level, so two cwds in one repo look like two
+// repos to anything that compares paths. The common dir is shared by every
+// worktree, so stripping its trailing "/.git" yields the one checkout they all
+// belong to. Exported as narrowly as RemoteURL above, and read-only likewise.
+//
+// Not hypothetical here: an agent worktree under .claude/worktrees was the
+// newest session cwd for a folder, so the folder resolved to a path no other
+// folder could ever match. Falls back to dir when git cannot answer (not a
+// repo, or a git too old for --path-format).
+func CanonicalRoot(dir string) string {
+	out, ok := runGit(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if !ok || out == "" {
+		return dir
+	}
+	return strings.TrimSuffix(out, "/.git")
+}
+
 // gitSnapshot fills one repo from its root. The work-tree check gates the rest;
 // branch / status / upstream / log are then each independent and best-effort,
 // so a single failing command leaves only its own field blank.
