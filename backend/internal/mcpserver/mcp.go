@@ -116,6 +116,27 @@ type cycleListOutput struct {
 	Cycles []board.CycleReport `json:"cycles"`
 }
 
+type createCycleInput struct {
+	Name     string `json:"name" jsonschema:"display name, e.g. Sprint 12"`
+	Repo     string `json:"repo,omitempty" jsonschema:"project that owns the cycle, named as the board reports it; omit for a shared cycle every scope sees"`
+	Goal     string `json:"goal,omitempty" jsonschema:"one-line goal shown on the cycle row"`
+	StartsAt string `json:"startsAt" jsonschema:"window start — RFC3339, or a bare YYYY-MM-DD which lands at local midnight"`
+	EndsAt   string `json:"endsAt" jsonschema:"window end — RFC3339, or a bare YYYY-MM-DD which lands at local 23:59:59; must be after startsAt"`
+}
+
+// updateCycleInput mirrors board.CyclePatch: every field is optional, and only
+// the ones present are touched. Dates travel as strings so a bare YYYY-MM-DD
+// gets the same local-zone reading create_cycle gives it.
+type updateCycleInput struct {
+	ID       string  `json:"id" jsonschema:"cycle id, as returned by list_cycles"`
+	Name     *string `json:"name,omitempty" jsonschema:"rename the cycle"`
+	Goal     *string `json:"goal,omitempty" jsonschema:"replace the goal; empty string clears it"`
+	Repo     *string `json:"repo,omitempty" jsonschema:"re-own to this project; empty string makes it a shared cycle"`
+	StartsAt *string `json:"startsAt,omitempty" jsonschema:"move the window start — RFC3339 or bare YYYY-MM-DD (local midnight)"`
+	EndsAt   *string `json:"endsAt,omitempty" jsonschema:"move the window end — RFC3339 or bare YYYY-MM-DD (local 23:59:59); must stay after startsAt"`
+	Closed   *bool   `json:"closed,omitempty" jsonschema:"true closes the cycle (the server stamps the moment), false reopens it; an end date passing does not close a cycle on its own"`
+}
+
 type docIDInput struct {
 	ID string `json:"id" jsonschema:"doc id, as returned by list_docs"`
 }
@@ -162,6 +183,29 @@ type listShipsInput struct {
 	Project string `json:"project,omitempty" jsonschema:"only records for this project (as its Makefile reports it, e.g. watch-your-ai-code); omit for all projects"`
 	Days    int    `json:"days,omitempty" jsonschema:"only records from the last N days; omit or 0 for all time"`
 	WithLog bool   `json:"withLog,omitempty" jsonschema:"include each run's captured log tail — verbose, ask only when debugging a failed run"`
+}
+
+// cycleTime parses one cycle bound. RFC3339 is taken as-is; a bare YYYY-MM-DD
+// is read in the server's zone — midnight for a start, 23:59:59 for an end —
+// the same rule the cycles view applies, because a bare date parsed as UTC
+// shifts the window a day for anyone east of Greenwich.
+func cycleTime(s string, endOfDay bool) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, fmt.Errorf("date is required — RFC3339 or YYYY-MM-DD")
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	d, err := time.ParseInLocation("2006-01-02", s, time.Local)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("bad date %q — use RFC3339 or YYYY-MM-DD", s)
+	}
+	if endOfDay {
+		y, m, day := d.Date()
+		d = time.Date(y, m, day, 23, 59, 59, 0, time.Local)
+	}
+	return d, nil
 }
 
 // newServer builds the "wyac" MCP server over the drawing, todo and doc
@@ -321,6 +365,56 @@ func newServer(drawings *board.DrawingStore, todos *board.TodoStore, states *boa
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in cycleListInput) (*mcp.CallToolResult, cycleListOutput, error) {
 		scoped := board.ResolveScope(strings.TrimSpace(in.Repo), groups, projects)
 		return nil, cycleListOutput{Cycles: board.Velocity(cycles.ListForScope(scoped), todos, scoped)}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "create_cycle",
+		Description: "Open a new cycle (sprint) — a named window cards are planned into by setting their cycleId (create_todo/update_todo). Dates take RFC3339 or a bare YYYY-MM-DD read in the server's zone: a start lands at midnight, an end at 23:59:59.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in createCycleInput) (*mcp.CallToolResult, board.Cycle, error) {
+		starts, err := cycleTime(in.StartsAt, false)
+		if err != nil {
+			return nil, board.Cycle{}, fmt.Errorf("startsAt: %w", err)
+		}
+		ends, err := cycleTime(in.EndsAt, true)
+		if err != nil {
+			return nil, board.Cycle{}, fmt.Errorf("endsAt: %w", err)
+		}
+		c, err := cycles.Create(in.Name, in.Repo, in.Goal, starts, ends)
+		if err != nil {
+			return nil, board.Cycle{}, err
+		}
+		hub.Broadcast("cycles-updated", cycles.List())
+		return nil, c, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "update_cycle",
+		Description: "Update one cycle. Only the fields you send are touched. Send closed=true when the sprint is over — the server stamps the close moment and the velocity table keeps the row — or closed=false to reopen it.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in updateCycleInput) (*mcp.CallToolResult, board.Cycle, error) {
+		p := board.CyclePatch{Name: in.Name, Goal: in.Goal, Repo: in.Repo, Closed: in.Closed}
+		if in.StartsAt != nil {
+			t, err := cycleTime(*in.StartsAt, false)
+			if err != nil {
+				return nil, board.Cycle{}, fmt.Errorf("startsAt: %w", err)
+			}
+			p.StartsAt = &t
+		}
+		if in.EndsAt != nil {
+			t, err := cycleTime(*in.EndsAt, true)
+			if err != nil {
+				return nil, board.Cycle{}, fmt.Errorf("endsAt: %w", err)
+			}
+			p.EndsAt = &t
+		}
+		c, err := cycles.Update(in.ID, p)
+		if errors.Is(err, board.ErrCycleNotFound) {
+			return nil, board.Cycle{}, fmt.Errorf("no cycle with id %q — see list_cycles", in.ID)
+		}
+		if err != nil {
+			return nil, board.Cycle{}, err
+		}
+		hub.Broadcast("cycles-updated", cycles.List())
+		return nil, c, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
