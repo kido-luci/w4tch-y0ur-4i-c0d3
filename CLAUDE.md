@@ -145,6 +145,29 @@ Need the real board to test against? That's a *data* question, not a port
 question: copy `data.db` (with its `-wal`/`-shm` siblings) into the throwaway
 config dir.
 
+**A throwaway port and config dir are two axes; the OUTPUT PATH is the third,
+and `make` doesn't give it to you.** `make build` and `make check` both end in
+`go build -o ../watch-your-ai-code` — the exact file the launchd agent runs. So
+running either one IS a delivery to the everyday instance: it puts whichever
+branch is checked out on 4777, with no merge, tag or release anywhere in sight.
+The restart below is not a way to avoid that, it's the *other* consequence of
+the same overwrite. Never reach for `make build`/`make check` to try a branch
+out; shipping to the everyday instance is a decision to ask for, not a step
+inside a verification.
+
+Build somewhere else instead — the port and the config dir were never the part
+at risk:
+
+    npm --prefix frontend run build                  # writes backend/…/web/dist
+    go build -C backend -o /tmp/wyac-verify/wyac .   # -o absolute: -C moved us
+    /tmp/wyac-verify/wyac -addr 127.0.0.1:4779 -config-dir /tmp/wyac-verify/cfg
+
+`npm run build` alone is harmless — `dist` is read at go-build time, so nothing
+already running notices. It is the `-o` that decides whose binary you replaced.
+This is not hypothetical: verifying an unmerged branch on 4779 began with a
+`make build`, which left the everyday instance running that branch and forced a
+`kickstart` to keep it answering at all.
+
 **Check the served bundle against the one on disk, not just against last time:**
 
     curl -s http://127.0.0.1:4779/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.js'
