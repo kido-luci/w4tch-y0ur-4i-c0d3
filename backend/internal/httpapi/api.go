@@ -960,7 +960,6 @@ func Register(mux *http.ServeMux, d Deps) {
 		var in struct {
 			Folders []string `json:"folders"`
 			Hidden  bool     `json:"hidden"`
-			Private bool     `json:"private"`
 			Ord     int      `json:"ord"`
 			Parent  string   `json:"parent"`
 		}
@@ -968,7 +967,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		p, err := projects.Upsert(r.PathValue("name"), in.Folders, in.Hidden, in.Private, in.Ord, in.Parent)
+		p, err := projects.Upsert(r.PathValue("name"), in.Folders, in.Hidden, in.Ord, in.Parent)
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return

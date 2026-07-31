@@ -77,6 +77,33 @@ func runGH(args ...string) ([]byte, bool) {
 	return out, true
 }
 
+// visCache memoises repo visibility per slug. Visibility changes rarely, and
+// the sync loop in main re-asks for every project on a short tick — without
+// this that would be one gh call per project per tick.
+var visCache = newGHCache(10 * time.Minute)
+
+// IsPrivate reports whether the repo at root is a private GitHub repository.
+// ok=false means there is nothing trustworthy to report — no GitHub remote,
+// no gh, or the call failed — and the CALLER decides what unknown means (the
+// presentation sync treats it as private, the safe answer for screenshots).
+func IsPrivate(root string) (private, ok bool) {
+	slug, ok := ghSlug(root)
+	if !ok {
+		return false, false
+	}
+	v, ok := visCache.get("vis:"+slug, time.Now(), func() (any, bool) {
+		out, ok := runGH("api", "repos/"+slug, "--jq", ".private")
+		if !ok {
+			return nil, false
+		}
+		return strings.TrimSpace(string(out)) == "true", true
+	})
+	if !ok {
+		return false, false
+	}
+	return v.(bool), true
+}
+
 // ghCache memoises gh responses per (key) for a short TTL — gh is slow and
 // rate-limited, and the UI re-fetches a section every time it's opened.
 type ghCache struct {
