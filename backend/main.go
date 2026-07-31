@@ -175,6 +175,14 @@ func main() {
 				if roots := rr.Repos(strings.Join(p.Folders, ",")); len(roots) > 0 {
 					allPublic := true
 					for _, r := range roots {
+						// A guessed root is a directory that merely shares the
+						// folder's name — calling a project public on that
+						// basis would let presentation mode show work off a
+						// repo nobody proved is this project's.
+						if r.Guessed {
+							allPublic = false
+							break
+						}
 						priv, ok := github.IsPrivate(r.Root)
 						if !ok || priv {
 							allPublic = false
@@ -207,6 +215,52 @@ func main() {
 		return changed
 	}
 
+	// seedRepoProjects grows the registry from the code instead of waiting for
+	// someone to type a folder name: a Claude folder no project owns, whose
+	// sessions resolve to a real repo, becomes a project named after that REPO
+	// (the checkout's directory is often not the repo's name). Folders that
+	// resolve to nothing — a directory since deleted, work outside any repo —
+	// are left alone, because inventing a project for them would be the
+	// unchecked guessing this replaces; so is a `guessed` root, which only
+	// matched a directory by name.
+	//
+	// Add-only, the contract SeedProjects already has for labels: the sessions
+	// are the evidence, so a row deleted while its folder keeps producing
+	// sessions comes back on the next tick.
+	seedRepoProjects := func() bool {
+		owned := map[string]bool{}
+		for _, p := range projectStore.List() {
+			for _, f := range p.Folders {
+				owned[f] = true
+			}
+		}
+		added := false
+		for _, folder := range ix.Projects() {
+			if owned[folder] {
+				continue
+			}
+			rs := rr.Repos(folder)
+			if len(rs) == 0 || rs[0].Guessed {
+				continue
+			}
+			root := git.CanonicalRoot(rs[0].Root)
+			if projectStore.SeedRepo(git.RepoName(root), folder) {
+				added = true
+			}
+		}
+		return added
+	}
+
+	// Seeding first, so a row created this pass gets its repo link and its
+	// visibility in the same tick rather than five minutes later.
+	syncRegistry := func() bool {
+		changed := seedRepoProjects()
+		if syncProjectRepos() {
+			changed = true
+		}
+		return changed
+	}
+
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
 	// under an unselectable scope for long. Add-only; broadcast only on change.
@@ -214,12 +268,12 @@ func main() {
 	// and boot runs one sync immediately so presentation mode doesn't spend its
 	// first minutes wrong.
 	go func() {
-		if syncProjectRepos() {
+		if syncRegistry() {
 			hub.Broadcast("projects-updated", projectStore.List())
 		}
 		for range time.Tick(5 * time.Minute) {
 			changed := board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0
-			if syncProjectRepos() {
+			if syncRegistry() {
 				changed = true
 			}
 			if changed {

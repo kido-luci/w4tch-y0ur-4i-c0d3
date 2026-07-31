@@ -79,6 +79,40 @@ func TestProjectRepoLink(t *testing.T) {
 	}
 }
 
+// Seeding from a repo names the project after the REPO while owning the FOLDER
+// the sessions ran in — the two differ whenever a checkout's directory is not
+// the repo's name, which is the case this exists for.
+func TestProjectSeedRepo(t *testing.T) {
+	db := newTestDataDB(t)
+	ps := NewProjectStore(db)
+
+	if !ps.SeedRepo("luci_dev", "luci_web_blog-frontend") {
+		t.Fatal("a new repo should seed a project")
+	}
+	got := NewProjectStore(db).List() // reload = a restart
+	if len(got) != 1 || got[0].Name != "luci_dev" || len(got[0].Folders) != 1 ||
+		got[0].Folders[0] != "luci_web_blog-frontend" || got[0].LinkKind != LinkNone {
+		t.Fatalf("want luci_dev owning luci_web_blog-frontend, unlinked; got %+v", got)
+	}
+
+	// Add-only: seeding the same repo again changes nothing.
+	if ps.SeedRepo("luci_dev", "luci_web_blog-frontend") {
+		t.Error("an existing project must not be re-seeded")
+	}
+	// A taken name belongs to some other repo — widening it is exactly the
+	// unchecked guessing this replaces.
+	if ps.SeedRepo("luci_dev", "another-folder") {
+		t.Error("a taken name must not adopt a second folder")
+	}
+	// And a folder someone already owns stays owned.
+	if _, err := ps.Upsert("manual", []string{"claimed"}, false, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	if ps.SeedRepo("some-repo", "claimed") {
+		t.Error("an owned folder must not be seeded away from its project")
+	}
+}
+
 // A folder belongs to exactly one project: claiming it for B strips it off A.
 func TestProjectStoreExclusiveOwnership(t *testing.T) {
 	db := newTestDataDB(t)

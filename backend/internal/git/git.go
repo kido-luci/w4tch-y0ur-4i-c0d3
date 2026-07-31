@@ -13,6 +13,7 @@ import (
 	"context"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -75,6 +76,32 @@ func runGit(root string, args ...string) (string, bool) {
 // convention a future caller could quietly break by reaching for runGit.
 func RemoteURL(root, remote string) (string, bool) {
 	return runGit(root, "remote", "get-url", remote)
+}
+
+// RepoName is what the repo calls itself: the last segment of its origin URL,
+// which is the name on the host rather than whatever the checkout's directory
+// happens to be called — the two differ often enough to matter (a directory
+// named luci_web_blog-frontend cloned from a repo named luci_dev). Falls back
+// to the directory name when there is no remote to ask.
+func RepoName(root string) string {
+	if url, ok := RemoteURL(root, "origin"); ok {
+		if n := repoNameFromURL(url); n != "" {
+			return n
+		}
+	}
+	return filepath.Base(root)
+}
+
+// repoNameFromURL takes the last path segment of a clone URL, in any of the
+// shapes git accepts: https://host/owner/name.git, git@host:owner/name.git,
+// ssh://host/owner/name, with or without the .git and a trailing slash.
+func repoNameFromURL(url string) string {
+	s := strings.TrimSpace(url)
+	s = strings.TrimSuffix(strings.TrimRight(s, "/"), ".git")
+	if i := strings.LastIndexAny(s, "/:"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
 }
 
 // CanonicalRoot answers which REPO a directory belongs to, which is not the

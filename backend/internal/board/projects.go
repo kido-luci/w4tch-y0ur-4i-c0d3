@@ -512,11 +512,55 @@ func (ps *ProjectStore) Seed(names []string) int {
 			log.Printf("projects: seed %q: %v", name, err)
 			continue
 		}
-		ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{name}, Ord: next})
+		ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{name}, LinkKind: LinkNone, Ord: next})
 		next++
 		added++
 	}
 	return added
+}
+
+// SeedRepo adds one project for a repo the index has sessions for but no
+// project owns. `name` is what the REPO calls itself and `folder` the Claude
+// folder whose sessions resolved there — two different things whenever a
+// checkout's directory is not the repo's name, which is the whole reason the
+// registry could not be maintained by typing folder names.
+//
+// Add-only, like Seed: it refuses when the name is taken, because that row
+// belongs to some other repo and silently widening it would be exactly the
+// unchecked guessing this replaces. It refuses an already-owned folder too —
+// the caller only offers unowned ones, but exclusivity is the store's rule to
+// keep, not the caller's. Reports whether it created a row.
+func (ps *ProjectStore) SeedRepo(name, folder string) bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	name, folder = strings.TrimSpace(name), strings.TrimSpace(folder)
+	if name == "" || folder == "" || strings.Contains(name, "/") || ps.find(name) != nil {
+		return false
+	}
+	next := 0
+	for _, p := range ps.projects {
+		if p.Ord >= next {
+			next = p.Ord + 1
+		}
+		for _, f := range p.Folders {
+			if f == folder {
+				return false
+			}
+		}
+	}
+	raw, err := json.Marshal([]string{folder})
+	if err != nil {
+		return false
+	}
+	if _, err := ps.db.Exec(
+		`INSERT INTO projects(name, folders, hidden, ord) VALUES(?, ?, 0, ?)
+		 ON CONFLICT(name) DO NOTHING`,
+		name, string(raw), next); err != nil {
+		log.Printf("projects: seed repo %q: %v", name, err)
+		return false
+	}
+	ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{folder}, LinkKind: LinkNone, Ord: next})
+	return true
 }
 
 // SeedProjects mirrors the CONTENT taxonomy into the registry: every label

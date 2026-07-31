@@ -9,6 +9,22 @@ import (
 	"time"
 )
 
+func TestRepoNameFromURL(t *testing.T) {
+	cases := map[string]string{
+		"https://github.com/kido-luci/w4tch-y0ur-4i-c0d3.git": "w4tch-y0ur-4i-c0d3",
+		"https://github.com/kido-luci/openscreen":             "openscreen",
+		"git@xddlabs.com:root/tbchat.git":                     "tbchat",
+		"ssh://git@host:2222/team/svc.git/":                   "svc",
+		"/srv/mirrors/bare-repo.git":                          "bare-repo",
+		"":                                                    "",
+	}
+	for url, want := range cases {
+		if got := repoNameFromURL(url); got != want {
+			t.Errorf("repoNameFromURL(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
 // Two cwds in one repo must answer with one root. A linked worktree has its own
 // path and its own top-level, so anything comparing paths counts it as a
 // separate repo — which is how a folder whose newest session ran in an agent
