@@ -8,7 +8,6 @@ import {
   getUnmappedFolders,
   projectLogoURL,
   putGroup,
-  putPresentation,
   putProject,
   putProjectLogo,
   renameProject,
@@ -246,10 +245,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       groupsHtml +
       projHtml +
       `<button type="button" class="rail-item rail-manage" data-act="manage-groups">+ groups…</button>` +
-      `<button type="button" class="rail-item rail-manage" data-act="manage-projects">+ projects…</button>` +
-      `<button type="button" class="rail-item rail-manage" data-act="presentation" title="one switch hides every private project — rail, views, search, MCP — while you demo or screenshot">${
-        presentationOn ? "🙈 private hidden — show" : "👁 hide private"
-      }</button>`;
+      `<button type="button" class="rail-item rail-manage" data-act="manage-projects">+ projects…</button>`;
   }
 
   list.addEventListener("click", (e) => {
@@ -277,15 +273,6 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       groupPanel.hidden = true;
       projPanel.hidden = !projPanel.hidden;
       if (!projPanel.hidden) refreshUnmapped();
-      return;
-    }
-    if (btn.dataset["act"] === "presentation") {
-      // State flips on the SSE echo (the board/design mutation recipe), so
-      // every open tab — this one included — follows the same path.
-      putPresentation(!presentationOn).catch((err: unknown) => {
-        console.error("presentation toggle failed", err);
-        alert(err instanceof Error ? err.message : "presentation toggle failed");
-      });
       return;
     }
     const scope = btn.dataset["scope"];
@@ -489,7 +476,6 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       <form class="scope-panel-form" data-editing="${escapeHtml(editing)}">
         ${nameField}
         <label class="scope-panel-check"><input type="checkbox" name="hidden"${p?.hidden ? " checked" : ""}> hidden (keep off the rail)</label>
-        <label class="scope-panel-check"><input type="checkbox" name="private"${p?.private ? " checked" : ""}> private (hide everywhere in presentation mode)</label>
         ${parentSection}
         ${logoSection}
         <div class="scope-panel-sub">folders${checks ? "" : " — none unmapped"}</div>
@@ -556,7 +542,6 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       (c) => c.value,
     );
     const hidden = form.querySelector<HTMLInputElement>('input[name="hidden"]')?.checked ?? false;
-    const priv = form.querySelector<HTMLInputElement>('input[name="private"]')?.checked ?? false;
     const parent = form.querySelector<HTMLSelectElement>('select[name="parent"]')?.value ?? "";
     // ord is preserved on an edit/rename (from the original row), fresh on a new one.
     const cur = getKnownProjects().find((k) => k.name === editing);
@@ -576,7 +561,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           await renameProject(editing, name);
           if (getScope() === editing) setScope(name, true);
         }
-        await putProject(name, { folders, hidden, private: priv, ord, parent });
+        await putProject(name, { folders, hidden, ord, parent });
         renderProjectPanel();
       } catch (err) {
         console.error("save project failed", err);

@@ -10,7 +10,7 @@ func TestProjectStoreCRUDAndPersistence(t *testing.T) {
 	db := newTestDataDB(t)
 	ps := NewProjectStore(db)
 
-	p, err := ps.Upsert("  proj-a  ", []string{" f1 ", "", "f2", "f1"}, false, false, 5, "")
+	p, err := ps.Upsert("  proj-a  ", []string{" f1 ", "", "f2", "f1"}, false, 5, "")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -22,7 +22,7 @@ func TestProjectStoreCRUDAndPersistence(t *testing.T) {
 		t.Fatalf("want [f1 f2], got %v", p.Folders)
 	}
 
-	if _, err := ps.Upsert("proj-b", []string{"f3"}, true, false, 2, ""); err != nil {
+	if _, err := ps.Upsert("proj-b", []string{"f3"}, true, 2, ""); err != nil {
 		t.Fatalf("upsert second: %v", err)
 	}
 
@@ -55,10 +55,10 @@ func TestProjectStoreExclusiveOwnership(t *testing.T) {
 	db := newTestDataDB(t)
 	ps := NewProjectStore(db)
 
-	if _, err := ps.Upsert("A", []string{"x", "y"}, false, false, 0, ""); err != nil {
+	if _, err := ps.Upsert("A", []string{"x", "y"}, false, 0, ""); err != nil {
 		t.Fatalf("upsert A: %v", err)
 	}
-	if _, err := ps.Upsert("B", []string{"y", "z"}, false, false, 1, ""); err != nil {
+	if _, err := ps.Upsert("B", []string{"y", "z"}, false, 1, ""); err != nil {
 		t.Fatalf("upsert B: %v", err)
 	}
 
@@ -86,18 +86,18 @@ func TestProjectStoreExclusiveOwnership(t *testing.T) {
 func TestProjectStoreValidation(t *testing.T) {
 	ps := NewProjectStore(newTestDataDB(t))
 
-	if _, err := ps.Upsert("   ", nil, false, false, 0, ""); err == nil {
+	if _, err := ps.Upsert("   ", nil, false, 0, ""); err == nil {
 		t.Fatal("blank name should be rejected")
 	}
 	// The name doubles as an URL path segment.
-	if _, err := ps.Upsert("a/b", nil, false, false, 0, ""); err == nil {
+	if _, err := ps.Upsert("a/b", nil, false, 0, ""); err == nil {
 		t.Fatal("a name with '/' should be rejected")
 	}
 	if err := ps.Delete("nope"); err != ErrProjectNotFound {
 		t.Fatalf("want ErrProjectNotFound, got %v", err)
 	}
 	// An empty folder set is legal (a project with no Claude sessions yet).
-	p, err := ps.Upsert("empty", nil, false, false, 0, "")
+	p, err := ps.Upsert("empty", nil, false, 0, "")
 	if err != nil || len(p.Folders) != 0 {
 		t.Fatalf("empty project should be allowed, got %+v (%v)", p, err)
 	}
@@ -119,7 +119,7 @@ func TestProjectStoreSeedIsAddOnly(t *testing.T) {
 	}
 
 	// A user hides "a" and renames nothing — Seed must leave that alone.
-	if _, err := ps.Upsert("a", []string{"a"}, true, false, 0, ""); err != nil {
+	if _, err := ps.Upsert("a", []string{"a"}, true, 0, ""); err != nil {
 		t.Fatalf("hide a: %v", err)
 	}
 	if n := ps.Seed([]string{"a", "b", "c"}); n != 1 {
@@ -152,7 +152,7 @@ func TestProjectRenameValidation(t *testing.T) {
 		t.Fatal("a name with '/' should be rejected")
 	}
 	// Success keeps the folders/hidden/ord and persists.
-	if _, err := ps.Upsert("old", []string{"f1", "f2"}, true, false, 9, ""); err != nil {
+	if _, err := ps.Upsert("old", []string{"f1", "f2"}, true, 9, ""); err != nil {
 		t.Fatalf("setup upsert: %v", err)
 	}
 	if err := ps.Rename("old", "New"); err != nil {
@@ -249,10 +249,10 @@ func TestProjectParent(t *testing.T) {
 	db := newTestDataDB(t)
 	ps := NewProjectStore(db)
 
-	if _, err := ps.Upsert("games", nil, false, false, 0, ""); err != nil {
+	if _, err := ps.Upsert("games", nil, false, 0, ""); err != nil {
 		t.Fatalf("upsert parent: %v", err)
 	}
-	if _, err := ps.Upsert("bloomrise", nil, false, false, 1, "games"); err != nil {
+	if _, err := ps.Upsert("bloomrise", nil, false, 1, "games"); err != nil {
 		t.Fatalf("upsert child: %v", err)
 	}
 	// Persists across a reload.
@@ -269,10 +269,10 @@ func TestProjectParent(t *testing.T) {
 	}
 
 	// A project cannot parent itself, and a cycle is refused.
-	if _, err := ps.Upsert("games", nil, false, false, 0, "games"); err == nil {
+	if _, err := ps.Upsert("games", nil, false, 0, "games"); err == nil {
 		t.Fatal("self-parent should be rejected")
 	}
-	if _, err := ps.Upsert("games", nil, false, false, 0, "bloomrise"); err == nil {
+	if _, err := ps.Upsert("games", nil, false, 0, "bloomrise"); err == nil {
 		t.Fatal("cycle (games→bloomrise→games) should be rejected")
 	}
 
@@ -366,7 +366,7 @@ func TestMigrateAddsProjectsTable(t *testing.T) {
 		t.Fatalf("want user_version %d, got %d (%v)", dataSchemaVersion, v, err)
 	}
 	ps := NewProjectStore(db)
-	if _, err := ps.Upsert("studio", []string{"blog", "wyac"}, false, false, 0, ""); err != nil {
+	if _, err := ps.Upsert("studio", []string{"blog", "wyac"}, false, 0, ""); err != nil {
 		t.Fatalf("upsert after migration: %v", err)
 	}
 	if got := NewProjectStore(db).List(); len(got) != 1 || len(got[0].Folders) != 2 {

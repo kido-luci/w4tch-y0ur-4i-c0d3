@@ -33,9 +33,10 @@ type Project struct {
 	Name    string   `json:"name"`
 	Folders []string `json:"folders"`
 	Hidden  bool     `json:"hidden"`
-	// Private marks a project presentation mode hides app-wide (screenshots,
-	// demos). Orthogonal to Hidden: hidden is "off the rail always", private is
-	// "mine, hide it only while presenting".
+	// Private mirrors the project's GitHub repo visibility (private repo, no
+	// GitHub remote, or no resolvable repo → true) — derived by the sync loop
+	// in main, never set by hand. Presentation mode hides private projects
+	// app-wide. Orthogonal to Hidden, which is "off the rail always".
 	Private bool `json:"private"`
 	Ord     int  `json:"ord"`
 	// Parent is the name of the project this one nests under in the rail tree,
@@ -139,7 +140,7 @@ func (ps *ProjectStore) List() []Project {
 // from every other project so ownership stays exclusive — the merge/reassign
 // and the strip run in one transaction, and the in-memory copy is only touched
 // after the DB commit.
-func (ps *ProjectStore) Upsert(name string, folders []string, hidden, private bool, ord int, parent string) (Project, error) {
+func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord int, parent string) (Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Project{}, fmt.Errorf("name is required")
@@ -173,10 +174,13 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden, private bo
 	}
 	defer tx.Rollback()
 
+	// `private` is deliberately absent on both sides of the upsert: the sync
+	// loop deriving it from GitHub visibility is the column's only writer, so
+	// a manager save can never clobber what the sync found.
 	if _, err := tx.Exec(
-		`INSERT INTO projects(name, folders, hidden, private, ord, parent) VALUES(?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(name) DO UPDATE SET folders=excluded.folders, hidden=excluded.hidden, private=excluded.private, ord=excluded.ord, parent=excluded.parent`,
-		name, string(raw), boolToInt(hidden), boolToInt(private), ord, parent); err != nil {
+		`INSERT INTO projects(name, folders, hidden, ord, parent) VALUES(?, ?, ?, ?, ?)
+		 ON CONFLICT(name) DO UPDATE SET folders=excluded.folders, hidden=excluded.hidden, ord=excluded.ord, parent=excluded.parent`,
+		name, string(raw), boolToInt(hidden), ord, parent); err != nil {
 		return Project{}, fmt.Errorf("write project: %w", err)
 	}
 
@@ -228,8 +232,26 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden, private bo
 		p = &Project{Name: name}
 		ps.projects = append(ps.projects, p)
 	}
-	p.Folders, p.Hidden, p.Private, p.Ord, p.Parent = cleaned, hidden, private, ord, parent
+	p.Folders, p.Hidden, p.Ord, p.Parent = cleaned, hidden, ord, parent
 	return p.clone(), nil
+}
+
+// SetPrivate records a project's derived GitHub visibility — the sync loop in
+// main is the only writer (Upsert deliberately leaves the column alone).
+// Returns whether the stored value changed.
+func (ps *ProjectStore) SetPrivate(name string, private bool) bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	p := ps.find(name)
+	if p == nil || p.Private == private {
+		return false
+	}
+	if _, err := ps.db.Exec(`UPDATE projects SET private=? WHERE name=?`, boolToInt(private), name); err != nil {
+		log.Printf("projects: set private: %v", err)
+		return false
+	}
+	p.Private = private
+	return true
 }
 
 // PrivateSets returns the private projects' names and the union of the folders

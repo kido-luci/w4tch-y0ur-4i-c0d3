@@ -25,7 +25,7 @@ func scopeFixture(t *testing.T) (*GroupStore, *ProjectStore) {
 		{"blog-worker", "blog-backend"},
 		{"standalone", ""},
 	} {
-		if _, err := ps.Upsert(p.name, nil, false, false, 0, p.parent); err != nil {
+		if _, err := ps.Upsert(p.name, nil, false, 0, p.parent); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -105,7 +105,7 @@ func TestStoresAgreeOnScope(t *testing.T) {
 	if _, err := gs.Upsert("luci-studio", []string{"blog-backend"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ps.Upsert("blog-backend", nil, false, false, 0, ""); err != nil {
+	if _, err := ps.Upsert("blog-backend", nil, false, 0, ""); err != nil {
 		t.Fatal(err)
 	}
 	states := NewStateStore(db)
@@ -162,7 +162,7 @@ func TestReportsCountOnlyCardsInScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"blog-backend", "elsewhere"} {
-		if _, err := ps.Upsert(n, nil, false, false, 0, ""); err != nil {
+		if _, err := ps.Upsert(n, nil, false, 0, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -222,7 +222,7 @@ func TestBurndownRefusesACycleOutsideTheScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"blog-backend", "elsewhere"} {
-		if _, err := ps.Upsert(n, nil, false, false, 0, ""); err != nil {
+		if _, err := ps.Upsert(n, nil, false, 0, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -247,9 +247,9 @@ func TestBurndownRefusesACycleOutsideTheScope(t *testing.T) {
 
 func TestScopeSetWithExcludeHidesPrivateProjects(t *testing.T) {
 	gs, ps := scopeFixture(t)
-	// Mark one group member private, the way presentation mode would see it.
-	if _, err := ps.Upsert("blog-backend", nil, false, true, 0, ""); err != nil {
-		t.Fatal(err)
+	// Mark one group member private, the way the GitHub-visibility sync would.
+	if !ps.SetPrivate("blog-backend", true) {
+		t.Fatal("SetPrivate should report a change")
 	}
 	private, _ := ps.PrivateSets()
 	if !private["blog-backend"] || len(private) != 1 {

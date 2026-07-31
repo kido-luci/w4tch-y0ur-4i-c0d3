@@ -66,11 +66,14 @@ func presentationFixture(t *testing.T) (settings *board.SettingsStore, guard htt
 	}
 	t.Cleanup(func() { db.Close() })
 	projects := board.NewProjectStore(db)
-	if _, err := projects.Upsert("secret", []string{"secret-folder"}, false, true, 0, ""); err != nil {
+	if _, err := projects.Upsert("secret", []string{"secret-folder"}, false, 0, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := projects.Upsert("open", []string{"open-folder"}, false, false, 0, ""); err != nil {
+	if _, err := projects.Upsert("open", []string{"open-folder"}, false, 0, ""); err != nil {
 		t.Fatal(err)
+	}
+	if !projects.SetPrivate("secret", true) {
+		t.Fatal("SetPrivate should report a change")
 	}
 	settings = board.NewSettingsStore(db)
 	got = new(string)

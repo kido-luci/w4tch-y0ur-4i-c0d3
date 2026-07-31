@@ -15,10 +15,12 @@ import (
 
 	"watch-your-ai-code/internal/board"
 	"watch-your-ai-code/internal/fdgauge"
+	"watch-your-ai-code/internal/github"
 	"watch-your-ai-code/internal/httpapi"
 	"watch-your-ai-code/internal/httpx"
 	"watch-your-ai-code/internal/index"
 	"watch-your-ai-code/internal/mcpserver"
+	"watch-your-ai-code/internal/repos"
 	"watch-your-ai-code/internal/ships"
 	"watch-your-ai-code/internal/sse"
 	"watch-your-ai-code/internal/summarize"
@@ -146,12 +148,52 @@ func main() {
 	})
 	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, settingsStore, shipStore, ix, hub))
 
+	// syncPrivate derives every project's private flag from its GitHub repo's
+	// visibility: every resolved repo public → public; a private repo, no
+	// GitHub remote, no resolvable repo at all, or a failed gh call → private —
+	// the safe answer for what presentation mode exists to do (public
+	// screenshots must only ever show work that is already public). The gh
+	// answer is cached per slug (github.IsPrivate), so a tick is cheap.
+	rr := repos.New(ix)
+	syncPrivate := func() bool {
+		changed := false
+		for _, p := range projectStore.List() {
+			private := true
+			if len(p.Folders) > 0 { // Repos("") would mean ALL folders, not none
+				if roots := rr.Repos(strings.Join(p.Folders, ",")); len(roots) > 0 {
+					allPublic := true
+					for _, r := range roots {
+						priv, ok := github.IsPrivate(r.Root)
+						if !ok || priv {
+							allPublic = false
+							break
+						}
+					}
+					private = !allPublic
+				}
+			}
+			if projectStore.SetPrivate(p.Name, private) {
+				changed = true
+			}
+		}
+		return changed
+	}
+
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
 	// under an unselectable scope for long. Add-only; broadcast only on change.
+	// The same tick re-derives GitHub visibility, and boot runs one sync
+	// immediately so presentation mode doesn't spend its first minutes wrong.
 	go func() {
+		if syncPrivate() {
+			hub.Broadcast("projects-updated", projectStore.List())
+		}
 		for range time.Tick(5 * time.Minute) {
-			if board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0 {
+			changed := board.SeedProjects(projectStore, groupStore, todoStore, docStore, drawingStore) > 0
+			if syncPrivate() {
+				changed = true
+			}
+			if changed {
 				hub.Broadcast("projects-updated", projectStore.List())
 			}
 		}
