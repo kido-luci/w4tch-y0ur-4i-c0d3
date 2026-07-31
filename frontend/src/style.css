@@ -1190,6 +1190,22 @@ a {
   margin: 0 0 var(--px-sp-4);
 }
 
+/* The serif page title the mock opens each view with. */
+.view-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--px-sp-5);
+  margin: 0 0 var(--px-sp-4);
+}
+
+.view-h1 {
+  margin: 0;
+  font-family: var(--px-serif);
+  font-size: var(--px-head);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
 .graph-card {
   padding-bottom: var(--px-sp-4);
 }
@@ -6058,20 +6074,26 @@ a.flow-node {
   gap: var(--px-sp-4);
 }
 
+/* An open editorial list: a heavy rule on top, hairlines between rows, no
+   boxes — the mock's cycles page. */
+.cy-list {
+  border-top: var(--px-rule-heavy);
+}
+
 .cy-row {
-  background: var(--card);
-  border: var(--px-edge);
-  padding: var(--px-sp-5);
+  background: transparent;
+  border-bottom: var(--px-edge-inner);
+  padding: var(--px-sp-6) var(--px-sp-2);
   cursor: pointer;
-  box-shadow: var(--px-shadow);
 }
 
 .cy-row:hover {
-  border-color: var(--border-hover);
+  background: var(--row-hover);
 }
 
+/* Selected is a blue bar in the margin, not a frame. */
 .cy-row.selected {
-  border-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .cy-row-head {
@@ -6089,13 +6111,26 @@ a.flow-node {
 
 .cy-badge {
   background: var(--px-rule-soft);
-  padding: 1px var(--px-sp-3);
-  font-family: var(--mono);
+  border: 1px solid transparent;
+  border-radius: var(--px-r-pill);
+  padding: 1px var(--px-sp-4);
+  font-family: var(--px-sans);
+  font-weight: 700;
   font-size: var(--px-label-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--px-muted-on-fill);
 }
 
+/* The mock's CURRENT pill: green words in a soft green frame, no fill. */
+.cy-badge-current {
+  background: transparent;
+  border-color: var(--px-green);
+  color: var(--px-green-text);
+}
+
 .cy-badge-late {
+  background: transparent;
   color: #d98a2b;
   border-color: #d98a2b;
 }
@@ -6144,13 +6179,21 @@ a.flow-node {
 .cy-bar {
   margin-top: var(--px-sp-3);
   height: 4px;
-  background: var(--border);
+  border-radius: 2px;
+  background: var(--px-rule-soft);
+  overflow: hidden;
 }
 
+/* Progress is green while the cycle runs and grey once it's history. */
 .cy-bar i {
   display: block;
   height: 100%;
-  background: var(--accent);
+  border-radius: 2px;
+  background: var(--px-green);
+}
+
+.cy-bar--past i {
+  background: var(--px-line-strong);
 }
 
 .cy-detail {

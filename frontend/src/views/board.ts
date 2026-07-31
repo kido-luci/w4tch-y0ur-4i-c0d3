@@ -215,8 +215,8 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
       : "";
     return `
       <div class="todo-card${sel}${t.parentId ? " todo-child" : ""}" draggable="true" data-id="${escapeHtml(t.id)}">
-        ${labels}
         <div class="todo-title md-inline">${kindInd}${prio}${renderInlineMarkdown(t.title)}</div>
+        ${labels}
         ${roll}
         ${sessLinksHtml(t, sessCache)}
         ${sessMetricsHtml(t, sessCache)}

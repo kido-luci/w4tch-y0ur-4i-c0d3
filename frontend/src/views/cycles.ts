@@ -93,7 +93,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
   container.innerHTML = `
     <div class="page">
       <header class="topbar"><div class="topbar-controls">${scopeChipHtml()}</div></header>
-      <div class="section-heading">cycles</div>
+      <div class="view-head"><h1 class="view-h1">Cycles</h1></div>
       <div class="section-desc">
         Sprints the board's cards are planned into. A cycle's burndown reads the
         card history, so it only knows what actually moved — cards carrying no
@@ -117,7 +117,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
 
   function createFormHtml(): string {
     if (!creating) {
-      return `<button type="button" class="todo-btn cy-new">+ new cycle</button>`;
+      return `<button type="button" class="nav-link cy-new">+ new cycle</button>`;
     }
     const today = new Date();
     const in2w = new Date(today.getTime() + 13 * 86_400_000);
@@ -141,6 +141,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
       <div class="cy-row${c.id === selectedId ? " selected" : ""}" data-id="${escapeHtml(c.id)}">
         <div class="cy-row-head">
           <span class="cy-name">${escapeHtml(c.name)}</span>
+          ${open && !overdue ? `<span class="cy-badge cy-badge-current">current</span>` : ""}
           ${open ? "" : `<span class="cy-badge" title="closed ${escapeHtml(formatRelativeTime(c.closedAt!))}">closed</span>`}
           ${overdue ? `<span class="cy-badge cy-badge-late">past its end date</span>` : ""}
           <span class="cy-dates">${escapeHtml(formatDay(c.startsAt))} → ${escapeHtml(
@@ -161,7 +162,7 @@ export function renderCyclesView(container: HTMLElement): () => void {
               : ""
           }
         </div>
-        <div class="cy-bar"><i style="width:${pct}%"></i></div>
+        <div class="cy-bar${open ? "" : " cy-bar--past"}"><i style="width:${pct}%"></i></div>
       </div>`;
   }
 
