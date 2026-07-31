@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## v2.2.0 — 2026-07-31
+
+### Added
+- **The agent opens and closes its own sprints.** The MCP server grows
+  `create_cycle` and `update_cycle` (#28) — the missing half of the cycle
+  loop: cards could already be planned into a cycle (`cycleId`/`estimate`
+  on `create_todo`/`update_todo`), but the window itself had to be opened
+  and closed in the UI. Dates take RFC3339 or a bare `YYYY-MM-DD` read in
+  the server's zone — midnight for a start, 23:59:59 for an end, the same
+  rule the cycles view applies. Closing stamps the moment server-side, and
+  delete stays UI-only like every other store.
+
 ## v2.1.0 — 2026-07-31
 
 ### Changed
