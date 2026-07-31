@@ -4,6 +4,7 @@ import { migrateLegacyHash, parseRoute } from "./app/router";
 import { announce } from "./app/live";
 import { initNotifications } from "./app/notify";
 import { navigate, syncScopeToURL } from "./scope";
+import { mountPresentationToggle } from "./app/presentation";
 import { initTheme, mountThemeToggle } from "./app/theme";
 import { mountScopeRail } from "./ui/scopeRail";
 import { renderBoardView } from "./views/board";
@@ -56,6 +57,7 @@ app.innerHTML = `
       <a class="px-nav-link" href="/project/board" data-fam="project">project</a>
     </div>
     <div class="px-nav__end">
+      <button type="button" class="theme-btn" id="presentation-btn" aria-label="hide private projects and their Claude sessions"></button>
       <button type="button" class="theme-btn" id="theme-btn" aria-label="toggle light/dark theme"></button>
     </div>
   </nav>
@@ -103,6 +105,7 @@ new ResizeObserver(() => {
 }).observe(chromeEl);
 
 mountThemeToggle(app.querySelector<HTMLButtonElement>("#theme-btn")!);
+mountPresentationToggle(app.querySelector<HTMLButtonElement>("#presentation-btn")!);
 const famLinks = [...app.querySelectorAll<HTMLAnchorElement>("[data-fam]:not([data-nav])")];
 const navLinks = [...app.querySelectorAll<HTMLAnchorElement>("[data-nav]")];
 

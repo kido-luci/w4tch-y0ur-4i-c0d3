@@ -8,7 +8,6 @@ import {
   getUnmappedFolders,
   projectLogoURL,
   putGroup,
-  putPresentation,
   putProject,
   putProjectLogo,
   renameProject,
@@ -246,10 +245,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       groupsHtml +
       projHtml +
       `<button type="button" class="rail-item rail-manage" data-act="manage-groups">+ groups…</button>` +
-      `<button type="button" class="rail-item rail-manage" data-act="manage-projects">+ projects…</button>` +
-      `<button type="button" class="rail-item rail-manage" data-act="presentation" title="one switch hides every private project — rail, views, search, MCP — while you demo or screenshot">${
-        presentationOn ? "🙈 private hidden — show" : "👁 hide private"
-      }</button>`;
+      `<button type="button" class="rail-item rail-manage" data-act="manage-projects">+ projects…</button>`;
   }
 
   list.addEventListener("click", (e) => {
@@ -277,15 +273,6 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       groupPanel.hidden = true;
       projPanel.hidden = !projPanel.hidden;
       if (!projPanel.hidden) refreshUnmapped();
-      return;
-    }
-    if (btn.dataset["act"] === "presentation") {
-      // State flips on the SSE echo (the board/design mutation recipe), so
-      // every open tab — this one included — follows the same path.
-      putPresentation(!presentationOn).catch((err: unknown) => {
-        console.error("presentation toggle failed", err);
-        alert(err instanceof Error ? err.message : "presentation toggle failed");
-      });
       return;
     }
     const scope = btn.dataset["scope"];
