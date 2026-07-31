@@ -239,7 +239,7 @@ a {
   background: none;
   border: 2px solid transparent;
   color: var(--text-muted);
-  font-family: var(--mono);
+  font-family: var(--px-sans);
   font-size: var(--px-body);
   padding: var(--px-sp-2) var(--px-sp-4);
   cursor: pointer;
@@ -2812,16 +2812,48 @@ a.flow-node {
   }
 }
 
+/* Columns are OPEN — no box, no shadow: the serif head and its rule are the
+   whole structure, and the cards float on the ground. The mock never draws a
+   column as a surface; boxing them is the pixel language, not this one. */
 .board-col {
-  background: var(--card);
-  border: var(--px-edge);
-  border-radius: var(--px-r-card);
-  padding: var(--px-sp-5);
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: var(--px-sp-4);
   min-height: 180px;
-  box-shadow: var(--px-shadow);
+}
+
+/* Per-category colour, straight from the mock: In-progress columns speak
+   purple (rule, name, a card edge), done columns speak green and cross their
+   cards off. */
+.board-col--started .board-col-head {
+  border-bottom-color: var(--px-purple);
+}
+
+.board-col--started .board-col-name {
+  color: var(--px-purple-text);
+}
+
+.board-col--started .todo-card {
+  border-left: 3px solid var(--px-purple);
+}
+
+.board-col--done .board-col-head {
+  border-bottom-color: var(--px-green);
+}
+
+.board-col--done .board-col-name {
+  color: var(--px-green-text);
+}
+
+.board-col--done .todo-card {
+  background: var(--row-hover);
+  opacity: 0.75;
+}
+
+.board-col--done .todo-title {
+  text-decoration: line-through;
+  color: var(--text-muted);
 }
 
 /* The editorial signature: a serif column head over a heavy ink rule. Where
@@ -2839,13 +2871,11 @@ a.flow-node {
   color: var(--text);
 }
 
+/* Bare mono, no box — the count rides the serif head's baseline. */
 .board-count {
-  background: transparent;
-  border: var(--px-edge-inner);
-  border-radius: var(--px-r-card);
-  padding: 1px var(--px-sp-3);
-  font-size: var(--px-label-xs);
-  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  color: var(--text-muted);
 }
 
 .board-sum {
@@ -2880,18 +2910,16 @@ a.flow-node {
 }
 
 .todo-card {
-  background: var(--bg);
-  border: var(--px-edge-inner);
+  background: var(--card);
+  border: var(--px-edge);
   border-radius: var(--px-r-card);
   padding: var(--px-sp-4) var(--px-sp-5);
   cursor: grab;
-  transition: border-color 0.15s ease, transform 0.15s ease,
-    box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .todo-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  transform: translate(-2px, -2px);
+  border-color: var(--px-line-strong);
   box-shadow: var(--px-shadow-sm);
 }
 
@@ -5583,7 +5611,9 @@ a.flow-node {
 .board-col-add {
   min-height: 0;
   background: transparent;
-  border-style: dashed;
+  border: 1px dashed var(--px-line-strong);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-5);
   box-shadow: none;
 }
 

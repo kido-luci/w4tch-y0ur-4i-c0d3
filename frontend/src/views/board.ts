@@ -363,7 +363,7 @@ export function renderBoardView(container: HTMLElement, initialCardId?: string):
         .map((s) => {
           const cards = byColumn(s.id);
           return `
-        <div class="board-col">
+        <div class="board-col board-col--${escapeHtml(s.category)}">
           ${colHeadHtml(s, cards)}
           <div class="board-cards" data-status="${escapeHtml(s.id)}">${cards.map(cardHtml).join("")}</div>
           ${composerHtml(s.id)}
