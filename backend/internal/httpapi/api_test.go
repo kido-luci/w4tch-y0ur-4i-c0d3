@@ -1,8 +1,13 @@
 package httpapi
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"watch-your-ai-code/internal/board"
 )
 
 // A burst of kicks while a rescan runs must fold into exactly ONE follow-up:
@@ -47,5 +52,83 @@ func TestRescanCoalescer(t *testing.T) {
 	case p := <-started:
 		t.Fatalf("unexpected extra rescan of %q", p)
 	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// presentationFixture builds the guard over one private project ("secret",
+// owning folder "secret-folder") and one public one, with a recording handler
+// behind it that captures the project param each request arrived with.
+func presentationFixture(t *testing.T) (settings *board.SettingsStore, guard http.Handler, got *string) {
+	t.Helper()
+	db, err := board.OpenDB(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	projects := board.NewProjectStore(db)
+	if _, err := projects.Upsert("secret", []string{"secret-folder"}, false, true, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := projects.Upsert("open", []string{"open-folder"}, false, false, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	settings = board.NewSettingsStore(db)
+	got = new(string)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*got = r.URL.Query().Get("project")
+	})
+	folders := func() []string { return []string{"secret-folder", "open-folder"} }
+	return settings, PresentationGuard(settings, projects, folders, next), got
+}
+
+func TestPresentationGuardRewritesTheProjectParam(t *testing.T) {
+	settings, guard, got := presentationFixture(t)
+	serve := func(method, target string) {
+		*got = "unset"
+		guard.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(method, target, nil))
+	}
+
+	// Mode off: everything passes through untouched.
+	serve("GET", "/api/sessions")
+	if *got != "" {
+		t.Fatalf("mode off must not rewrite, handler saw %q", *got)
+	}
+
+	if err := settings.SetPresentationHidden(true); err != nil {
+		t.Fatal(err)
+	}
+
+	// An empty param means "all folders" — it becomes all minus the private ones.
+	serve("GET", "/api/sessions")
+	if *got != "open-folder" {
+		t.Fatalf("empty param should become the public folders, handler saw %q", *got)
+	}
+
+	// A scoped param loses its private folders and keeps the rest.
+	serve("GET", "/api/stats?project=open-folder,secret-folder")
+	if *got != "open-folder" {
+		t.Fatalf("scoped param should lose the private folder, handler saw %q", *got)
+	}
+
+	// A param left with nothing must NOT become the all-folders empty string.
+	serve("GET", "/api/stats?project=secret-folder")
+	if *got == "" || strings.Contains(*got, "secret-folder") {
+		t.Fatalf("an emptied filter must match nothing, handler saw %q", *got)
+	}
+
+	// Ships speak Makefile names, not folders — the guard leaves them alone.
+	serve("GET", "/api/ships")
+	if *got != "" {
+		t.Fatalf("/api/ships must pass through untouched, handler saw %q", *got)
+	}
+
+	// Writes and non-API paths pass through untouched.
+	serve("POST", "/api/todos")
+	if *got != "" {
+		t.Fatalf("a write must pass through untouched, handler saw %q", *got)
+	}
+	serve("GET", "/assets/index.js")
+	if *got != "" {
+		t.Fatalf("a static path must pass through untouched, handler saw %q", *got)
 	}
 }

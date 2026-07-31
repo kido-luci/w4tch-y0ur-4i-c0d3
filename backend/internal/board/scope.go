@@ -40,6 +40,12 @@ type ScopeSet struct {
 	All    bool            // the all-projects scope: nothing is filtered
 	Cards  map[string]bool // projects whose cards are in scope
 	owners map[string]bool // labels whose configuration applies here
+	// Exclude names projects presentation mode is hiding — consulted before
+	// every other answer, including All. A nil map excludes nothing, so plain
+	// ResolveScope results are unaffected. Deliberately NOT keyed on the empty
+	// string: an unscoped card keeps its usual answer either way, because a
+	// card with no project name leaks nothing worth hiding.
+	Exclude map[string]bool
 }
 
 // Covers reports whether a CARD carrying this repo is in scope.
@@ -48,6 +54,9 @@ type ScopeSet struct {
 // project shows only under all-projects, which is the rule the board has had
 // since v0.63. Do not "fix" this to return true.
 func (s ScopeSet) Covers(repo string) bool {
+	if s.Exclude[repo] {
+		return false
+	}
 	if s.All {
 		return true
 	}
@@ -65,10 +74,24 @@ func (s ScopeSet) Covers(repo string) bool {
 // no repo means SHARED and therefore visible everywhere. Two meanings for one
 // empty value, so they get two methods rather than one flag.
 func (s ScopeSet) CoversOwner(repo string) bool {
+	if s.Exclude[repo] {
+		return false
+	}
 	if repo == "" || s.All {
 		return true
 	}
 	return s.owners[repo]
+}
+
+// WithExclude returns a copy of s that also refuses everything in names — how
+// presentation mode subtracts private projects from an already-resolved scope
+// without a second resolution rule. An empty or nil set returns s unchanged.
+func (s ScopeSet) WithExclude(names map[string]bool) ScopeSet {
+	if len(names) == 0 {
+		return s
+	}
+	s.Exclude = names
+	return s
 }
 
 // ResolveScope expands a scope label into the two sets above. An empty label is

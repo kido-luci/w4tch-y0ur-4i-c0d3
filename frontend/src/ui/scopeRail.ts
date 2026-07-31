@@ -3,10 +3,12 @@ import {
   deleteProject,
   deleteProjectLogo,
   getGroups,
+  getPresentation,
   getProjectRegistry,
   getUnmappedFolders,
   projectLogoURL,
   putGroup,
+  putPresentation,
   putProject,
   putProjectLogo,
   renameProject,
@@ -19,6 +21,7 @@ import {
   getKnownProjects,
   getScope,
   getScopeParam,
+  getScopeSet,
   loadScopeIndex,
   setKnownTaxonomy,
   setScope,
@@ -82,20 +85,35 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // manager opens, offered there to be claimed or merged.
   let unmapped: string[] = [];
 
+  // Presentation mode — server-side state, mirrored here for the rail's own
+  // filtering. The PUT's SSE echo is the only writer after boot, so every tab
+  // flips together.
+  let presentationOn = false;
+
   // Which tree nodes are folded (persisted). Read once; toggles mutate it.
   const collapsed = loadCollapsed();
 
+  const isPrivateName = (name: string): boolean =>
+    !!getKnownProjects().find((p) => p.name === name)?.private;
+
+  /** A group earns a rail row unless presentation mode hides every member it
+      has — an empty group keeps its row (its name is not a project's). */
+  const groupVisible = (g: ProjectGroup): boolean =>
+    !presentationOn || !g.projects.length || g.projects.some((n) => !isPrivateName(n));
+
   function visibleProjects(): Project[] {
-    return getKnownProjects().filter((p) => !p.hidden);
+    return getKnownProjects().filter((p) => !p.hidden && !(presentationOn && p.private));
   }
 
   /** The default scope for a fresh load — first group, else first visible
    *  project (rail order), so a project is always selected now that "all
    *  projects" is gone. "" only when there's nothing to select. */
   function firstScope(): string {
-    if (getKnownGroups().length) {
-      return [...getKnownGroups()].map((g) => g.name).sort((a, b) => a.localeCompare(b))[0]!;
-    }
+    const groups = [...getKnownGroups()]
+      .filter(groupVisible)
+      .map((g) => g.name)
+      .sort((a, b) => a.localeCompare(b));
+    if (groups.length) return groups[0]!;
     return visibleProjects()[0]?.name ?? "";
   }
 
@@ -179,6 +197,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       const members = new Set(g.projects);
       const body = g.projects
         .map((name) => {
+          // A private member leaves no trace while presenting — without this,
+          // the registry lookup below misses it (visibleProjects dropped it)
+          // and the phantom-leaf fallback would print the name anyway.
+          if (presentationOn && isPrivateName(name)) return "";
           const p = projs.find((x) => x.name === name);
           // A member whose parent is also in this group renders under that
           // parent (nested), not a second time as a direct member.
@@ -190,9 +212,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       return row + body;
     };
 
-    const groupsHtml = getKnownGroups().length
+    const shownGroups = [...getKnownGroups()].filter(groupVisible);
+    const groupsHtml = shownGroups.length
       ? `<div class="rail-heading">groups</div>` +
-        [...getKnownGroups()].sort((a, b) => a.name.localeCompare(b.name)).map(renderGroup).join("")
+        shownGroups.sort((a, b) => a.name.localeCompare(b.name)).map(renderGroup).join("")
       : "";
 
     // Top-level projects: in no group and with no visible parent (their children
@@ -211,7 +234,11 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       for (const n of g.projects) shown.add(n);
     }
     for (const p of projs) shown.add(p.name);
-    if (current && !shown.has(current)) topRows.push(nodeRow(current, current, 0));
+    // The keep-it-selectable fallback must not resurrect a private project's
+    // name while presenting — the toggle handler bounces the scope instead.
+    if (current && !shown.has(current) && !(presentationOn && isPrivateName(current))) {
+      topRows.push(nodeRow(current, current, 0));
+    }
 
     const projHtml = topRows.length ? `<div class="rail-heading">projects</div>` + topRows.join("") : "";
 
@@ -219,7 +246,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       groupsHtml +
       projHtml +
       `<button type="button" class="rail-item rail-manage" data-act="manage-groups">+ groups…</button>` +
-      `<button type="button" class="rail-item rail-manage" data-act="manage-projects">+ projects…</button>`;
+      `<button type="button" class="rail-item rail-manage" data-act="manage-projects">+ projects…</button>` +
+      `<button type="button" class="rail-item rail-manage" data-act="presentation" title="one switch hides every private project — rail, views, search, MCP — while you demo or screenshot">${
+        presentationOn ? "🙈 private hidden — show" : "👁 hide private"
+      }</button>`;
   }
 
   list.addEventListener("click", (e) => {
@@ -247,6 +277,15 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       groupPanel.hidden = true;
       projPanel.hidden = !projPanel.hidden;
       if (!projPanel.hidden) refreshUnmapped();
+      return;
+    }
+    if (btn.dataset["act"] === "presentation") {
+      // State flips on the SSE echo (the board/design mutation recipe), so
+      // every open tab — this one included — follows the same path.
+      putPresentation(!presentationOn).catch((err: unknown) => {
+        console.error("presentation toggle failed", err);
+        alert(err instanceof Error ? err.message : "presentation toggle failed");
+      });
       return;
     }
     const scope = btn.dataset["scope"];
@@ -385,7 +424,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       .map(
         (p) => `
       <div class="scope-panel-row">
-        <button type="button" class="scope-panel-name${p.hidden ? " scope-panel-name--off" : ""}" data-act="edit" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}${p.hidden ? " · hidden" : ""}</button>
+        <button type="button" class="scope-panel-name${p.hidden ? " scope-panel-name--off" : ""}" data-act="edit" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}${p.hidden ? " · hidden" : ""}${p.private ? " · private" : ""}</button>
         <span class="scope-panel-count">${(p.folders ?? []).length}</span>
         <button type="button" class="scope-panel-del" data-act="del" data-name="${escapeHtml(p.name)}" title="delete project">✕</button>
       </div>`,
@@ -450,6 +489,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       <form class="scope-panel-form" data-editing="${escapeHtml(editing)}">
         ${nameField}
         <label class="scope-panel-check"><input type="checkbox" name="hidden"${p?.hidden ? " checked" : ""}> hidden (keep off the rail)</label>
+        <label class="scope-panel-check"><input type="checkbox" name="private"${p?.private ? " checked" : ""}> private (hide everywhere in presentation mode)</label>
         ${parentSection}
         ${logoSection}
         <div class="scope-panel-sub">folders${checks ? "" : " — none unmapped"}</div>
@@ -516,6 +556,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       (c) => c.value,
     );
     const hidden = form.querySelector<HTMLInputElement>('input[name="hidden"]')?.checked ?? false;
+    const priv = form.querySelector<HTMLInputElement>('input[name="private"]')?.checked ?? false;
     const parent = form.querySelector<HTMLSelectElement>('select[name="parent"]')?.value ?? "";
     // ord is preserved on an edit/rename (from the original row), fresh on a new one.
     const cur = getKnownProjects().find((k) => k.name === editing);
@@ -535,7 +576,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           await renameProject(editing, name);
           if (getScope() === editing) setScope(name, true);
         }
-        await putProject(name, { folders, hidden, ord, parent });
+        await putProject(name, { folders, hidden, private: priv, ord, parent });
         renderProjectPanel();
       } catch (err) {
         console.error("save project failed", err);
@@ -550,6 +591,26 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // recipe. The nav chrome mounts once, so this subscription never needs
   // tearing down.
   subscribeRawEvents((type, data) => {
+    if (type === "presentation-updated") {
+      presentationOn = !!(data as { hidden?: boolean } | null)?.hidden;
+      renderRows();
+      // What every label covers changed server-side (/api/scopes trims private
+      // projects while the mode is on) — refetch, then either bounce off a
+      // scope the mode just hid or re-render the view where it stands.
+      void loadScopeIndex().then(() => {
+        const cur = getScope();
+        const covered = getScopeSet()?.size ?? 0;
+        if (presentationOn && cur && (isPrivateName(cur) || covered === 0)) {
+          const def = firstScope();
+          if (def && def !== cur) {
+            setScope(def); // popstate re-renders the view and the rows
+            return;
+          }
+        }
+        onChange();
+      });
+      return;
+    }
     if (type === "groups-updated") {
       const scope = getScope();
       const before = getScopeParam();
@@ -595,8 +656,16 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   renderRows();
   const hadScope = getScope();
   const beforeParam = getScopeParam(); // pre-load: labels resolve as their own folder
-  Promise.all([getProjectRegistry(), getGroups(), loadScopeIndex()])
-    .then(([projects, groups]) => {
+  Promise.all([
+    getProjectRegistry(),
+    getGroups(),
+    loadScopeIndex(),
+    // The mode must not block boot: unreadable answers as off, and the SSE
+    // echo corrects it the moment someone flips the switch.
+    getPresentation().catch(() => ({ hidden: false })),
+  ])
+    .then(([projects, groups, , pres]) => {
+      presentationOn = !!pres.hidden;
       setKnownTaxonomy(projects, groups);
       // No "all projects" anymore: a fresh load (or a cleared scope) lands on a
       // default project so a scope is always active.

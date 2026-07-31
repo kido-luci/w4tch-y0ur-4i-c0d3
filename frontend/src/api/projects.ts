@@ -6,6 +6,7 @@ export interface Project {
   name: string;
   folders: string[];
   hidden: boolean;
+  private: boolean; // hidden app-wide while presentation mode is on
   ord: number;
   parent: string; // name of the project this nests under in the rail tree, "" = top-level
   logoVersion: number; // ms of the last logo write, 0 = no logo (also the cache-buster)
@@ -33,9 +34,21 @@ export function getUnmappedFolders(): Promise<string[]> {
     and rail order. Claimed folders are stripped from other projects server-side. */
 export function putProject(
   name: string,
-  body: { folders: string[]; hidden: boolean; ord: number; parent: string },
+  body: { folders: string[]; hidden: boolean; private: boolean; ord: number; parent: string },
 ): Promise<Project> {
   return sendJSON<Project>(`/api/projects/${encodeURIComponent(name)}`, "PUT", body);
+}
+
+/** Presentation mode — the server-side switch that hides private projects
+    app-wide (rail, every endpoint family, MCP) while demoing or taking
+    screenshots. The PUT's SSE echo (`presentation-updated`) is what makes
+    every open tab follow. */
+export function getPresentation(): Promise<{ hidden: boolean }> {
+  return getJSON<{ hidden: boolean }>("/api/presentation");
+}
+
+export function putPresentation(hidden: boolean): Promise<{ hidden: boolean }> {
+  return sendJSON<{ hidden: boolean }>("/api/presentation", "PUT", { hidden });
 }
 
 export function deleteProject(name: string): Promise<void> {

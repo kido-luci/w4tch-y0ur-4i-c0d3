@@ -115,6 +115,7 @@ type Deps struct {
 	Docs     *board.DocStore
 	Groups   *board.GroupStore
 	Projects *board.ProjectStore
+	Settings *board.SettingsStore
 }
 
 func Register(mux *http.ServeMux, d Deps) {
@@ -125,6 +126,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	todos, states, cycles, events := d.Todos, d.States, d.Cycles, d.Events
 	views, drawings, docs := d.Views, d.Drawings, d.Docs
 	groups, projects := d.Groups, d.Projects
+	settings := d.Settings
 
 	// Repo resolution, ship records and transcript search read the index but are
 	// not part of it — each takes the narrow slice of it that it needs, so none
@@ -133,10 +135,24 @@ func Register(mux *http.ServeMux, d Deps) {
 	shipStore := ships.New(ix.DB(), ix)
 	searchIdx := search.New(ix.DB(), ix)
 
+	// privateNames is the presentation-mode subtraction: the private projects'
+	// names while the toggle is on, empty otherwise — so every caller can apply
+	// it unconditionally.
+	privateNames := func() map[string]bool {
+		if settings == nil || !settings.PresentationHidden() {
+			return nil
+		}
+		names, _ := projects.PrivateSets()
+		return names
+	}
+
 	// Every scope question below goes through here, so a group label expands the
-	// same way the rail expands it — see scope.go.
+	// same way the rail expands it — see scope.go. Presentation mode subtracts
+	// the private projects right here, so every scope-filtered endpoint hides
+	// them without knowing the toggle exists.
 	scopeOf := func(r *http.Request) board.ScopeSet {
-		return board.ResolveScope(strings.TrimSpace(r.URL.Query().Get("repo")), groups, projects)
+		s := board.ResolveScope(strings.TrimSpace(r.URL.Query().Get("repo")), groups, projects)
+		return s.WithExclude(privateNames())
 	}
 
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +212,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// of one rule drift the moment someone edits one, and the last time this rule
 	// was wrong a workflow column vanished from a member project.
 	mux.HandleFunc("GET /api/scopes", func(w http.ResponseWriter, r *http.Request) {
+		// Presentation mode subtracts private projects from every label's
+		// coverage. The client filters its lists by these sets, so trimming
+		// them here hides private cards/pages/drawings in every label-based
+		// view without the client learning a second rule.
+		private := privateNames()
 		out := map[string][]string{}
 		add := func(label string) {
 			if label == "" {
@@ -204,6 +225,9 @@ func Register(mux *http.ServeMux, d Deps) {
 			in := board.ResolveScope(label, groups, projects)
 			names := make([]string, 0, len(in.Cards))
 			for n := range in.Cards {
+				if private[n] {
+					continue
+				}
 				names = append(names, n)
 			}
 			sort.Strings(names) // stable payload, so a refetch diffs cleanly
@@ -936,6 +960,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		var in struct {
 			Folders []string `json:"folders"`
 			Hidden  bool     `json:"hidden"`
+			Private bool     `json:"private"`
 			Ord     int      `json:"ord"`
 			Parent  string   `json:"parent"`
 		}
@@ -943,7 +968,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		p, err := projects.Upsert(r.PathValue("name"), in.Folders, in.Hidden, in.Ord, in.Parent)
+		p, err := projects.Upsert(r.PathValue("name"), in.Folders, in.Hidden, in.Private, in.Ord, in.Parent)
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return
@@ -959,6 +984,33 @@ func Register(mux *http.ServeMux, d Deps) {
 		}
 		hub.Broadcast("projects-updated", projects.List())
 		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Presentation mode: the one switch that hides private projects app-wide
+	// (rail, scope resolution, session endpoints, MCP) while you demo or
+	// screenshot. Server-side state so every tab and consumer flips together;
+	// the broadcast is what makes open tabs re-render.
+	mux.HandleFunc("GET /api/presentation", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteJSON(w, map[string]bool{"hidden": settings != nil && settings.PresentationHidden()})
+	})
+	mux.HandleFunc("PUT /api/presentation", func(w http.ResponseWriter, r *http.Request) {
+		if settings == nil {
+			httpx.WriteJSONError(w, http.StatusServiceUnavailable, "settings store unavailable")
+			return
+		}
+		var in struct {
+			Hidden bool `json:"hidden"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
+			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
+			return
+		}
+		if err := settings.SetPresentationHidden(in.Hidden); err != nil {
+			httpx.WriteJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		hub.Broadcast("presentation-updated", map[string]bool{"hidden": in.Hidden})
+		httpx.WriteJSON(w, map[string]bool{"hidden": in.Hidden})
 	})
 
 	// Rename a project AND cascade the new name across every label that carried
@@ -1190,7 +1242,21 @@ func Register(mux *http.ServeMux, d Deps) {
 		if limit > 500 {
 			limit = 500
 		}
-		httpx.WriteJSON(w, shipStore.List(q.Get("project"), days, limit, q.Get("log") == "1"))
+		out := shipStore.List(q.Get("project"), days, limit, q.Get("log") == "1")
+		// Ship records carry Makefile-reported project names — a different
+		// namespace from Claude folders, so PresentationGuard skips this path
+		// and the private-NAME subtraction happens here instead.
+		if private := privateNames(); len(private) > 0 {
+			kept := make([]ships.ShipRecord, 0, len(out.Ships))
+			for _, s := range out.Ships {
+				if !private[s.Project] {
+					kept = append(kept, s)
+				}
+			}
+			out.Total -= len(out.Ships) - len(kept)
+			out.Ships = kept
+		}
+		httpx.WriteJSON(w, out)
 	})
 
 	// Transcript search over the FTS5 index (see internal/search). `limit` (default
@@ -1303,5 +1369,60 @@ func Register(mux *http.ServeMux, d Deps) {
 				fl.Flush()
 			}
 		}
+	})
+}
+
+// PresentationGuard hides private projects from the session-derived endpoint
+// family while presentation mode is on. Those endpoints share one convention —
+// a `project` query param carrying comma-separated Claude folders, empty
+// meaning all of them — and the guard rewrites that param in place: an empty
+// param becomes every folder the index knows minus the private ones, and a
+// non-empty one loses its private folders. The handlers (sessions, insights,
+// stats, search, git, code graph) never learn the toggle exists.
+//
+// /api/ships is the one exception: its `project` values are Makefile-reported
+// names, a different namespace, so its handler subtracts by project NAME
+// itself. Writes, non-/api paths and the SSE stream pass through untouched.
+//
+// `folders` supplies every folder the index knows (ix.Projects at the call
+// site) — a func, not a slice, because the index rescans behind this handler.
+func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectStore, folders func() []string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if settings == nil || !settings.PresentationHidden() ||
+			r.Method != http.MethodGet ||
+			!strings.HasPrefix(r.URL.Path, "/api/") ||
+			r.URL.Path == "/api/ships" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		_, private := projects.PrivateSets()
+		if len(private) == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		q := r.URL.Query()
+		var keep []string
+		if cur := q.Get("project"); cur != "" {
+			for _, f := range index.SplitProjects(cur) {
+				if !private[f] {
+					keep = append(keep, f)
+				}
+			}
+		} else {
+			for _, f := range folders() {
+				if !private[f] {
+					keep = append(keep, f)
+				}
+			}
+		}
+		if len(keep) == 0 {
+			// An empty param means "all folders" — the opposite of what an
+			// emptied filter should mean — so send a token no folder can be.
+			keep = []string{"\x00none"}
+		}
+		q.Set("project", strings.Join(keep, ","))
+		r2 := r.Clone(r.Context())
+		r2.URL.RawQuery = q.Encode()
+		next.ServeHTTP(w, r2)
 	})
 }

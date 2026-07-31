@@ -25,7 +25,7 @@ func scopeFixture(t *testing.T) (*GroupStore, *ProjectStore) {
 		{"blog-worker", "blog-backend"},
 		{"standalone", ""},
 	} {
-		if _, err := ps.Upsert(p.name, nil, false, 0, p.parent); err != nil {
+		if _, err := ps.Upsert(p.name, nil, false, false, 0, p.parent); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -105,7 +105,7 @@ func TestStoresAgreeOnScope(t *testing.T) {
 	if _, err := gs.Upsert("luci-studio", []string{"blog-backend"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ps.Upsert("blog-backend", nil, false, 0, ""); err != nil {
+	if _, err := ps.Upsert("blog-backend", nil, false, false, 0, ""); err != nil {
 		t.Fatal(err)
 	}
 	states := NewStateStore(db)
@@ -162,7 +162,7 @@ func TestReportsCountOnlyCardsInScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"blog-backend", "elsewhere"} {
-		if _, err := ps.Upsert(n, nil, false, 0, ""); err != nil {
+		if _, err := ps.Upsert(n, nil, false, false, 0, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -222,7 +222,7 @@ func TestBurndownRefusesACycleOutsideTheScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"blog-backend", "elsewhere"} {
-		if _, err := ps.Upsert(n, nil, false, 0, ""); err != nil {
+		if _, err := ps.Upsert(n, nil, false, false, 0, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -242,5 +242,50 @@ func TestBurndownRefusesACycleOutsideTheScope(t *testing.T) {
 	// An unrelated project must not — which is what makes the handler 404.
 	if in := ResolveScope("elsewhere", gs, ps); in.CoversOwner(c.Repo) {
 		t.Error("an unrelated project must not see another group's cycle")
+	}
+}
+
+func TestScopeSetWithExcludeHidesPrivateProjects(t *testing.T) {
+	gs, ps := scopeFixture(t)
+	// Mark one group member private, the way presentation mode would see it.
+	if _, err := ps.Upsert("blog-backend", nil, false, true, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	private, _ := ps.PrivateSets()
+	if !private["blog-backend"] || len(private) != 1 {
+		t.Fatalf("PrivateSets should name exactly blog-backend, got %v", private)
+	}
+
+	// A group scope keeps its public members and loses the private one.
+	g := ResolveScope("luci-studio", gs, ps).WithExclude(private)
+	if g.Covers("blog-backend") {
+		t.Error("a private member must fall out of its group's scope")
+	}
+	if !g.Covers("blog-frontend") {
+		t.Error("a public member must stay in scope")
+	}
+	if g.CoversOwner("blog-backend") {
+		t.Error("a private member's configuration must fall out too")
+	}
+	if !g.CoversOwner("") {
+		t.Error("shared configuration (empty owner) must survive the exclusion")
+	}
+
+	// The all-projects scope keeps its empty-repo behaviour: an unscoped card
+	// still shows, only the private project disappears.
+	all := ResolveScope("", gs, ps).WithExclude(private)
+	if !all.Covers("") {
+		t.Error("an unscoped card must stay visible under all-projects")
+	}
+	if all.Covers("blog-backend") {
+		t.Error("a private project must be excluded even under all-projects")
+	}
+	if !all.Covers("standalone") {
+		t.Error("a public project must stay visible under all-projects")
+	}
+
+	// No exclusions → the very same set, untouched.
+	if s := ResolveScope("luci-studio", gs, ps).WithExclude(nil); !s.Covers("blog-backend") {
+		t.Error("an empty exclusion set must change nothing")
 	}
 }
