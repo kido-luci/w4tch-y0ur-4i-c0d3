@@ -3,6 +3,44 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## v2.1.0 — 2026-07-31
+
+### Changed
+- **Paper Editorial Cool — the app wears a new design language.** The pixel
+  language (cream ground, Silkscreen chrome, hard offset shadows, 0-radius
+  ink boxes) is replaced wholesale by an editorial one: a cool slate palette,
+  Newsreader for headings and column heads, Public Sans for prose and UI,
+  IBM Plex Mono staying on data — all vendored latin + vietnamese. Structure
+  is hairlines and soft shadows; chips are pills; board columns open up into
+  serif heads over a heavy rule, purple while in progress and green when
+  done; the docs view becomes a single sheet with a scroll-spied "on this
+  page" rail; markdown tables take the property-map shape. Colour speaks in
+  roles — blue for navigation and links, teal for ids and hashes, pink for
+  actions, purple for in-review, green for done/live — and every hue that
+  colours text was measured to 4.5:1 rather than copied from the mock. Dark
+  is a derived inversion on the same slate axis. The wordmark reads "Watch
+  Your AI Code".
+- **The design tab split into Wireframe and UI** — sketches and hi-fi
+  screens are different artifacts and now have different tabs (#24), and the
+  UI tab lists a scope's `.fig`/`.pen` files and opens them in OpenPencil
+  (#21).
+
+### Fixed
+- **The file watcher no longer holds a kqueue fd per watched file.** It
+  polls with stamp sweeps instead, dropping the ~4.3k-fd baseline (#26); a
+  periodic fd census logs what remains (#25).
+- **Design files resolve from the scope's folders, not its rail label**
+  (#23).
+- **The session detail no longer refetches summaries on every repaint** —
+  the request is keyed to the milestones' freshness, not to the render loop
+  (#14).
+
+### Internal
+- Frontend and backend are sibling trees of narrow packages instead of one
+  nesting in the other (#13–#17); CI runs the frontend test suite (#15); and
+  `make release-dry` rehearses the whole release path without publishing
+  (#18).
+
 ## v2.0.1 — 2026-07-28
 
 ### Fixed
