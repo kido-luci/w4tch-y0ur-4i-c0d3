@@ -119,6 +119,7 @@ func main() {
 	docStore := board.NewDocStore(dataDB)
 	groupStore := board.NewGroupStore(dataDB)
 	projectStore := board.NewProjectStore(dataDB)
+	settingsStore := board.NewSettingsStore(dataDB)
 	// Seed the project registry from the content taxonomy (add-only, keeps
 	// names): every label the board / docs / design actually carry. The Claude
 	// session scan is NOT a source — which folders sessions ran in doesn't
@@ -141,8 +142,9 @@ func main() {
 		Docs:     docStore,
 		Groups:   groupStore,
 		Projects: projectStore,
+		Settings: settingsStore,
 	})
-	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, shipStore, ix, hub))
+	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, settingsStore, shipStore, ix, hub))
 
 	// Adopt freshly-labelled content into the registry (a card/page/drawing
 	// given a label that has no project row yet gets one), so nothing sits
@@ -201,7 +203,10 @@ func main() {
 	log.Printf("watch-your-ai-code on http://%s (root: %s, config: %s)", *addr, *root, cfgDir)
 	// hostGuard wraps EVERYTHING (API, MCP, static): loopback alone doesn't
 	// stop DNS rebinding or blind cross-origin POSTs — see internal/httpx.
-	log.Fatal(http.ListenAndServe(*addr, httpx.HostGuard(*addr, mux)))
+	// Inside it, PresentationGuard subtracts private projects from the
+	// session-endpoint family while presentation mode is on.
+	handler := httpapi.PresentationGuard(settingsStore, projectStore, ix.Projects, mux)
+	log.Fatal(http.ListenAndServe(*addr, httpx.HostGuard(*addr, handler)))
 }
 
 // defaultConfigDir is where the board and design library (data.db) live unless

@@ -33,7 +33,11 @@ type Project struct {
 	Name    string   `json:"name"`
 	Folders []string `json:"folders"`
 	Hidden  bool     `json:"hidden"`
-	Ord     int      `json:"ord"`
+	// Private marks a project presentation mode hides app-wide (screenshots,
+	// demos). Orthogonal to Hidden: hidden is "off the rail always", private is
+	// "mine, hide it only while presenting".
+	Private bool `json:"private"`
+	Ord     int  `json:"ord"`
 	// Parent is the name of the project this one nests under in the rail tree,
 	// "" for a top-level project. It is a display-only edge (the scope of a
 	// parent covers its subtree); a folder still belongs to exactly one project.
@@ -52,6 +56,7 @@ func (p *Project) clone() Project {
 		Name:        p.Name,
 		Folders:     append([]string{}, p.Folders...),
 		Hidden:      p.Hidden,
+		Private:     p.Private,
 		Ord:         p.Ord,
 		Parent:      p.Parent,
 		LogoVersion: p.LogoVersion,
@@ -80,7 +85,7 @@ func NewProjectStore(db *sql.DB) *ProjectStore {
 
 func (ps *ProjectStore) loadDB() {
 	// The logo blob itself stays on disk; only its version rides in memory.
-	rows, err := ps.db.Query(`SELECT name, folders, hidden, ord, parent, logo_updated_at FROM projects`)
+	rows, err := ps.db.Query(`SELECT name, folders, hidden, private, ord, parent, logo_updated_at FROM projects`)
 	if err != nil {
 		log.Printf("projects: load: %v", err)
 		return
@@ -89,13 +94,14 @@ func (ps *ProjectStore) loadDB() {
 	for rows.Next() {
 		p := &Project{}
 		var folders string
-		var hidden, ord int
-		if err := rows.Scan(&p.Name, &folders, &hidden, &ord, &p.Parent, &p.LogoVersion); err != nil {
+		var hidden, private, ord int
+		if err := rows.Scan(&p.Name, &folders, &hidden, &private, &ord, &p.Parent, &p.LogoVersion); err != nil {
 			log.Printf("projects: load row: %v", err)
 			continue
 		}
 		_ = json.Unmarshal([]byte(folders), &p.Folders)
 		p.Hidden = hidden != 0
+		p.Private = private != 0
 		p.Ord = ord
 		ps.projects = append(ps.projects, p)
 	}
@@ -133,7 +139,7 @@ func (ps *ProjectStore) List() []Project {
 // from every other project so ownership stays exclusive — the merge/reassign
 // and the strip run in one transaction, and the in-memory copy is only touched
 // after the DB commit.
-func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord int, parent string) (Project, error) {
+func (ps *ProjectStore) Upsert(name string, folders []string, hidden, private bool, ord int, parent string) (Project, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Project{}, fmt.Errorf("name is required")
@@ -168,9 +174,9 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	defer tx.Rollback()
 
 	if _, err := tx.Exec(
-		`INSERT INTO projects(name, folders, hidden, ord, parent) VALUES(?, ?, ?, ?, ?)
-		 ON CONFLICT(name) DO UPDATE SET folders=excluded.folders, hidden=excluded.hidden, ord=excluded.ord, parent=excluded.parent`,
-		name, string(raw), boolToInt(hidden), ord, parent); err != nil {
+		`INSERT INTO projects(name, folders, hidden, private, ord, parent) VALUES(?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(name) DO UPDATE SET folders=excluded.folders, hidden=excluded.hidden, private=excluded.private, ord=excluded.ord, parent=excluded.parent`,
+		name, string(raw), boolToInt(hidden), boolToInt(private), ord, parent); err != nil {
 		return Project{}, fmt.Errorf("write project: %w", err)
 	}
 
@@ -222,8 +228,28 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 		p = &Project{Name: name}
 		ps.projects = append(ps.projects, p)
 	}
-	p.Folders, p.Hidden, p.Ord, p.Parent = cleaned, hidden, ord, parent
+	p.Folders, p.Hidden, p.Private, p.Ord, p.Parent = cleaned, hidden, private, ord, parent
 	return p.clone(), nil
+}
+
+// PrivateSets returns the private projects' names and the union of the folders
+// they own — the two shapes presentation-mode filtering needs (labels for the
+// board family and /api/scopes, folders for the session-derived endpoints).
+// Both maps are non-nil and freshly built, safe for the caller to hold.
+func (ps *ProjectStore) PrivateSets() (names, folders map[string]bool) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	names, folders = map[string]bool{}, map[string]bool{}
+	for _, p := range ps.projects {
+		if !p.Private {
+			continue
+		}
+		names[p.Name] = true
+		for _, f := range p.Folders {
+			folders[f] = true
+		}
+	}
+	return names, folders
 }
 
 // wouldCycle reports whether making parent the parent of name would create a

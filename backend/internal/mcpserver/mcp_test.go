@@ -42,7 +42,7 @@ func dialMCP(t *testing.T) (*mcp.ClientSession, *board.DrawingStore, *board.Todo
 	ts.UseEvents(board.NewEventStore(db))
 	dcs := board.NewDocStore(db)
 	ixEmpty := index.New(t.TempDir())
-	server := newServer(ds, ts, ss, board.NewCycleStore(db), dcs, board.NewGroupStore(db), board.NewProjectStore(db), ships.New(nil, ixEmpty), ixEmpty, sse.New())
+	server := newServer(ds, ts, ss, board.NewCycleStore(db), dcs, board.NewGroupStore(db), board.NewProjectStore(db), board.NewSettingsStore(db), ships.New(nil, ixEmpty), ixEmpty, sse.New())
 
 	ctx := context.Background()
 	clientTr, serverTr := mcp.NewInMemoryTransports()

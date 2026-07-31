@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-const dataSchemaVersion = 12
+const dataSchemaVersion = 13
 
 // OpenDB opens (creating if needed) <cfgDir>/data.db and migrates its
 // schema forward. Unlike the index cache, an error here is fatal to the
@@ -409,6 +409,30 @@ CREATE TABLE IF NOT EXISTS board_views(
 			}
 		}
 		if _, err := db.Exec(`PRAGMA user_version = 12`); err != nil {
+			return err
+		}
+	}
+	if v < 13 {
+		// Private projects + presentation mode. `private` marks a project the
+		// presentation toggle hides app-wide (orthogonal to `hidden`, which is
+		// "keep off the rail always"). `settings` is a tiny kv table whose first
+		// key is that toggle — server-side state, so one switch covers every
+		// open tab and MCP alike. Guarded ADD COLUMN like the ones above.
+		has, err := columnExists(db, "projects", "private")
+		if err != nil {
+			return err
+		}
+		if !has {
+			if _, err := db.Exec(`ALTER TABLE projects ADD COLUMN private INTEGER NOT NULL DEFAULT 0`); err != nil {
+				return err
+			}
+		}
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS settings(
+	key TEXT PRIMARY KEY,
+	value TEXT NOT NULL DEFAULT ''
+);
+PRAGMA user_version = 13;`); err != nil {
 			return err
 		}
 	}

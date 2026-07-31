@@ -24,6 +24,7 @@ const SSE_TYPES = [
   "docs-updated",
   "groups-updated",
   "projects-updated",
+  "presentation-updated",
   "ship-recorded",
 ];
 
