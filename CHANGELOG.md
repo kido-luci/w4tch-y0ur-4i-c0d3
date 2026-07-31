@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## v2.3.0 — 2026-07-31
+
+### Added
+- **Private projects + presentation mode.** Mark a project private in the
+  rail's project manager, and one switch — the eye at the bottom of the
+  rail — hides it everywhere at once while you demo or screenshot: the
+  rail and scope panels, every scope-resolved view, the session-derived
+  endpoints (sessions, insights, stats, search), the git overview, ships,
+  and MCP (#30). The state lives server-side, so every open tab flips
+  together off one SSE echo; flip it back and everything returns —
+  nothing is deleted, only hidden. `private` is orthogonal to `hidden`
+  (which keeps a project off the rail always).
+
 ## v2.2.0 — 2026-07-31
 
 ### Added
