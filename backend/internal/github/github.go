@@ -46,6 +46,11 @@ func ghPath() string {
 
 var reGitHubRemote = regexp.MustCompile(`github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$`)
 
+// Slug is ghSlug for callers outside this package — the project registry records
+// it so a project says which repo it is bound to. Reading the remote is a local
+// git call; nothing here reaches GitHub.
+func Slug(root string) (string, bool) { return ghSlug(root) }
+
 // ghSlug parses "owner/repo" from a repo's origin remote, but only when the host
 // is github.com; ok=false for any other host (GitLab, self-hosted, no remote).
 func ghSlug(root string) (slug string, ok bool) {
@@ -355,7 +360,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 
 	slugFor := func(w http.ResponseWriter, r *http.Request) (string, bool, bool) {
 		root := r.URL.Query().Get("repo")
-		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
+		if !rr.BoundRoot(r.URL.Query().Get("scope"), root) {
 			httpx.WriteJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false, false
 		}

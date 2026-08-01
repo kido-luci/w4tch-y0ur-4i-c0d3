@@ -283,7 +283,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	openScoped := func(w http.ResponseWriter, r *http.Request) *sql.DB {
 		root := r.URL.Query().Get("repo")
 		ok := false
-		for _, rp := range rr.Repos(r.URL.Query().Get("project")) {
+		for _, rp := range rr.Bound(r.URL.Query().Get("scope")) {
 			if rp.Root == root && rp.HasIndex {
 				ok = true
 				break
@@ -304,7 +304,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	// The page load: the scope's repos with their summaries, plus the file
 	// graph of ?repo (or the first indexed repo when unset).
 	mux.HandleFunc("GET /api/codegraph", func(w http.ResponseWriter, r *http.Request) {
-		repoList := rr.Repos(r.URL.Query().Get("project"))
+		repoList := rr.Bound(r.URL.Query().Get("scope"))
 		for i := range repoList {
 			if repoList[i].HasIndex {
 				cgFillSummary(&repoList[i])

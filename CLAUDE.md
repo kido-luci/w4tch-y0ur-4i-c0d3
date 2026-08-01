@@ -25,8 +25,12 @@ what breaks, silently, at build time.
 - `index` — transcript scan/parse, the `index.db` cache, session types, the file
   watcher. Everything reads it; it reads nothing. Its schema covers `sessions`,
   the `messages` FTS table and `ships` together, under one generation stamp.
-- `repos` — resolves a scope to on-disk repo roots, and owns `ResolveRoot`, the
-  whitelist every git/GitHub drill-down validates `?repo` against.
+- `repos` — resolves a scope to on-disk repo roots, two ways for two questions.
+  `Bound` reads the project registry's repo bindings (what a project declares it
+  IS) and owns `BoundRoot`, the whitelist every git/GitHub drill-down validates
+  `?repo` against. `Repos` reads the session index instead — where work actually
+  happened — which is what the manager's binding picker and the registry's
+  opening offer need, and nothing else should.
 - `git`, `github`, `codegraph` — the three read-only repo views, each with its
   own handlers. `search`, `ships` — query layers over `index.db`'s handle.
 - `figfiles` — the `.fig`/`.pen` documents under each repo's `design/`, and the
@@ -144,6 +148,29 @@ it can't touch the real one. It reads the real transcripts either way (read-only
 Need the real board to test against? That's a *data* question, not a port
 question: copy `data.db` (with its `-wal`/`-shm` siblings) into the throwaway
 config dir.
+
+**A throwaway port and config dir are two axes; the OUTPUT PATH is the third,
+and `make` doesn't give it to you.** `make build` and `make check` both end in
+`go build -o ../watch-your-ai-code` — the exact file the launchd agent runs. So
+running either one IS a delivery to the everyday instance: it puts whichever
+branch is checked out on 4777, with no merge, tag or release anywhere in sight.
+The restart below is not a way to avoid that, it's the *other* consequence of
+the same overwrite. Never reach for `make build`/`make check` to try a branch
+out; shipping to the everyday instance is a decision to ask for, not a step
+inside a verification.
+
+Build somewhere else instead — the port and the config dir were never the part
+at risk:
+
+    npm --prefix frontend run build                  # writes backend/…/web/dist
+    go build -C backend -o /tmp/wyac-verify/wyac .   # -o absolute: -C moved us
+    /tmp/wyac-verify/wyac -addr 127.0.0.1:4779 -config-dir /tmp/wyac-verify/cfg
+
+`npm run build` alone is harmless — `dist` is read at go-build time, so nothing
+already running notices. It is the `-o` that decides whose binary you replaced.
+This is not hypothetical: verifying an unmerged branch on 4779 began with a
+`make build`, which left the everyday instance running that branch and forced a
+`kickstart` to keep it answering at all.
 
 **Check the served bundle against the one on disk, not just against last time:**
 
@@ -318,6 +345,16 @@ scope-LESS (`href="/project/git"`) and `syncScopeToURL` splices the active scope
 in during `render()` — which is why adding a link never means threading the scope
 through it, and why a link's `href` and the address bar legitimately differ.
 
+**The two families share the grammar and nothing else.** The segment sits in the
+same place, but on `/project` it names a registry project (or group) and on
+`/claude` it names a repo the sessions ran in — two taxonomies, so two remembered
+scopes (`wyac-scope`, `wyac-scope-claude`). `setScope` therefore takes the family
+it applies to, and rewrites the URL only when you are standing in that family:
+the project rail mounts on EVERY route and applies its default at boot, so
+without that check it spliced a project name into a claude path, where it names
+nothing and the session list came back empty. For the same reason the rail reads
+`getProjectScope()`, never `getScope()`.
+
 Two rules that exist because breaking them shipped bugs:
 
 - **A scope change must DROP the detail segment.** Carry it over and you land on a
@@ -353,11 +390,19 @@ that without asking; it's a deliberate property, not an oversight.
   fallback broke.)
 
 **Repo resolution is shared with the code graph** — both go through
-`internal/repos`, so both tabs always list the same repos, resolved through each
-folder's most recent session cwd. Every drill-down endpoint
-(`/api/git/{commit,diff,branches,commits,prs,activity}`) validates `?repo`
-against that resolved set; an arbitrary path is a 404. That guard is *why* these
-endpoints are safe to expose — keep it on anything new you add here.
+`internal/repos`, so both tabs always list the same repos. They resolve a scope
+LABEL (`?scope=`, the same label the board endpoints take) to the repos its
+projects are BOUND to in the registry — not to the directories its sessions ran
+in, which is what these tabs used to do and what made the project page's answer
+depend on where Claude had wandered. A project with no binding lists no repos,
+on purpose: the fix is to bind it in the manager, not to guess for it.
+
+Every drill-down endpoint (`/api/git/{commit,diff,branches,commits,prs,activity}`)
+validates `?repo` against that bound set (`BoundRoot`); an arbitrary path is a
+404. That guard is *why* these endpoints are safe to expose — keep it on anything
+new you add here. It is also why binding accepts only a real checkout
+(`git.IsRepo`): the binding IS the whitelist now, so the gate sits where the path
+enters, in `PUT /api/projects/{name}`.
 
 **Filters** ride all four lists in the shared `.filter-chip` idiom: overview
 (dirty/clean/ahead/behind) · branches (hide merged/local/remote/stale >90d) · pull

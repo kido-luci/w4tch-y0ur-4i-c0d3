@@ -143,22 +143,22 @@ export interface DesignFile {
 }
 
 /**
- * The scope's design documents, newest first. `project` is the Claude FOLDER
- * list from getScopeParam() — the server matches it against session folders,
- * so a rail label like `memoirme-app` finds nothing while its folder
- * `memoirme copy` does. Undefined = unscoped, every repo.
+ * The scope's design documents, newest first. `scope` is the rail's LABEL — the
+ * server resolves it through the project registry's repo bindings, the same way
+ * the git and code-graph tabs do, so a project finds its documents once it is
+ * bound to a repo and not before. Undefined = unscoped, every bound repo.
  */
-export async function getDesignFiles(project: string | undefined): Promise<DesignFile[]> {
-  const res = await getJSON<{ files: DesignFile[] }>(`/api/design-files${buildQuery({ project })}`);
+export async function getDesignFiles(scope: string | undefined): Promise<DesignFile[]> {
+  const res = await getJSON<{ files: DesignFile[] }>(`/api/design-files${buildQuery({ scope })}`);
   return res.files ?? [];
 }
 
 /**
  * Opens the file in OpenPencil. `path` must come from getDesignFiles — the
- * server re-resolves the scope and rejects anything else — and `project` must
- * be the same folder param the listing used, or the re-resolve sees a
- * different repo set than the one that produced the path.
+ * server re-resolves the scope and rejects anything else — and `scope` must be
+ * the same label the listing used, or the re-resolve sees a different repo set
+ * than the one that produced the path.
  */
-export function openDesignFile(project: string | undefined, path: string): Promise<void> {
-  return sendJSON<void>(`/api/design-files/open${buildQuery({ project, path })}`, "POST");
+export function openDesignFile(scope: string | undefined, path: string): Promise<void> {
+  return sendJSON<void>(`/api/design-files/open${buildQuery({ scope, path })}`, "POST");
 }

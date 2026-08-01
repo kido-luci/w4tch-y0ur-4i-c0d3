@@ -57,18 +57,18 @@ export interface CGSymbolDetail {
   callees: CGSymbol[];
 }
 
-export function getCodegraph(project?: string, repo?: string): Promise<CGResponse> {
-  return getJSON<CGResponse>(`/api/codegraph${buildQuery({ project, repo })}`);
+export function getCodegraph(scope?: string, repo?: string): Promise<CGResponse> {
+  return getJSON<CGResponse>(`/api/codegraph${buildQuery({ scope, repo })}`);
 }
 
-export function getCodegraphFile(repo: string, path: string, project?: string): Promise<CGSymbol[]> {
-  return getJSON<CGSymbol[]>(`/api/codegraph/file${buildQuery({ repo, path, project })}`);
+export function getCodegraphFile(repo: string, path: string, scope?: string): Promise<CGSymbol[]> {
+  return getJSON<CGSymbol[]>(`/api/codegraph/file${buildQuery({ repo, path, scope })}`);
 }
 
-export function searchCodegraphSymbols(repo: string, q: string, project?: string): Promise<CGSymbol[]> {
-  return getJSON<CGSymbol[]>(`/api/codegraph/symbols${buildQuery({ repo, q, project })}`);
+export function searchCodegraphSymbols(repo: string, q: string, scope?: string): Promise<CGSymbol[]> {
+  return getJSON<CGSymbol[]>(`/api/codegraph/symbols${buildQuery({ repo, q, scope })}`);
 }
 
-export function getCodegraphSymbol(repo: string, id: string, project?: string): Promise<CGSymbolDetail> {
-  return getJSON<CGSymbolDetail>(`/api/codegraph/symbols${buildQuery({ repo, id, project })}`);
+export function getCodegraphSymbol(repo: string, id: string, scope?: string): Promise<CGSymbolDetail> {
+  return getJSON<CGSymbolDetail>(`/api/codegraph/symbols${buildQuery({ repo, id, scope })}`);
 }

@@ -11,13 +11,14 @@ import { getDesignFiles, openDesignFile } from "../api";
 import type { DesignFile } from "../api";
 import { escapeHtml, formatRelativeTime } from "../domain/format";
 import { announce, showError } from "../app/live";
-import { getScopeParam } from "../scope";
+import { getScope } from "../scope";
 
 /** Renders the UI-design file list into `container`; returns a cleanup callback. */
 export function renderUIView(container: HTMLElement): () => void {
   // The Claude FOLDERS the scope covers — what the design-files endpoints
   // match against (a rail label like `memoirme-app` is not a folder name).
-  const scopeParam = getScopeParam();
+  // The scope LABEL: /api/design-files resolves it through the repo bindings.
+  const scopeParam = getScope();
 
   container.innerHTML = `
     <div class="page">

@@ -50,6 +50,56 @@ func TestProjectStoreCRUDAndPersistence(t *testing.T) {
 	}
 }
 
+// The binding is the user's column and the derived pair is the sync's: a
+// manager save must not clear either, and the sync's opening offer is made
+// once — a binding the user cleared is theirs to leave cleared.
+func TestProjectRepoBinding(t *testing.T) {
+	db := newTestDataDB(t)
+	ps := NewProjectStore(db)
+	if _, err := ps.Upsert("proj", []string{"f1"}, false, 0, ""); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if got := ps.List()[0].LinkKind; got != LinkUnset {
+		t.Fatalf("a fresh row must read as never-resolved, got %q", got)
+	}
+
+	// The opening offer takes on a row nobody has touched...
+	if !ps.AdoptRepoRoot("proj", "/repos/proj") {
+		t.Fatal("an unresolved row should accept the first offer")
+	}
+	if ps.AdoptRepoRoot("proj", "/repos/other") {
+		t.Fatal("a row that already has a binding must refuse a second offer")
+	}
+
+	if !ps.SetRepoDerived("proj", "owner/proj", LinkLinked) {
+		t.Fatal("first derivation should report a change")
+	}
+	if ps.SetRepoDerived("proj", "owner/proj", LinkLinked) {
+		t.Fatal("an unchanged derivation must stay silent — a tick would broadcast every pass")
+	}
+
+	// A manager save (folders/hidden/ord) leaves binding and derivation alone.
+	if _, err := ps.Upsert("proj", []string{"f1", "f2"}, true, 3, ""); err != nil {
+		t.Fatalf("re-upsert: %v", err)
+	}
+	got := NewProjectStore(db).List()[0] // reload = a restart
+	if got.RepoRoot != "/repos/proj" || got.RepoSlug != "owner/proj" || got.LinkKind != LinkLinked {
+		t.Fatalf("the binding should survive an upsert and a reload, got %+v", got)
+	}
+
+	// Clearing is a statement, not an absence: it must not be re-offered.
+	if err := ps.SetRepoRoot("proj", ""); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	cleared := NewProjectStore(db).List()[0]
+	if cleared.RepoRoot != "" || cleared.RepoSlug != "" || cleared.LinkKind != LinkNone {
+		t.Fatalf("clearing should leave an explicit none, got %+v", cleared)
+	}
+	if ps.AdoptRepoRoot("proj", "/repos/proj") {
+		t.Fatal("a binding the user cleared must never be re-offered")
+	}
+}
+
 // A folder belongs to exactly one project: claiming it for B strips it off A.
 func TestProjectStoreExclusiveOwnership(t *testing.T) {
 	db := newTestDataDB(t)

@@ -3,7 +3,7 @@ import "./editorial.css";
 import { migrateLegacyHash, parseRoute } from "./app/router";
 import { announce } from "./app/live";
 import { initNotifications } from "./app/notify";
-import { navigate, syncScopeToURL } from "./scope";
+import { loadClaudeScopeIndex, navigate, setScope, syncScopeToURL } from "./scope";
 import { mountPresentationToggle } from "./app/presentation";
 import { initTheme, mountThemeToggle } from "./app/theme";
 import { mountScopeRail } from "./ui/scopeRail";
@@ -19,6 +19,7 @@ import { renderGitRepoView } from "./views/gitRepo";
 import { renderInsightsView } from "./views/insights";
 import { renderSearchView } from "./views/search";
 import { renderSessionsView } from "./views/sessions";
+import { renderUsageView } from "./views/usage";
 import { renderShipsView } from "./views/ships";
 
 initTheme();
@@ -63,6 +64,7 @@ app.innerHTML = `
   </nav>
   <nav class="px-subnav">
     <a class="px-subnav-link" href="/" data-nav="list" data-fam="claude">sessions</a>
+    <a class="px-subnav-link" href="/claude/usage" data-nav="usage" data-fam="claude">usage</a>
     <a class="px-subnav-link" href="/claude/insights" data-nav="insights" data-fam="claude">insights</a>
     <a class="px-subnav-link" href="/claude/search" data-nav="search" data-fam="claude">search</a>
     <a class="px-subnav-link" href="/project/board" data-nav="board" data-fam="project">board</a>
@@ -127,6 +129,8 @@ function render(): void {
   const active =
     route.view === "board"
       ? "board"
+      : route.view === "usage"
+        ? "usage"
       : route.view === "cycles"
         ? "cycles"
       : route.view === "design" || route.view === "designEditor"
@@ -149,7 +153,9 @@ function render(): void {
   // The family follows the active view; the sub-row shows only that family's
   // tabs and lights the active one.
   const family =
-    active === "list" || active === "insights" || active === "search" ? "claude" : "project";
+    active === "list" || active === "usage" || active === "insights" || active === "search"
+      ? "claude"
+      : "project";
   // aria-current alongside the class: the underline says "you are here" to
   // anyone who can see it, and said nothing to anyone who can't. "page" is the
   // right token for both rows — each is a link to a location, and the active
@@ -196,7 +202,9 @@ function render(): void {
             ? renderUIView(view)
             : route.view === "docs"
               ? renderDocsView(view, route.id)
-              : route.view === "insights"
+              : route.view === "usage"
+                ? renderUsageView(view)
+                : route.view === "insights"
                 ? renderInsightsView(view)
                 : route.view === "search"
                   ? renderSearchView(view)
@@ -252,6 +260,16 @@ document.addEventListener("click", (e) => {
   navigate(href);
 });
 
+// The claude family's scope switcher (rendered by scopeChipHtml into whichever
+// session view is mounted). One delegated listener rather than three view-level
+// ones: the control is re-rendered on every route change, so nothing that binds
+// to the element itself would survive.
+document.addEventListener("change", (e) => {
+  const sel = e.target as HTMLElement;
+  if (sel.id !== "claude-scope-select") return;
+  setScope((sel as HTMLSelectElement).value);
+});
+
 // Old #/… bookmarks → the new path, once, before anything reads the location.
 migrateLegacyHash();
 
@@ -260,3 +278,9 @@ migrateLegacyHash();
 mountScopeRail(railEl, render);
 initNotifications();
 render();
+
+// The claude taxonomy is derived server-side (folders grouped by the repo they
+// ran in), so it arrives after the first paint; re-render once it does, the
+// same way the rail re-renders when the registry lands. Until then a scope
+// resolves to itself as a folder, which is a degenerate answer, not a wrong one.
+void loadClaudeScopeIndex().then(render);

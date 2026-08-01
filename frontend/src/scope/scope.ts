@@ -19,12 +19,58 @@
 // A group is a named set of project names, managed from "+ groups…"; it covers
 // its name plus its members. Names resolve group-first on collision.
 
-import { getScopeIndex } from "../api";
-import type { Project, ProjectGroup } from "../api";
+import { getClaudeScopes, getScopeIndex } from "../api";
+import type { ClaudeScope, Project, ProjectGroup } from "../api";
 import { escapeHtml } from "../domain/format";
 import { buildPath, parseLocation } from "./location";
 
-const SCOPE_KEY = "wyac-scope";
+// Two families, two taxonomies, two scopes — they share the path GRAMMAR
+// (family/scope/tab) and nothing else. /project scopes by the registry you
+// curate; /claude scopes by the repos its sessions actually ran in, derived
+// from the transcripts (see /api/claude/scopes). Neither is the other's source
+// of truth, so each remembers its own scope: switching family used to carry a
+// project name into the session views, where it meant something else entirely.
+const SCOPE_KEY = "wyac-scope"; // project family
+const CLAUDE_SCOPE_KEY = "wyac-scope-claude";
+
+type Family = "claude" | "project";
+
+/** The family a path belongs to. The root is the sessions list, so "" reads as
+    claude — same rule syncScopeToURL applies when it canonicalises. */
+function familyOf(pathname: string): Family {
+  return parseLocation(pathname).family === "project" ? "project" : "claude";
+}
+
+function storageKey(fam: Family): string {
+  return fam === "claude" ? CLAUDE_SCOPE_KEY : SCOPE_KEY;
+}
+
+function remembered(fam: Family): string {
+  try {
+    return localStorage.getItem(storageKey(fam)) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** The claude family's scope list, keyed by its URL segment. Empty until the
+    boot fetch lands; "" as a scope means every folder, which is the default and
+    a legitimate answer here (unlike the project rail, which always selects one). */
+let claudeScopes: ClaudeScope[] = [];
+
+export function getClaudeScopeList(): ClaudeScope[] {
+  return claudeScopes;
+}
+
+export function loadClaudeScopeIndex(): Promise<void> {
+  return getClaudeScopes()
+    .then((list) => {
+      claudeScopes = list;
+    })
+    .catch(() => {
+      /* keep the last good list; an empty one just means "all" everywhere */
+    });
+}
 
 // Module-level caches so views can resolve the scope synchronously at render
 // time; mountScopeRail fills them (and re-renders once, if that changes what an
@@ -58,11 +104,17 @@ export function setKnownTaxonomy(projects: Project[], groups: ProjectGroup[]): v
 export function getScope(): string {
   const loc = parseLocation(window.location.pathname);
   if (loc.scope) return loc.scope;
-  try {
-    return localStorage.getItem(SCOPE_KEY) ?? "";
-  } catch {
-    return "";
-  }
+  return remembered(familyOf(window.location.pathname));
+}
+
+/** The PROJECT family's scope no matter where you are standing. The rail mounts
+    on every route and has to render, default and compare against its own
+    family's scope — getScope() would hand it the claude one on a session route.
+    The path wins only when the path IS the project family's. */
+export function getProjectScope(): string {
+  const loc = parseLocation(window.location.pathname);
+  if (loc.family === "project" && loc.scope) return loc.scope;
+  return remembered("project");
 }
 
 /** label -> the project names that scope covers, as RESOLVED BY THE SERVER
@@ -87,6 +139,14 @@ let scopeIndex: Record<string, string[]> = {};
 export function getScopeSet(): Set<string> | null {
   const scope = getScope();
   if (!scope) return null;
+  // The claude family answers in FOLDERS — that is what a session carries
+  // (s.project) and what its callers compare against. The project family
+  // answers in project NAMES, which is what a card carries. One question, two
+  // vocabularies, because there are now two taxonomies.
+  if (familyOf(window.location.pathname) === "claude") {
+    const cs = claudeScopes.find((c) => c.key === scope);
+    return new Set(cs ? cs.folders : [scope]);
+  }
   return new Set(scopeIndex[scope] ?? [scope]);
 }
 
@@ -103,36 +163,49 @@ export function loadScopeIndex(): Promise<void> {
 }
 
 /** The active scope as an API `project` param for the SESSION-derived endpoints
-    (they filter s.Project, a Claude folder). Each project in scope owns a set
-    of folders — expand to those; a phantom label with no registry entry doubles
-    as its own folder, which preserves the pre-registry behaviour and keeps a
-    just-deleted project's sessions reachable. undefined when unscoped. */
+    (they filter s.Project, a Claude folder). The claude scope IS a repo, so
+    this expands it to the folders whose sessions ran there — no registry
+    lookup, which is the whole point of the split. undefined = every folder. */
 export function getScopeParam(): string | undefined {
-  const labels = getScopeSet();
-  if (!labels) return undefined;
-  const folders = new Set<string>();
-  for (const label of labels) {
-    const p = knownProjects.find((k) => k.name === label);
-    if (p) for (const f of p.folders ?? []) folders.add(f);
-    else folders.add(label);
-  }
-  return folders.size ? [...folders].join(",") : undefined;
+  const scope = getScope();
+  if (!scope) return undefined; // "" is every folder — the claude family's default
+  const cs = claudeScopes.find((c) => c.key === scope);
+  // A scope the list does not know (a stale link, or the list not loaded yet)
+  // falls back to itself as a folder name: the pre-registry behaviour, and it
+  // keeps a bookmarked folder reachable instead of silently widening to ALL.
+  const folders = cs ? cs.folders : [scope];
+  return folders.length ? folders.join(",") : undefined;
 }
 
-/** A compact "you are looking at X" chip, for the views that filter by scope
-    but do NOT carry the rail (sessions / insights / search / cycles / ships —
-    see the allowlist in main.ts). Those five read getScopeParam() like everyone
-    else, so their numbers are scoped, and until this existed nothing on the
-    screen said to what: you could not tell which project's cost you were
-    reading, and the only way to change it was to leave for a tab that has the
-    rail. Cycles even printed "0 open cards are in this scope with no cycle"
-    while refusing to name the scope.
+/** The scope control for views without the rail. Two different things, because
+    the two families now have two different taxonomies:
 
-    It links to the board because that is where the switcher lives. Deliberately
-    scope-LESS href, per the routing rule — syncScopeToURL splices the active
-    scope in at render. */
+    - claude (sessions / insights / search) gets a real SWITCHER — its scopes
+      are derived, so there is no manager page to send you to, and a select is
+      the whole UI. main.ts listens for its change event.
+    - project (cycles / ships) keeps the read-only chip linking to the board,
+      where the registry's rail is.
+
+    Deliberately scope-LESS href, per the routing rule — syncScopeToURL splices
+    the active scope in at render. */
 export function scopeChipHtml(): string {
   const scope = getScope();
+  if (familyOf(window.location.pathname) === "claude") {
+    const opts = [`<option value=""${scope ? "" : " selected"}>all repos</option>`]
+      .concat(
+        claudeScopes.map(
+          (c) =>
+            `<option value="${escapeHtml(c.key)}"${c.key === scope ? " selected" : ""}>` +
+            `${escapeHtml(c.name)} (${c.sessions})</option>`,
+        ),
+      )
+      .join("");
+    return (
+      `<label class="scope-chip scope-chip--select" title="the repos your sessions ran in — derived from the transcripts, not from the project registry">` +
+      `<span class="scope-chip-key">scope</span>` +
+      `<select id="claude-scope-select">${opts}</select></label>`
+    );
+  }
   const label = scope || "all projects";
   return (
     `<a class="scope-chip" href="/project/board" ` +
@@ -147,20 +220,21 @@ export function getKnownGroupNames(): string[] {
 }
 
 /** The display label for a Claude folder (an s.Project value): the name of the
-    project that owns it, or the folder itself if no project does. Session-derived
-    views (grouping, per-project tables, filters) show this so a merged/renamed
-    project reads as your name, not the raw folder. */
+    REPO its sessions ran in, or the folder itself when they ran in none.
+    Session-derived views (grouping, per-project tables, live cards) show this,
+    so two folders of one repo read as one name — and a folder nobody has
+    claimed still reads as something, which is what it did before any of this. */
 export function labelForFolder(folder: string): string {
-  const p = knownProjects.find((k) => (k.folders ?? []).includes(folder));
-  return p ? p.name : folder;
+  const cs = claudeScopes.find((c) => c.folders.includes(folder));
+  return cs ? cs.name : folder;
 }
 
-function saveScope(p: string): void {
+function saveScope(p: string, fam: Family = familyOf(window.location.pathname)): void {
   try {
     if (p === "") {
-      localStorage.removeItem(SCOPE_KEY);
+      localStorage.removeItem(storageKey(fam));
     } else {
-      localStorage.setItem(SCOPE_KEY, p);
+      localStorage.setItem(storageKey(fam), p);
     }
   } catch {
     /* storage unavailable — the scope just won't persist */
@@ -196,13 +270,17 @@ export function navigate(path: string, replace = false): void {
     previous scope); a boot default or rename passes replace=true to swap it in
     place. Service routes have no scope segment, so a scope change there is a
     persist-only no-op on the URL. */
-export function setScope(label: string, replace = false): void {
-  saveScope(label);
+export function setScope(label: string, replace = false, fam?: Family): void {
   const loc = parseLocation(window.location.pathname);
+  const target = fam ?? familyOf(window.location.pathname);
+  saveScope(label, target);
   let { family, tab, detail } = loc;
-  if (family === "") {
-    // No scoped path to rewrite — the next scoped navigation will carry the
-    // persisted scope.
+  // Only the family you are LOOKING at owns the URL. The project rail mounts on
+  // every route and applies its default at boot, so without this it splices a
+  // project name into a claude path — where it names nothing, and the session
+  // list goes empty. A family-less path (the root) has nothing to rewrite
+  // either; the next scoped navigation carries the persisted scope.
+  if (family === "" || family !== target) {
     return;
   }
   if (family === "claude" && tab === "") tab = "sessions";

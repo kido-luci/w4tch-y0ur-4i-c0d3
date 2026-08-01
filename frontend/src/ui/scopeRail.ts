@@ -4,6 +4,7 @@ import {
   deleteProjectLogo,
   getGroups,
   getPresentation,
+  getKnownRepos,
   getProjectRegistry,
   getUnmappedFolders,
   projectLogoURL,
@@ -13,13 +14,12 @@ import {
   renameProject,
   subscribeRawEvents,
 } from "../api";
-import type { Project, ProjectGroup } from "../api";
+import type { KnownRepo, Project, ProjectGroup } from "../api";
 import { escapeHtml } from "../domain/format";
 import {
   getKnownGroups,
   getKnownProjects,
-  getScope,
-  getScopeParam,
+  getProjectScope,
   getScopeSet,
   loadScopeIndex,
   setKnownTaxonomy,
@@ -83,6 +83,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // Unmapped Claude folders (owned by no project) — loaded when the project
   // manager opens, offered there to be claimed or merged.
   let unmapped: string[] = [];
+  // The manager's repo suggestions. Loaded when the panel opens, not at boot:
+  // it walks every session cwd on disk, which is not work the rail owes on a
+  // page load where nobody has asked to edit a project.
+  let knownRepos: KnownRepo[] = [];
 
   // Presentation mode — server-side state, mirrored here for the rail's own
   // filtering. The PUT's SSE echo is the only writer after boot, so every tab
@@ -91,6 +95,12 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
 
   // Which tree nodes are folded (persisted). Read once; toggles mutate it.
   const collapsed = loadCollapsed();
+
+  /** What the active scope COVERS, as a comparable string — the rail's own
+      change detector. It used to use getScopeParam(), which now answers for the
+      claude family only: a project label would resolve to itself there and the
+      detector would go blind to exactly the changes it exists to catch. */
+  const coveredKey = (): string => [...(getScopeSet() ?? [])].sort().join(",");
 
   const isPrivateName = (name: string): boolean =>
     !!getKnownProjects().find((p) => p.name === name)?.private;
@@ -116,8 +126,75 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     return visibleProjects()[0]?.name ?? "";
   }
 
+  // feather "git-branch" — the mark that says this project is bound to a repo
+  // on disk, and the server proved it.
+  const GIT_SVG =
+    `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" ` +
+    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/>` +
+    `<circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`;
+
+  /** The rail's git mark: this project is bound to a repo, and — full ink vs
+      faint — whether the server could confirm a GitHub remote for it. A binding
+      whose path has gone missing draws faint too and says so on hover, because
+      a moved checkout must not read like a healthy one. No binding draws
+      nothing: absence is the signal in a narrow rail, and the manager panel
+      spells the state out in words. */
+  const gitMark = (p: Project): string => {
+    if (!p.repoRoot) return "";
+    const title =
+      p.linkKind === "linked"
+        ? (p.repoSlug ?? p.repoRoot)
+        : p.linkKind === "missing"
+          ? `bound path is missing · ${p.repoRoot}`
+          : p.linkKind === "local"
+            ? `no GitHub remote · ${p.repoRoot}`
+            : // "" — bound, not resolved yet. Saying "no remote" here would be
+              // a claim where the truth is that nothing has looked.
+              `checking… · ${p.repoRoot}`;
+    const weak = p.linkKind === "linked" ? "" : " rail-git--weak";
+    return `<span class="rail-git${weak}" title="${escapeHtml(title)}">${GIT_SVG}</span>`;
+  };
+
+  /** The same state in words, for the manager's wider rows — where you go to
+      fix a project, so `none` has to be said out loud rather than implied by a
+      missing icon. */
+  const repoNote = (p: Project): string => {
+    if (!p.repoRoot) return " · no repo";
+    switch (p.linkKind) {
+      case "linked":
+        return ` · ${p.repoSlug ?? ""}`;
+      case "missing":
+        return " · repo path missing";
+      case "local":
+        return " · repo, no remote";
+      default:
+        return " · repo, checking…";
+    }
+  };
+
+  /** While presenting, the active scope must not sit on something the mode
+      hides — a private project, or a label whose coverage it emptied. Moves to
+      the default scope and reports whether it moved; run it AFTER
+      loadScopeIndex, since the "covers nothing" half reads the trimmed index.
+
+      `replace` for the boot path (no history entry, and no popstate — so that
+      caller re-renders itself); a push otherwise, which re-renders through
+      popstate. Without the boot call the chip and the URL kept printing a
+      private project's name across a reload, and — its coverage being empty —
+      the views fell back to every public folder instead of that scope. */
+  function bounceOffHidden(replace: boolean): boolean {
+    const cur = getProjectScope();
+    if (!presentationOn || !cur) return false;
+    if (!isPrivateName(cur) && (getScopeSet()?.size ?? 0) > 0) return false;
+    const def = firstScope();
+    if (!def || def === cur) return false;
+    setScope(def, replace, "project");
+    return true;
+  }
+
   function renderRows(): void {
-    const current = getScope();
+    const current = getProjectScope();
     const projs = visibleProjects();
 
     // Children of each project, by parent name, in rail order (ord then name).
@@ -151,7 +228,13 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       scope: string,
       label: string,
       depth: number,
-      opts: { logo?: string; nodeId?: string; expandable?: boolean; folded?: boolean } = {},
+      opts: {
+        logo?: string;
+        nodeId?: string;
+        expandable?: boolean;
+        folded?: boolean;
+        mark?: string;
+      } = {},
     ): string => {
       const isActive = scope === current;
       const active = isActive ? " rail-item--active" : "";
@@ -169,7 +252,9 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           : `<span class="rail-tree-spacer"></span>`;
       return `<button type="button" class="rail-item${active}"${cur} data-scope="${escapeHtml(
         scope,
-      )}" style="padding-left:${pad}px">${lead}${opts.logo ?? ""}${escapeHtml(label)}</button>`;
+      )}" style="padding-left:${pad}px">${lead}${opts.logo ?? ""}<span class="rail-item-label">${escapeHtml(
+        label,
+      )}</span>${opts.mark ?? ""}</button>`;
     };
 
     // A project and, unless folded, its descendant subtree.
@@ -182,6 +267,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
         nodeId,
         expandable: children.length > 0,
         folded,
+        mark: gitMark(p),
       });
       if (!children.length || folded) return row;
       return row + children.map((c) => renderProject(c, depth + 1)).join("");
@@ -272,7 +358,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       renderProjectPanel();
       groupPanel.hidden = true;
       projPanel.hidden = !projPanel.hidden;
-      if (!projPanel.hidden) refreshUnmapped();
+      if (!projPanel.hidden) {
+        refreshUnmapped();
+        refreshKnownRepos();
+      }
       return;
     }
     const scope = btn.dataset["scope"];
@@ -280,7 +369,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     groupPanel.hidden = true;
     projPanel.hidden = true;
     renderRows(); // instant highlight; setScope's popstate also re-renders view + rows
-    setScope(scope); // persist + push into the path; the view re-renders via popstate
+    setScope(scope, false, "project"); // persist + push into the path; the view re-renders via popstate
   });
 
   // --- group manager panel -------------------------------------------------
@@ -361,7 +450,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
         // A rename is save-under-new-name + drop the old row; the scope follows.
         if (editing && editing !== name) {
           await deleteGroup(editing);
-          if (getScope() === editing) setScope(name, true);
+          if (getProjectScope() === editing) setScope(name, true, "project");
         }
         renderGroupPanel();
       } catch (err) {
@@ -372,6 +461,22 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   });
 
   // --- project manager panel -----------------------------------------------
+
+  function refreshKnownRepos(): void {
+    getKnownRepos()
+      .then((r) => {
+        knownRepos = r;
+        // Only when a form is open — a repaint would otherwise throw away
+        // whatever the user has typed into it.
+        if (!projPanel.hidden && projPanel.querySelector(".scope-panel-form")) {
+          const cur = projPanel.querySelector<HTMLFormElement>(".scope-panel-form")?.dataset["editing"];
+          renderProjectPanel(cur);
+        }
+      })
+      .catch(() => {
+        /* the path field still works without suggestions */
+      });
+  }
 
   function refreshUnmapped(): void {
     getUnmappedFolders()
@@ -411,7 +516,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       .map(
         (p) => `
       <div class="scope-panel-row">
-        <button type="button" class="scope-panel-name${p.hidden ? " scope-panel-name--off" : ""}" data-act="edit" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}${p.hidden ? " · hidden" : ""}${p.private ? " · private" : ""}</button>
+        <button type="button" class="scope-panel-name${p.hidden ? " scope-panel-name--off" : ""}" data-act="edit" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}${p.hidden ? " · hidden" : ""}${p.private ? " · private" : ""}${escapeHtml(repoNote(p))}</button>
         <span class="scope-panel-count">${(p.folders ?? []).length}</span>
         <button type="button" class="scope-panel-del" data-act="del" data-name="${escapeHtml(p.name)}" title="delete project">✕</button>
       </div>`,
@@ -472,10 +577,34 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
         .join("");
       const parentSection = `<div class="scope-panel-sub">parent</div>
         <select class="scope-panel-input scope-panel-parent" name="parent">${parentOpts}</select>`;
+      // The repo this project IS. The list is a suggestion (every repo the
+      // machine has seen); the field below it takes any checkout's path, so a
+      // repo nobody has opened Claude in is bindable too. Picking from the list
+      // just fills the field — the path is what gets saved.
+      const curRoot = p?.repoRoot ?? "";
+      const repoOpts = [`<option value="">(pick a repo…)</option>`]
+        .concat(
+          knownRepos.map((k) => {
+            const taken = k.boundBy && k.boundBy !== editing ? ` — bound to ${k.boundBy}` : "";
+            // Found only by a name match: still worth offering, but say so —
+            // picking it is what turns a guess into a binding you stated.
+            const byName = k.byName ? " (name match)" : "";
+            return `<option value="${escapeHtml(k.root)}">${escapeHtml(k.name)}${escapeHtml(byName)}${escapeHtml(taken)}</option>`;
+          }),
+        )
+        .join("");
+      const repoSection = `<div class="scope-panel-sub">repo${
+        p && p.linkKind === "missing" ? " — bound path is missing" : ""
+      }</div>
+        <select class="scope-panel-input scope-panel-repo-pick">${repoOpts}</select>
+        <input class="scope-panel-input scope-panel-repo" name="repoRoot" value="${escapeHtml(
+          curRoot,
+        )}" placeholder="/path/to/repo (empty = not bound)">`;
       form = `
       <form class="scope-panel-form" data-editing="${escapeHtml(editing)}">
         ${nameField}
         <label class="scope-panel-check"><input type="checkbox" name="hidden"${p?.hidden ? " checked" : ""}> hidden (keep off the rail)</label>
+        ${repoSection}
         ${parentSection}
         ${logoSection}
         <div class="scope-panel-sub">folders${checks ? "" : " — none unmapped"}</div>
@@ -515,6 +644,14 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // Picking a file uploads the logo immediately (its own endpoint), separate
   // from the form's save; the preview updates in place.
   projPanel.addEventListener("change", (e) => {
+    // Picking a suggestion fills the path field rather than saving: the path is
+    // what the project stores, so it stays visible and editable before the save.
+    const pick = (e.target as HTMLElement).closest<HTMLSelectElement>(".scope-panel-repo-pick");
+    if (pick) {
+      const field = pick.closest("form")?.querySelector<HTMLInputElement>(".scope-panel-repo");
+      if (field && pick.value) field.value = pick.value;
+      return;
+    }
     const input = (e.target as HTMLElement).closest<HTMLInputElement>(".scope-panel-logo-input");
     const file = input?.files?.[0];
     const name = input?.closest<HTMLFormElement>(".scope-panel-form")?.dataset["editing"];
@@ -543,6 +680,9 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     );
     const hidden = form.querySelector<HTMLInputElement>('input[name="hidden"]')?.checked ?? false;
     const parent = form.querySelector<HTMLSelectElement>('select[name="parent"]')?.value ?? "";
+    // The binding rides the same save. Sent only from this form, so every other
+    // caller of putProject leaves it alone (the field is optional server-side).
+    const repoRoot = form.querySelector<HTMLInputElement>('input[name="repoRoot"]')?.value.trim() ?? "";
     // ord is preserved on an edit/rename (from the original row), fresh on a new one.
     const cur = getKnownProjects().find((k) => k.name === editing);
     const ord = cur ? cur.ord : getKnownProjects().reduce((m, p) => Math.max(m, p.ord), -1) + 1;
@@ -559,9 +699,9 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           )
             return;
           await renameProject(editing, name);
-          if (getScope() === editing) setScope(name, true);
+          if (getProjectScope() === editing) setScope(name, true, "project");
         }
-        await putProject(name, { folders, hidden, ord, parent });
+        await putProject(name, { folders, hidden, ord, parent, repoRoot });
         renderProjectPanel();
       } catch (err) {
         console.error("save project failed", err);
@@ -583,40 +723,31 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       // projects while the mode is on) — refetch, then either bounce off a
       // scope the mode just hid or re-render the view where it stands.
       void loadScopeIndex().then(() => {
-        const cur = getScope();
-        const covered = getScopeSet()?.size ?? 0;
-        if (presentationOn && cur && (isPrivateName(cur) || covered === 0)) {
-          const def = firstScope();
-          if (def && def !== cur) {
-            setScope(def); // popstate re-renders the view and the rows
-            return;
-          }
-        }
-        onChange();
+        if (!bounceOffHidden(false)) onChange();
       });
       return;
     }
     if (type === "groups-updated") {
-      const scope = getScope();
-      const before = getScopeParam();
+      const scope = getProjectScope();
+      const before = coveredKey();
       setKnownTaxonomy(getKnownProjects(), (data as ProjectGroup[] | null) ?? []);
       renderRows();
       // Group membership changed, so what a label covers did too — the server
       // owns that rule, so refetch rather than recompute.
       void loadScopeIndex().then(onChange);
       if (!groupPanel.hidden && !groupPanel.querySelector(".scope-panel-form")) renderGroupPanel();
-      const after = getScopeParam();
+      const after = coveredKey();
       if (scope && before !== after) onChange();
       return;
     }
     if (type === "projects-updated") {
-      const before = getScopeParam();
+      const before = coveredKey();
       setKnownTaxonomy((data as Project[] | null) ?? [], getKnownGroups());
       renderRows();
       void loadScopeIndex().then(onChange); // the parent tree moved; see above
       if (!projPanel.hidden && !projPanel.querySelector(".scope-panel-form")) renderProjectPanel();
       refreshUnmapped(); // ownership changed → the unmapped set did too
-      const after = getScopeParam();
+      const after = coveredKey();
       if (before !== after) onChange();
       return;
     }
@@ -631,7 +762,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
 
   // The scope now lives in the path, so any navigation (a rail pick, Back/Forward,
   // or a bare-path link that syncScopeToURL re-scoped) must re-light the active
-  // row. renderRows reads getScope(), which reads the path — so this stays correct.
+  // row. renderRows reads getProjectScope(), which prefers the path — so this stays correct.
   window.addEventListener("popstate", renderRows);
 
   // --- boot ----------------------------------------------------------------
@@ -639,8 +770,8 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // Render immediately with just the persisted scope so the rail never flashes
   // empty, then fill in the registry and groups.
   renderRows();
-  const hadScope = getScope();
-  const beforeParam = getScopeParam(); // pre-load: labels resolve as their own folder
+  const hadScope = getProjectScope();
+  const beforeParam = coveredKey(); // pre-load: a label covers only itself
   Promise.all([
     getProjectRegistry(),
     getGroups(),
@@ -653,16 +784,21 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       presentationOn = !!pres.hidden;
       setKnownTaxonomy(projects, groups);
       // No "all projects" anymore: a fresh load (or a cleared scope) lands on a
-      // default project so a scope is always active.
+      // default project so a scope is always active. A remembered one may be a
+      // scope presentation mode hides — a reload is the other way into that
+      // state, and until this ran only the toggle itself bounced off it.
+      let bounced = false;
       if (!hadScope) {
         const def = firstScope();
-        if (def) setScope(def, true);
+        if (def) setScope(def, true, "project");
+      } else {
+        bounced = bounceOffHidden(true);
       }
       renderRows();
       // Re-render the views when the load changed what the active scope resolves
       // to: a default was applied, a group scope expanded to its members, or a
       // merged project now owns more than its own name.
-      if (getScopeParam() !== beforeParam) onChange();
+      if (bounced || coveredKey() !== beforeParam) onChange();
     })
     .catch(() => {
       /* the persisted-scope-only rows stay */

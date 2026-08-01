@@ -87,6 +87,18 @@ type activityDay struct {
 	CostUSD  float64 `json:"costUsd"`
 }
 
+// claudeScope is one entry in the session views' own scope list: a repo the
+// transcripts show work happening in, with the Claude folders that resolve to
+// it. Folders that resolve to no repo appear as themselves.
+type claudeScope struct {
+	Key      string   `json:"key"`  // the URL scope segment — never contains "/"
+	Name     string   `json:"name"` // what to show
+	Slug     string   `json:"slug,omitempty"`
+	Root     string   `json:"root,omitempty"`
+	Folders  []string `json:"folders"` // what the session endpoints filter on
+	Sessions int      `json:"sessions"`
+}
+
 // docWithBody is the GET /api/docs/{id} payload: a page's metadata plus its
 // markdown body (the List payload carries metadata only, to keep the tree light).
 type docWithBody struct {
@@ -142,8 +154,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		if settings == nil || !settings.PresentationHidden() {
 			return nil
 		}
-		names, _ := projects.PrivateSets()
-		return names
+		return projects.PrivateNames()
 	}
 
 	// Every scope question below goes through here, so a group label expands the
@@ -154,6 +165,24 @@ func Register(mux *http.ServeMux, d Deps) {
 		s := board.ResolveScope(strings.TrimSpace(r.URL.Query().Get("repo")), groups, projects)
 		return s.WithExclude(privateNames())
 	}
+
+	// The git tab, the code graph and the GitHub sections resolve a scope to the
+	// repos its projects are BOUND to — the project page's own taxonomy —
+	// instead of to wherever that scope's sessions happened to run. It goes
+	// through the same scope rule as every board endpoint above, presentation
+	// exclusion included: the git tab is as much a screen-share surface as the
+	// session list. Wired here rather than in main because this is where the
+	// resolver those three packages are handed is built.
+	rr.UseBindings(func(scope string) []repos.Binding {
+		in := board.ResolveScope(strings.TrimSpace(scope), groups, projects).WithExclude(privateNames())
+		out := []repos.Binding{}
+		for _, p := range projects.List() {
+			if p.RepoRoot != "" && in.Covers(p.Name) {
+				out = append(out, repos.Binding{Root: p.RepoRoot, Project: p.Name})
+			}
+		}
+		return out
+	})
 
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
@@ -962,6 +991,11 @@ func Register(mux *http.ServeMux, d Deps) {
 			Hidden  bool     `json:"hidden"`
 			Ord     int      `json:"ord"`
 			Parent  string   `json:"parent"`
+			// RepoRoot is the project's binding to a repo. A pointer so that
+			// omitting the field leaves the binding alone: every other caller
+			// of this endpoint (rename, reorder, a folder edit) would otherwise
+			// send "" and silently unbind the project.
+			RepoRoot *string `json:"repoRoot"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
@@ -972,8 +1006,183 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		if in.RepoRoot != nil {
+			root := strings.TrimSpace(*in.RepoRoot)
+			// Only a real checkout may be bound: the git and code-graph
+			// endpoints will operate on whatever is stored here, so this is the
+			// gate that keeps them pointed at repos instead of at any path a
+			// request cared to name. Stored canonical, so a worktree binds to
+			// the repo it belongs to.
+			if root != "" {
+				if !git.IsRepo(root) {
+					httpx.WriteJSONError(w, http.StatusBadRequest, "that path is not a git repository")
+					return
+				}
+				root = git.CanonicalRoot(root)
+			}
+			if err := projects.SetRepoRoot(p.Name, root); err != nil {
+				httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			p.RepoRoot = root
+			if root != "" {
+				// Read the remote here rather than leaving the row unresolved
+				// until the next five-minute tick: that window would render as
+				// "no GitHub remote", which is a claim, not a wait. Visibility
+				// stays with the sync — it is the gh round-trip, and a save
+				// should not block on the network.
+				slug, kind := "", board.LinkLocal
+				if s, ok := github.Slug(root); ok {
+					slug, kind = s, board.LinkLinked
+				}
+				projects.SetRepoDerived(p.Name, slug, kind)
+				p.RepoSlug, p.LinkKind = slug, kind
+			} else {
+				// Upsert built this reply before the binding was cleared, so
+				// without this the response still advertises the old link.
+				p.RepoSlug, p.LinkKind = "", board.LinkNone
+			}
+		}
 		hub.Broadcast("projects-updated", projects.List())
 		httpx.WriteJSON(w, p)
+	})
+
+	// The CLAUDE family's own taxonomy — the counterpart to /api/scopes, which
+	// serves the project family. Every Claude folder is grouped by the repo its
+	// sessions actually ran in, so the session views scope by repo without
+	// asking the project registry anything: /project curates names, /claude
+	// reports what happened, and neither is the other's source of truth.
+	//
+	// A folder whose sessions resolve to no repo — a directory since deleted,
+	// work outside any checkout — stands as its own scope under its raw name
+	// rather than being dropped or guessed into someone else's repo. So does a
+	// folder whose only match was by name (Guessed): grouping on that would
+	// merge two projects' sessions on the strength of a coincidence.
+	//
+	// `key` is what rides the URL's scope segment, so it never contains "/" —
+	// the repo's own name, or the folder's. On the rare collision (two hosts,
+	// one repo name) the owner is prefixed, which keeps it stable rather than
+	// letting whichever loaded first win.
+	claudeScopes := func() []claudeScope {
+		// Presentation mode filters this list by the same allowlist the session
+		// endpoints apply, or the switcher would offer scopes whose content the
+		// guard then withholds — every pick landing on an empty list. It is the
+		// registry's notion of public (a folder owned by a public project), so
+		// while the mode is on this list is narrower than what /claude can
+		// actually show; the two agreeing beats each being right alone.
+		var public map[string]bool
+		if settings != nil && settings.PresentationHidden() {
+			public = projects.PublicFolders()
+		}
+		keep := func(folder string) bool { return public == nil || public[folder] }
+
+		counts := map[string]int{}
+		for _, s := range ix.Snapshot() {
+			counts[s.Project]++
+		}
+		byRoot := map[string]*claudeScope{}
+		out := []claudeScope{}
+		for _, folder := range ix.Projects() {
+			if !keep(folder) {
+				continue
+			}
+			rs := rr.Repos(folder)
+			if len(rs) == 0 || rs[0].Guessed {
+				out = append(out, claudeScope{
+					Key: folder, Name: folder, Folders: []string{folder}, Sessions: counts[folder],
+				})
+				continue
+			}
+			root := git.CanonicalRoot(rs[0].Root)
+			if cur, ok := byRoot[root]; ok {
+				cur.Folders = append(cur.Folders, folder)
+				cur.Sessions += counts[folder]
+				continue
+			}
+			cs := &claudeScope{
+				Key: git.RepoName(root), Name: git.RepoName(root), Root: root,
+				Folders: []string{folder}, Sessions: counts[folder],
+			}
+			if s, ok := github.Slug(root); ok {
+				cs.Slug = s
+			}
+			byRoot[root] = cs
+		}
+		for _, cs := range byRoot {
+			out = append(out, *cs)
+		}
+		// Disambiguate a repeated key with its owner, both sides, so neither
+		// entry wins by load order.
+		seen := map[string]int{}
+		for i := range out {
+			seen[out[i].Key]++
+		}
+		for i := range out {
+			if seen[out[i].Key] > 1 && out[i].Slug != "" {
+				out[i].Key = strings.ReplaceAll(out[i].Slug, "/", "-")
+			}
+		}
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Sessions != out[j].Sessions {
+				return out[i].Sessions > out[j].Sessions // busiest first
+			}
+			return out[i].Name < out[j].Name
+		})
+		return out
+	}
+	mux.HandleFunc("GET /api/claude/scopes", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteJSON(w, claudeScopes())
+	})
+
+	// The repos this machine knows about, for the manager's binding picker:
+	// every root the sessions resolve to, canonical and deduped, with the name
+	// the repo calls itself. It is a SUGGESTION list — /project stores whatever
+	// binding you choose, and a repo that has never seen a session can still be
+	// bound by path — so reading the session index here creates no dependency
+	// the project page has to keep.
+	mux.HandleFunc("GET /api/repos", func(w http.ResponseWriter, r *http.Request) {
+		type known struct {
+			Root    string `json:"root"`
+			Name    string `json:"name"`
+			Slug    string `json:"slug,omitempty"`
+			BoundBy string `json:"boundBy,omitempty"` // project already on this repo
+			ByName  bool   `json:"byName,omitempty"`  // only found by matching the folder's name
+		}
+		bound := map[string]string{}
+		for _, p := range projects.List() {
+			if p.RepoRoot != "" {
+				bound[p.RepoRoot] = p.Name
+			}
+		}
+		seen, out := map[string]bool{}, []known{}
+		add := func(rp repos.Repo) {
+			root := git.CanonicalRoot(rp.Root)
+			if seen[root] {
+				return
+			}
+			seen[root] = true
+			k := known{Root: root, Name: git.RepoName(root), BoundBy: bound[root], ByName: rp.Guessed}
+			if s, ok := github.Slug(root); ok {
+				k.Slug = s
+			}
+			out = append(out, k)
+		}
+		for _, rp := range rr.Repos("") {
+			add(rp)
+		}
+		// Repos("") cannot reach the name-matching fallback (it only runs for a
+		// scoped call), so the repos that most need binding — the ones with no
+		// session cwd of their own — would be missing from the very list that
+		// exists to bind them. Ask per folder to reach them, and mark them: a
+		// suggestion the user picks becomes an explicit binding, which is the
+		// difference between offering a name match and acting on one.
+		for _, folder := range ix.Projects() {
+			for _, rp := range rr.Repos(folder) {
+				add(rp)
+			}
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		httpx.WriteJSON(w, out)
 	})
 
 	mux.HandleFunc("DELETE /api/projects/{name}", func(w http.ResponseWriter, r *http.Request) {
@@ -1371,21 +1580,23 @@ func Register(mux *http.ServeMux, d Deps) {
 	})
 }
 
-// PresentationGuard hides private projects from the session-derived endpoint
-// family while presentation mode is on. Those endpoints share one convention —
+// PresentationGuard narrows the session-derived endpoint family to the public
+// projects while presentation mode is on. Those endpoints share one convention —
 // a `project` query param carrying comma-separated Claude folders, empty
 // meaning all of them — and the guard rewrites that param in place: an empty
-// param becomes every folder the index knows minus the private ones, and a
-// non-empty one loses its private folders. The handlers (sessions, insights,
-// stats, search, git, code graph) never learn the toggle exists.
+// param becomes every PUBLIC project's folders, and a non-empty one keeps only
+// the folders among them. The handlers (sessions, insights, stats, search, git,
+// code graph) never learn the toggle exists.
+//
+// It is an allowlist rather than a subtraction of the private folders, because
+// the folders no project owns are neither: subtracting left every unclaimed
+// folder — raw name, session titles and all — on screen mid-demo. Which is also
+// why there is no "no private projects, pass through" shortcut here.
 //
 // /api/ships is the one exception: its `project` values are Makefile-reported
 // names, a different namespace, so its handler subtracts by project NAME
 // itself. Writes, non-/api paths and the SSE stream pass through untouched.
-//
-// `folders` supplies every folder the index knows (ix.Projects at the call
-// site) — a func, not a slice, because the index rescans behind this handler.
-func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectStore, folders func() []string, next http.Handler) http.Handler {
+func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if settings == nil || !settings.PresentationHidden() ||
 			r.Method != http.MethodGet ||
@@ -1394,25 +1605,20 @@ func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectSto
 			next.ServeHTTP(w, r)
 			return
 		}
-		_, private := projects.PrivateSets()
-		if len(private) == 0 {
-			next.ServeHTTP(w, r)
-			return
-		}
+		public := projects.PublicFolders()
 		q := r.URL.Query()
 		var keep []string
 		if cur := q.Get("project"); cur != "" {
 			for _, f := range index.SplitProjects(cur) {
-				if !private[f] {
+				if public[f] {
 					keep = append(keep, f)
 				}
 			}
 		} else {
-			for _, f := range folders() {
-				if !private[f] {
-					keep = append(keep, f)
-				}
+			for f := range public {
+				keep = append(keep, f)
 			}
+			sort.Strings(keep) // map order is random; keep the param stable
 		}
 		if len(keep) == 0 {
 			// An empty param means "all folders" — the opposite of what an

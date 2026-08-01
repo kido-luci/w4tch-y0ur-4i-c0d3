@@ -29,7 +29,7 @@ import type { CGResponse, CGSymbol } from "../api";
 import { mountCodegraphGraph } from "../ui/codegraphGraph";
 import type { GraphHandle, GVEdge, GVNode } from "../ui/codegraphGraph";
 import { chipAttrs, escapeHtml, formatRelativeTime, formatTokens } from "../domain/format";
-import { getScope, getScopeParam } from "../scope";
+import { getScope } from "../scope";
 
 // Which subsystems (components) are shown, persisted per scope. Default is
 // NONE — the graph opens empty and you switch on the layers you want to see;
@@ -220,7 +220,9 @@ function groupDirs(paths: string[]): Map<string, string> {
 
 /** Renders the code-graph view into `container`; returns a cleanup callback. */
 export function renderCodegraphView(container: HTMLElement): () => void {
-  const scope = getScopeParam();
+  // The scope LABEL, not its Claude folders: the git and code-graph endpoints
+  // resolve a scope through the project registry's repo bindings now.
+  const scope = getScope();
   let resp: CGResponse | null = null;
   let repoOverride: string | undefined;
   let showTests = false;

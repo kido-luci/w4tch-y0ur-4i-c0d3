@@ -38,7 +38,15 @@ type Project struct {
 	// in main, never set by hand. Presentation mode hides private projects
 	// app-wide. Orthogonal to Hidden, which is "off the rail always".
 	Private bool `json:"private"`
-	Ord     int  `json:"ord"`
+	// RepoRoot is which repo this project IS — the one binding /project needs,
+	// and the user's to set. RepoSlug and LinkKind are derived from it by the
+	// sync loop in main and say only what the filesystem could confirm.
+	// Deliberately NOT resolved from the Claude folders below: the project page
+	// is its own taxonomy, and a binding nobody stated is a guess.
+	RepoRoot string `json:"repoRoot,omitempty"`
+	RepoSlug string `json:"repoSlug,omitempty"`
+	LinkKind string `json:"linkKind"`
+	Ord      int    `json:"ord"`
 	// Parent is the name of the project this one nests under in the rail tree,
 	// "" for a top-level project. It is a display-only edge (the scope of a
 	// parent covers its subtree); a folder still belongs to exactly one project.
@@ -58,11 +66,28 @@ func (p *Project) clone() Project {
 		Folders:     append([]string{}, p.Folders...),
 		Hidden:      p.Hidden,
 		Private:     p.Private,
+		RepoRoot:    p.RepoRoot,
+		RepoSlug:    p.RepoSlug,
+		LinkKind:    p.LinkKind,
 		Ord:         p.Ord,
 		Parent:      p.Parent,
 		LogoVersion: p.LogoVersion,
 	}
 }
+
+// What the sync could confirm about a project's binding. LinkNone is not bound
+// (and, unlike the empty string a fresh row carries, it means the user said
+// so — see the migration); LinkMissing is bound to a path that is no longer
+// there, which must read differently from unbound or a moved checkout silently
+// looks abandoned; LinkLocal is a real repo with no GitHub remote; LinkLinked
+// has a remote, so RepoSlug is filled and visibility is knowable.
+const (
+	LinkUnset   = ""
+	LinkNone    = "none"
+	LinkMissing = "missing"
+	LinkLocal   = "local"
+	LinkLinked  = "linked"
+)
 
 var (
 	ErrProjectNotFound = errors.New("project not found")
@@ -86,7 +111,7 @@ func NewProjectStore(db *sql.DB) *ProjectStore {
 
 func (ps *ProjectStore) loadDB() {
 	// The logo blob itself stays on disk; only its version rides in memory.
-	rows, err := ps.db.Query(`SELECT name, folders, hidden, private, ord, parent, logo_updated_at FROM projects`)
+	rows, err := ps.db.Query(`SELECT name, folders, hidden, private, repo_root, repo_slug, link_kind, ord, parent, logo_updated_at FROM projects`)
 	if err != nil {
 		log.Printf("projects: load: %v", err)
 		return
@@ -96,7 +121,8 @@ func (ps *ProjectStore) loadDB() {
 		p := &Project{}
 		var folders string
 		var hidden, private, ord int
-		if err := rows.Scan(&p.Name, &folders, &hidden, &private, &ord, &p.Parent, &p.LogoVersion); err != nil {
+		if err := rows.Scan(&p.Name, &folders, &hidden, &private,
+			&p.RepoRoot, &p.RepoSlug, &p.LinkKind, &ord, &p.Parent, &p.LogoVersion); err != nil {
 			log.Printf("projects: load row: %v", err)
 			continue
 		}
@@ -174,9 +200,9 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	}
 	defer tx.Rollback()
 
-	// `private` is deliberately absent on both sides of the upsert: the sync
-	// loop deriving it from GitHub visibility is the column's only writer, so
-	// a manager save can never clobber what the sync found.
+	// `private` and the repo-link columns are deliberately absent on both sides
+	// of the upsert: the sync loop deriving them is their only writer, so a
+	// manager save can never clobber what the sync found.
 	if _, err := tx.Exec(
 		`INSERT INTO projects(name, folders, hidden, ord, parent) VALUES(?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET folders=excluded.folders, hidden=excluded.hidden, ord=excluded.ord, parent=excluded.parent`,
@@ -229,6 +255,9 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	}
 	p := ps.find(name)
 	if p == nil {
+		// LinkKind is left at LinkUnset ("") to match the column's default:
+		// a brand-new row has never been resolved, which is the state that
+		// lets the sync make its opening binding offer exactly once.
 		p = &Project{Name: name}
 		ps.projects = append(ps.projects, p)
 	}
@@ -254,24 +283,114 @@ func (ps *ProjectStore) SetPrivate(name string, private bool) bool {
 	return true
 }
 
-// PrivateSets returns the private projects' names and the union of the folders
-// they own — the two shapes presentation-mode filtering needs (labels for the
-// board family and /api/scopes, folders for the session-derived endpoints).
-// Both maps are non-nil and freshly built, safe for the caller to hold.
-func (ps *ProjectStore) PrivateSets() (names, folders map[string]bool) {
+// SetRepoRoot binds a project to a repo, or clears the binding with "". This
+// one is the USER's write — the manager's repo picker — which is what makes
+// the project page independent of the session index: the binding is stated,
+// not inferred. Clearing it stamps LinkNone rather than the empty "never
+// resolved" state, so the sync's initial offer is not made a second time.
+func (ps *ProjectStore) SetRepoRoot(name, root string) error {
+	root = strings.TrimSpace(root)
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	names, folders = map[string]bool{}, map[string]bool{}
+	p := ps.find(name)
+	if p == nil {
+		return ErrProjectNotFound
+	}
+	if p.RepoRoot == root {
+		return nil
+	}
+	kind, slug := LinkNone, ""
+	if root != "" {
+		// The sync fills in what the filesystem says on its next pass; until
+		// then the row states the binding without claiming more than that.
+		kind = LinkUnset
+	}
+	if _, err := ps.db.Exec(
+		`UPDATE projects SET repo_root=?, repo_slug=?, link_kind=? WHERE name=?`,
+		root, slug, kind, name); err != nil {
+		return fmt.Errorf("set repo root: %w", err)
+	}
+	p.RepoRoot, p.RepoSlug, p.LinkKind = root, slug, kind
+	return nil
+}
+
+// SetRepoDerived records what the sync could confirm about the binding — the
+// slug and the kind, never the root itself, which belongs to the user. Reports
+// whether anything changed, so a tick that finds nothing new stays silent
+// instead of broadcasting.
+func (ps *ProjectStore) SetRepoDerived(name, slug, kind string) bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	p := ps.find(name)
+	if p == nil || (p.RepoSlug == slug && p.LinkKind == kind) {
+		return false
+	}
+	if _, err := ps.db.Exec(
+		`UPDATE projects SET repo_slug=?, link_kind=? WHERE name=?`, slug, kind, name); err != nil {
+		log.Printf("projects: set repo derived: %v", err)
+		return false
+	}
+	p.RepoSlug, p.LinkKind = slug, kind
+	return true
+}
+
+// AdoptRepoRoot offers a project its FIRST binding — the one place the project
+// page still learns anything from the session index, and only for a row whose
+// link has never been resolved (LinkUnset). Once the user has bound or cleared
+// it the row is theirs, so a cleared binding is never re-offered. Reports
+// whether it took.
+func (ps *ProjectStore) AdoptRepoRoot(name, root string) bool {
+	root = strings.TrimSpace(root)
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	p := ps.find(name)
+	if p == nil || root == "" || p.RepoRoot != "" || p.LinkKind != LinkUnset {
+		return false
+	}
+	if _, err := ps.db.Exec(`UPDATE projects SET repo_root=? WHERE name=?`, root, name); err != nil {
+		log.Printf("projects: adopt repo root: %v", err)
+		return false
+	}
+	p.RepoRoot = root
+	return true
+}
+
+// PrivateNames returns the private projects' names — the label subtraction the
+// board family and /api/scopes apply while presentation mode is on. Non-nil and
+// freshly built, safe for the caller to hold.
+func (ps *ProjectStore) PrivateNames() map[string]bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	names := map[string]bool{}
 	for _, p := range ps.projects {
-		if !p.Private {
+		if p.Private {
+			names[p.Name] = true
+		}
+	}
+	return names
+}
+
+// PublicFolders returns the Claude folders owned by projects that are NOT
+// private — the ALLOWLIST the session-derived endpoints filter to while
+// presentation mode is on.
+//
+// An allowlist, deliberately, and not the complement of the private folders: a
+// folder no project owns is not covered by anything that could be public, so
+// subtracting only the known-private ones left every unclaimed folder on screen
+// mid-demo, raw folder name and all. Claiming a folder is what makes it public.
+func (ps *ProjectStore) PublicFolders() map[string]bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	folders := map[string]bool{}
+	for _, p := range ps.projects {
+		if p.Private {
 			continue
 		}
-		names[p.Name] = true
 		for _, f := range p.Folders {
 			folders[f] = true
 		}
 	}
-	return names, folders
+	return folders
 }
 
 // wouldCycle reports whether making parent the parent of name would create a

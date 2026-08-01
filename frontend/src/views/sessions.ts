@@ -1,7 +1,10 @@
-// View 1 — sessions list (default route `/`).
+// View 1 — sessions list (default route `/`). The per-session half: what ran,
+// when, how big. Everything that AGGREGATES — totals, heatmap, model mix, the
+// tokens chart — moved to the usage tab next door, because this route was two
+// pages stacked and they are read at different moments.
 
-import { getActivity, getSessions, getStats, subscribeSessionEvents } from "../api";
-import type { Activity, ModelUsage, Session, Stats } from "../api";
+import { getSessions, subscribeSessionEvents } from "../api";
+import type { Session } from "../api";
 import {
   escapeHtml,
   formatCost,
@@ -13,16 +16,10 @@ import {
   truncate,
 } from "../domain/format";
 import { showError } from "../app/live";
-import { renderModelDistribution } from "../domain/distribution";
-import { renderActivityHeatmap } from "../ui/heatmap";
-import { createTokensOverTime } from "../ui/tokensOverTime";
 import { loadFilters, renderFilterBar, saveFilters } from "../domain/filters";
 import type { FilterState, StatusFilter } from "../domain/filters";
 import { isNotifyOn, notifySupported, toggleNotify } from "../app/notify";
 import { getScopeParam, getScopeSet, labelForFolder, navigate, scopeChipHtml } from "../scope";
-
-// The heatmap uses its own fixed window, independent of the day filter.
-const HEATMAP_WEEKS = 26;
 
 /** Renders the sessions list view into `container`; returns a cleanup callback. */
 export function renderSessionsView(container: HTMLElement): () => void {
@@ -49,20 +46,6 @@ export function renderSessionsView(container: HTMLElement): () => void {
         </div>
       </header>
 
-      <section class="stat-cards" id="stat-cards"></section>
-      <div class="summary-row">
-        <section class="card heatmap-card">
-          <h2 class="section-heading">activity · last ${HEATMAP_WEEKS} weeks</h2>
-          <p class="panel-scope">this scope · fixed ${HEATMAP_WEEKS}-week window, ignores the day filter</p>
-          <div id="heatmap-slot"></div>
-        </section>
-        <section class="card">
-          <h2 class="section-heading">model distribution</h2>
-          <p class="panel-scope">this scope · follows every filter above</p>
-          <div id="dist-slot"></div>
-        </section>
-      </div>
-      <section class="card tot-card" id="tot-card"></section>
       <section class="live-strip hidden" id="live-strip"></section>
       <section class="sessions-table-wrap" id="table-wrap">
         <div class="empty-state">loading…</div>
@@ -72,16 +55,8 @@ export function renderSessionsView(container: HTMLElement): () => void {
 
   const notifyBtn = container.querySelector<HTMLButtonElement>("#notify-btn")!;
   const filterSlot = container.querySelector<HTMLElement>("#filter-slot")!;
-  const statCardsEl = container.querySelector<HTMLElement>("#stat-cards")!;
-  const heatmapSlotEl = container.querySelector<HTMLElement>("#heatmap-slot")!;
-  const totCardEl = container.querySelector<HTMLElement>("#tot-card")!;
-  const distSlotEl = container.querySelector<HTMLElement>("#dist-slot")!;
   const liveStripEl = container.querySelector<HTMLElement>("#live-strip")!;
   const tableWrapEl = container.querySelector<HTMLElement>("#table-wrap")!;
-
-  const tokensOverTime = createTokensOverTime();
-  totCardEl.append(tokensOverTime.el);
-
 
   function syncNotifyBtn(): void {
     if (!notifySupported()) {
@@ -110,20 +85,9 @@ export function renderSessionsView(container: HTMLElement): () => void {
 
   async function refresh(): Promise<void> {
     try {
-      // The chart shows global all-time usage, independent of every filter
-      // (day / project / status), so it gets its own unfiltered fetch.
-      const [freshSessions, chartSessions, stats, activity] = await Promise.all([
-        getSessions(filters.days, scopeParam, filters.status),
-        getSessions(0),
-        getStats(filters.days, scopeParam, filters.status),
-        getActivity(HEATMAP_WEEKS, scopeParam),
-      ]);
+      const fresh = await getSessions(filters.days, scopeParam, filters.status);
       if (disposed) return; // navigated away mid-fetch
-      sessions = freshSessions;
-      renderStatCards(statCardsEl, stats);
-      renderHeatmap(heatmapSlotEl, activity);
-      renderDist(distSlotEl, sessions);
-      tokensOverTime.update(chartSessions, 0);
+      sessions = fresh;
       renderLiveStrip(liveStripEl, sessions);
       renderTable(tableWrapEl, sessions, filters);
     } catch (err) {
@@ -150,32 +114,12 @@ export function renderSessionsView(container: HTMLElement): () => void {
       return;
     }
 
+    // No fetch on a tick: the row we were sent IS the update, and the
+    // aggregates that did need refetching live on the usage tab now. A running
+    // session emits an event per tool use, so this used to be three requests
+    // each time.
     renderLiveStrip(liveStripEl, sessions);
     renderTable(tableWrapEl, sessions, filters);
-    renderDist(distSlotEl, sessions);
-    // Chart is global all-time (independent of every filter) — re-fetch
-    // unfiltered rather than derive from the filtered in-memory list.
-    getSessions(0)
-      .then((all) => {
-        if (!disposed) tokensOverTime.update(all, 0);
-      })
-      .catch(() => {
-        /* best-effort; keep the last-rendered chart */
-      });
-    getStats(filters.days, scopeParam, filters.status)
-      .then((stats) => {
-        if (!disposed) renderStatCards(statCardsEl, stats);
-      })
-      .catch(() => {
-        /* best-effort refresh; keep showing last-known stats */
-      });
-    getActivity(HEATMAP_WEEKS, scopeParam)
-      .then((activity) => {
-        if (!disposed) renderHeatmap(heatmapSlotEl, activity);
-      })
-      .catch(() => {
-        /* best-effort; keep the last-rendered heatmap */
-      });
   });
 
   return () => {
@@ -191,51 +135,7 @@ function matchesStatus(s: Session, status: StatusFilter): boolean {
   return true;
 }
 
-function renderHeatmap(el: HTMLElement, activity: Activity): void {
-  el.replaceChildren(renderActivityHeatmap(activity));
-}
 
-/** Sum each session's per-model breakdown into one global distribution. */
-function aggregateBreakdown(sessions: Session[]): ModelUsage[] {
-  const acc = new Map<string, ModelUsage>();
-  for (const s of sessions) {
-    for (const mu of s.modelBreakdown ?? []) {
-      const cur = acc.get(mu.model);
-      if (cur) {
-        cur.tokens += mu.tokens;
-        cur.costUsd += mu.costUsd;
-      } else {
-        acc.set(mu.model, { model: mu.model, tokens: mu.tokens, costUsd: mu.costUsd });
-      }
-    }
-  }
-  return [...acc.values()];
-}
-
-function renderDist(el: HTMLElement, sessions: Session[]): void {
-  el.replaceChildren(renderModelDistribution(aggregateBreakdown(sessions)));
-}
-
-function renderStatCards(el: HTMLElement, stats: Stats): void {
-  el.innerHTML = `
-    <div class="stat-card">
-      <div class="stat-label">sessions</div>
-      <div class="stat-value">${stats.sessions.toLocaleString("en-US")}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">total tokens</div>
-      <div class="stat-value">${formatTokens(stats.totalTokens)}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">est. cost</div>
-      <div class="stat-value">${formatCost(stats.totalCostUsd)}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">agent spawns</div>
-      <div class="stat-value">${formatTokens(stats.agentSpawns)}</div>
-    </div>
-  `;
-}
 
 function renderLiveStrip(el: HTMLElement, sessions: Session[]): void {
   const running = sessions.filter((s) => s.running);

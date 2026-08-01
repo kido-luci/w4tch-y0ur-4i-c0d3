@@ -13,6 +13,7 @@ import (
 	"context"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -75,6 +76,69 @@ func runGit(root string, args ...string) (string, bool) {
 // convention a future caller could quietly break by reaching for runGit.
 func RemoteURL(root, remote string) (string, bool) {
 	return runGit(root, "remote", "get-url", remote)
+}
+
+// RepoName is what the repo calls itself: the last segment of its origin URL,
+// which is the name on the host rather than whatever the checkout's directory
+// happens to be called — the two differ often enough to matter (a directory
+// named luci_web_blog-frontend cloned from a repo named luci_dev). Falls back
+// to the directory name when there is no remote to ask.
+func RepoName(root string) string {
+	if url, ok := RemoteURL(root, "origin"); ok {
+		if n := repoNameFromURL(url); n != "" {
+			return n
+		}
+	}
+	return filepath.Base(root)
+}
+
+// repoNameFromURL takes the last path segment of a clone URL, in any of the
+// shapes git accepts: https://host/owner/name.git, git@host:owner/name.git,
+// ssh://host/owner/name, with or without the .git and a trailing slash.
+func repoNameFromURL(url string) string {
+	s := strings.TrimSpace(url)
+	s = strings.TrimSuffix(strings.TrimRight(s, "/"), ".git")
+	if i := strings.LastIndexAny(s, "/:"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
+}
+
+// IsRepo reports whether dir is inside a git work tree — the check a stored
+// binding needs before anything downstream trusts it, since a bound path can
+// be moved or deleted long after it was chosen.
+func IsRepo(dir string) bool {
+	out, ok := runGit(dir, "rev-parse", "--is-inside-work-tree")
+	return ok && out == "true"
+}
+
+// CanonicalRoot answers which REPO a directory belongs to, which is not the
+// same question as which directory you are standing in: a linked worktree has
+// its own path and its own top-level, so two cwds in one repo look like two
+// repos to anything that compares paths. The common dir is shared by every
+// worktree, so stripping its trailing "/.git" yields the one checkout they all
+// belong to. Exported as narrowly as RemoteURL above, and read-only likewise.
+//
+// Not hypothetical here: an agent worktree under .claude/worktrees was the
+// newest session cwd for a folder, so the folder resolved to a path no other
+// folder could ever match. Falls back to dir when git cannot answer (not a
+// repo, or a git too old for --path-format).
+func CanonicalRoot(dir string) string {
+	// The common dir points INSIDE the repo's storage, and only a plain
+	// checkout keeps that at "<root>/.git". A submodule keeps it at
+	// "<super>/.git/modules/<name>", so trimming blindly hands back a path that
+	// is not a working tree at all — which is what the binding picker offered
+	// until this checked. Trim only the shape it can trim; otherwise ask where
+	// the working tree actually starts.
+	if out, ok := runGit(dir, "rev-parse", "--path-format=absolute", "--git-common-dir"); ok {
+		if root, cut := strings.CutSuffix(out, "/.git"); cut && root != "" {
+			return root
+		}
+	}
+	if top, ok := runGit(dir, "rev-parse", "--show-toplevel"); ok && top != "" {
+		return top
+	}
+	return dir
 }
 
 // gitSnapshot fills one repo from its root. The work-tree check gates the rest;
@@ -260,8 +324,8 @@ func parseGitLog(s string) []gitCommit {
 // snapshots run concurrently — the unscoped case can resolve to many repos, and
 // each carries up to a handful of ×3s-timeout git calls — bounded so a large
 // scope doesn't fork one goroutine per repo unbounded.
-func gitRepos(rr *repos.Resolver, project string) []gitRepo {
-	roots := rr.Repos(project)
+func gitRepos(rr *repos.Resolver, scope string) []gitRepo {
+	roots := rr.Bound(scope)
 	out := make([]gitRepo, len(roots))
 	const workers = 6
 	sem := make(chan struct{}, workers)
@@ -493,7 +557,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	// root; on a miss it writes the 404 and returns ok=false.
 	scoped := func(w http.ResponseWriter, r *http.Request) (string, bool) {
 		root := r.URL.Query().Get("repo")
-		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
+		if !rr.BoundRoot(r.URL.Query().Get("scope"), root) {
 			httpx.WriteJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false
 		}
@@ -503,7 +567,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	mux.HandleFunc("GET /api/git", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, struct {
 			Repos []gitRepo `json:"repos"`
-		}{Repos: gitRepos(rr, r.URL.Query().Get("project"))})
+		}{Repos: gitRepos(rr, r.URL.Query().Get("scope"))})
 	})
 
 	mux.HandleFunc("GET /api/git/commit", func(w http.ResponseWriter, r *http.Request) {

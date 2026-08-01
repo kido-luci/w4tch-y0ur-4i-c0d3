@@ -28,8 +28,8 @@ export interface GitResponse {
   repos: GitRepo[];
 }
 
-export function getGit(project?: string): Promise<GitResponse> {
-  return getJSON<GitResponse>(`/api/git${buildQuery({ project })}`);
+export function getGit(scope?: string): Promise<GitResponse> {
+  return getJSON<GitResponse>(`/api/git${buildQuery({ scope })}`);
 }
 
 // --- git drill-down: branches / commit diff / working-tree diff ---------------
@@ -70,8 +70,8 @@ export interface GitDiff {
   truncated: boolean;
 }
 
-export function getGitBranches(repo: string, project?: string): Promise<{ branches: GitBranch[] | null }> {
-  return getJSON(`/api/git/branches${buildQuery({ repo, project })}`);
+export function getGitBranches(repo: string, scope?: string): Promise<{ branches: GitBranch[] | null }> {
+  return getJSON(`/api/git/branches${buildQuery({ repo, scope })}`);
 }
 
 /** Commit-list filters. Applied server-side (`git log` flags) rather than in the
@@ -89,7 +89,7 @@ export function getGitCommits(
   repo: string,
   skip: number,
   limit: number,
-  project?: string,
+  scope?: string,
   filter?: GitLogFilter,
 ): Promise<{ commits: GitCommit[] | null; authors?: string[] | null }> {
   return getJSON(
@@ -97,7 +97,7 @@ export function getGitCommits(
       repo,
       skip,
       limit,
-      project,
+      scope,
       nomerges: filter?.nomerges ? 1 : undefined,
       q: filter?.q || undefined,
       author: filter?.author || undefined,
@@ -105,12 +105,12 @@ export function getGitCommits(
   );
 }
 
-export function getGitCommit(repo: string, hash: string, project?: string): Promise<GitCommitDetail> {
-  return getJSON<GitCommitDetail>(`/api/git/commit${buildQuery({ repo, hash, project })}`);
+export function getGitCommit(repo: string, hash: string, scope?: string): Promise<GitCommitDetail> {
+  return getJSON<GitCommitDetail>(`/api/git/commit${buildQuery({ repo, hash, scope })}`);
 }
 
-export function getGitDiff(repo: string, project?: string): Promise<GitDiff> {
-  return getJSON<GitDiff>(`/api/git/diff${buildQuery({ repo, project })}`);
+export function getGitDiff(repo: string, scope?: string): Promise<GitDiff> {
+  return getJSON<GitDiff>(`/api/git/diff${buildQuery({ repo, scope })}`);
 }
 
 // --- git drill-down: GitHub (PRs / issues / CI runs) --------------------------
@@ -148,13 +148,13 @@ export interface GitRun {
   createdAt: string;
 }
 
-export function getGitPRs(repo: string, project?: string): Promise<{ supported: boolean; prs: GitPR[] | null }> {
-  return getJSON(`/api/git/prs${buildQuery({ repo, project })}`);
+export function getGitPRs(repo: string, scope?: string): Promise<{ supported: boolean; prs: GitPR[] | null }> {
+  return getJSON(`/api/git/prs${buildQuery({ repo, scope })}`);
 }
 
 export function getGitActivity(
   repo: string,
-  project?: string,
+  scope?: string,
 ): Promise<{ supported: boolean; issues: GitIssue[] | null; runs: GitRun[] | null }> {
-  return getJSON(`/api/git/activity${buildQuery({ repo, project })}`);
+  return getJSON(`/api/git/activity${buildQuery({ repo, scope })}`);
 }

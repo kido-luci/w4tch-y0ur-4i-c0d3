@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-const dataSchemaVersion = 13
+const dataSchemaVersion = 14
 
 // OpenDB opens (creating if needed) <cfgDir>/data.db and migrates its
 // schema forward. Unlike the index cache, an error here is fatal to the
@@ -433,6 +433,36 @@ CREATE TABLE IF NOT EXISTS settings(
 	value TEXT NOT NULL DEFAULT ''
 );
 PRAGMA user_version = 13;`); err != nil {
+			return err
+		}
+	}
+	if v < 14 {
+		// Which repo a project IS. repo_root is the binding and it is the user's
+		// to set (see ProjectStore.SetRepoRoot); repo_slug and link_kind are
+		// derived from it by the sync in main and describe only what the
+		// filesystem could confirm — bound and on GitHub, bound with no remote,
+		// bound to a path that is gone, or not bound at all.
+		//
+		// link_kind's default is the empty string on purpose: it means "never
+		// resolved", which is what lets the first sync offer an initial binding
+		// without ever re-offering one the user has since cleared (clearing
+		// writes 'none'). Guarded ADD COLUMNs like the ones above.
+		for _, col := range []struct{ name, ddl string }{
+			{"repo_root", `ALTER TABLE projects ADD COLUMN repo_root TEXT NOT NULL DEFAULT ''`},
+			{"repo_slug", `ALTER TABLE projects ADD COLUMN repo_slug TEXT NOT NULL DEFAULT ''`},
+			{"link_kind", `ALTER TABLE projects ADD COLUMN link_kind TEXT NOT NULL DEFAULT ''`},
+		} {
+			has, err := columnExists(db, "projects", col.name)
+			if err != nil {
+				return err
+			}
+			if !has {
+				if _, err := db.Exec(col.ddl); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := db.Exec(`PRAGMA user_version = 14`); err != nil {
 			return err
 		}
 	}
