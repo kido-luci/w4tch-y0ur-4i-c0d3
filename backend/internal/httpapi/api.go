@@ -1064,6 +1064,18 @@ func Register(mux *http.ServeMux, d Deps) {
 	// one repo name) the owner is prefixed, which keeps it stable rather than
 	// letting whichever loaded first win.
 	claudeScopes := func() []claudeScope {
+		// Presentation mode filters this list by the same allowlist the session
+		// endpoints apply, or the switcher would offer scopes whose content the
+		// guard then withholds — every pick landing on an empty list. It is the
+		// registry's notion of public (a folder owned by a public project), so
+		// while the mode is on this list is narrower than what /claude can
+		// actually show; the two agreeing beats each being right alone.
+		var public map[string]bool
+		if settings != nil && settings.PresentationHidden() {
+			public = projects.PublicFolders()
+		}
+		keep := func(folder string) bool { return public == nil || public[folder] }
+
 		counts := map[string]int{}
 		for _, s := range ix.Snapshot() {
 			counts[s.Project]++
@@ -1071,6 +1083,9 @@ func Register(mux *http.ServeMux, d Deps) {
 		byRoot := map[string]*claudeScope{}
 		out := []claudeScope{}
 		for _, folder := range ix.Projects() {
+			if !keep(folder) {
+				continue
+			}
 			rs := rr.Repos(folder)
 			if len(rs) == 0 || rs[0].Guessed {
 				out = append(out, claudeScope{

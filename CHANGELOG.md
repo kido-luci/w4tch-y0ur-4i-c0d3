@@ -3,6 +3,56 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## v2.4.0 — 2026-08-01
+
+### Changed
+- **The project page and the Claude pages stop sharing a taxonomy.** They
+  shared one scope, so a label picked on `/project` arrived at `/claude`
+  meaning something else — a project name where a session lives in a
+  folder — and the session views had to go through the project registry to
+  translate. Now each family answers for itself and remembers its own
+  scope: `/project` scopes by the projects you curate, `/claude` by the
+  repos its sessions actually ran in (`/api/claude/scopes`, derived from
+  the transcripts). The URL grammar is unchanged; only what the scope
+  segment means is per-family.
+- **A project declares which repo it IS.** The git, code-graph, GitHub and
+  design-file tabs used to resolve a scope through the directories Claude
+  had run in, which made the project page's answer depend on where the
+  agent had wandered. Bind a repo in the project manager instead — the
+  picker offers every repo this machine has seen, and any checkout's path
+  works. What the server could confirm about that binding rides beside it:
+  linked (a GitHub remote, so visibility is knowable), local (a repo with
+  no remote), missing (the bound path is gone), or unbound. A git icon
+  after the project's name in the rail shows it at a glance.
+- **A project with no binding lists no repos.** That is the answer, not a
+  regression: the fix is to bind it, not to guess for it. Existing
+  projects are offered their first binding once, from what their folders
+  resolve to, and never from a directory matched by name alone.
+- **`usage` is its own tab.** The sessions route was two pages stacked:
+  totals, a heatmap, a model mix and a tokens chart on top of the list you
+  actually search. Sessions keeps what is per-session; usage takes
+  everything that aggregates. The filter window is shared between them.
+
+### Fixed
+- **Presentation mode hid private projects but not unclaimed folders.** It
+  subtracted the private projects' folders, so every folder no project
+  owned stayed on screen mid-demo — nine of them here, raw directory names
+  and all. It keeps the public projects' folders now, which is a different
+  question with a different answer.
+- **A reload could leave you on a scope presentation mode hides.** Only the
+  toggle bounced off it, so a refresh (or a shared link) left the chip and
+  the URL printing a private project's name while the views quietly showed
+  everything public instead of that scope.
+- **A worktree or a submodule bound the wrong path.** Repo identity came
+  from trimming `/.git` off git's common dir, which is only the shape a
+  plain checkout has: a linked worktree resolved to a path nothing else
+  could match, and a submodule to its superproject's storage — not a
+  working tree at all.
+- **The sessions list refetched on every SSE tick.** A running session
+  emits one per tool use, and each answered with three requests on top of
+  the row it had just been handed. The list now fetches nothing on a tick;
+  the usage tab coalesces its own refresh.
+
 ## v2.3.0 — 2026-07-31
 
 ### Added
