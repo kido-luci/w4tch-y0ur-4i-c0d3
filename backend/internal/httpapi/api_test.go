@@ -55,9 +55,12 @@ func TestRescanCoalescer(t *testing.T) {
 	}
 }
 
-// presentationFixture builds the guard over one private project ("secret",
-// owning folder "secret-folder") and one public one, with a recording handler
-// behind it that captures the project param each request arrived with.
+// presentationFixture builds the guard over one showable folder ("open-folder",
+// whose repo is public) and one that is not ("secret-folder"), with a recording
+// handler behind it that captures the project param each request arrived with.
+// The visibility answer is a plain func here for the same reason it is one in
+// production: whether a folder may be shown is a question about its REPO, and
+// the guard's job is only to apply the answer.
 func presentationFixture(t *testing.T) (settings *board.SettingsStore, guard http.Handler, got *string) {
 	t.Helper()
 	db, err := board.OpenDB(t.TempDir())
@@ -65,22 +68,13 @@ func presentationFixture(t *testing.T) (settings *board.SettingsStore, guard htt
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	projects := board.NewProjectStore(db)
-	if _, err := projects.Upsert("secret", []string{"secret-folder"}, false, 0, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := projects.Upsert("open", []string{"open-folder"}, false, 0, ""); err != nil {
-		t.Fatal(err)
-	}
-	if !projects.SetPrivate("secret", true) {
-		t.Fatal("SetPrivate should report a change")
-	}
 	settings = board.NewSettingsStore(db)
 	got = new(string)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		*got = r.URL.Query().Get("project")
 	})
-	return settings, PresentationGuard(settings, projects, next), got
+	public := func() map[string]bool { return map[string]bool{"open-folder": true} }
+	return settings, PresentationGuard(settings, public, next), got
 }
 
 func TestPresentationGuardRewritesTheProjectParam(t *testing.T) {
@@ -112,9 +106,10 @@ func TestPresentationGuardRewritesTheProjectParam(t *testing.T) {
 		t.Fatalf("scoped param should lose the private folder, handler saw %q", *got)
 	}
 
-	// A folder NO project owns is not public either. It is not in the private
-	// set, so subtracting instead of allowlisting left it — and its sessions,
-	// under its raw folder name — on screen mid-demo.
+	// A folder whose repo is not public (or that resolves to no repo at all)
+	// never survives, however it got into the param — subtracting the known
+	// private ones instead left every unclaimed folder, and its sessions under
+	// its raw directory name, on screen mid-demo.
 	serve("GET", "/api/stats?project=open-folder,loose-folder")
 	if *got != "open-folder" {
 		t.Fatalf("an unowned folder must not survive, handler saw %q", *got)
