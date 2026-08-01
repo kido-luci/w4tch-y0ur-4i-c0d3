@@ -168,6 +168,7 @@ func main() {
 	// only ever show work that is already public. The gh answer is cached per
 	// slug (github.IsPrivate), so a tick is cheap.
 	rr := repos.New(ix)
+
 	syncRegistry := func() bool {
 		changed := false
 		for _, p := range projectStore.List() {

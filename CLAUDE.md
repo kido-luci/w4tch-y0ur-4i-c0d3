@@ -25,8 +25,12 @@ what breaks, silently, at build time.
 - `index` — transcript scan/parse, the `index.db` cache, session types, the file
   watcher. Everything reads it; it reads nothing. Its schema covers `sessions`,
   the `messages` FTS table and `ships` together, under one generation stamp.
-- `repos` — resolves a scope to on-disk repo roots, and owns `ResolveRoot`, the
-  whitelist every git/GitHub drill-down validates `?repo` against.
+- `repos` — resolves a scope to on-disk repo roots, two ways for two questions.
+  `Bound` reads the project registry's repo bindings (what a project declares it
+  IS) and owns `BoundRoot`, the whitelist every git/GitHub drill-down validates
+  `?repo` against. `Repos` reads the session index instead — where work actually
+  happened — which is what the manager's binding picker and the registry's
+  opening offer need, and nothing else should.
 - `git`, `github`, `codegraph` — the three read-only repo views, each with its
   own handlers. `search`, `ships` — query layers over `index.db`'s handle.
 - `figfiles` — the `.fig`/`.pen` documents under each repo's `design/`, and the
@@ -353,11 +357,19 @@ that without asking; it's a deliberate property, not an oversight.
   fallback broke.)
 
 **Repo resolution is shared with the code graph** — both go through
-`internal/repos`, so both tabs always list the same repos, resolved through each
-folder's most recent session cwd. Every drill-down endpoint
-(`/api/git/{commit,diff,branches,commits,prs,activity}`) validates `?repo`
-against that resolved set; an arbitrary path is a 404. That guard is *why* these
-endpoints are safe to expose — keep it on anything new you add here.
+`internal/repos`, so both tabs always list the same repos. They resolve a scope
+LABEL (`?scope=`, the same label the board endpoints take) to the repos its
+projects are BOUND to in the registry — not to the directories its sessions ran
+in, which is what these tabs used to do and what made the project page's answer
+depend on where Claude had wandered. A project with no binding lists no repos,
+on purpose: the fix is to bind it in the manager, not to guess for it.
+
+Every drill-down endpoint (`/api/git/{commit,diff,branches,commits,prs,activity}`)
+validates `?repo` against that bound set (`BoundRoot`); an arbitrary path is a
+404. That guard is *why* these endpoints are safe to expose — keep it on anything
+new you add here. It is also why binding accepts only a real checkout
+(`git.IsRepo`): the binding IS the whitelist now, so the gate sits where the path
+enters, in `PUT /api/projects/{name}`.
 
 **Filters** ride all four lists in the shared `.filter-chip` idiom: overview
 (dirty/clean/ahead/behind) · branches (hide merged/local/remote/stale >90d) · pull

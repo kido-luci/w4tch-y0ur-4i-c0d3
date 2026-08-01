@@ -16,7 +16,7 @@ import {
 } from "../api";
 import type { GitBranch, GitCommit, GitCommitDetail, GitFileChange, GitPR, GitRepo } from "../api";
 import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
-import { getScopeParam } from "../scope";
+import { getScope } from "../scope";
 
 type TabKey = "commits" | "changes" | "branches" | "prs" | "activity";
 const TABS: { key: TabKey; label: string }[] = [
@@ -70,7 +70,9 @@ function diffBlock(diff: string, truncated: boolean): string {
 
 /** Renders the git repo-detail view; returns a cleanup callback. */
 export function renderGitRepoView(container: HTMLElement, folder: string): () => void {
-  const scope = getScopeParam();
+  // The scope LABEL, not its Claude folders: the git and code-graph endpoints
+  // resolve a scope through the project registry's repo bindings now.
+  const scope = getScope();
   let dead = false;
   let repo: GitRepo | null = null;
   let active: TabKey = "commits";

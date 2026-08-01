@@ -155,6 +155,24 @@ func Register(mux *http.ServeMux, d Deps) {
 		return s.WithExclude(privateNames())
 	}
 
+	// The git tab, the code graph and the GitHub sections resolve a scope to the
+	// repos its projects are BOUND to — the project page's own taxonomy —
+	// instead of to wherever that scope's sessions happened to run. It goes
+	// through the same scope rule as every board endpoint above, presentation
+	// exclusion included: the git tab is as much a screen-share surface as the
+	// session list. Wired here rather than in main because this is where the
+	// resolver those three packages are handed is built.
+	rr.UseBindings(func(scope string) []repos.Binding {
+		in := board.ResolveScope(strings.TrimSpace(scope), groups, projects).WithExclude(privateNames())
+		out := []repos.Binding{}
+		for _, p := range projects.List() {
+			if p.RepoRoot != "" && in.Covers(p.Name) {
+				out = append(out, repos.Binding{Root: p.RepoRoot, Project: p.Name})
+			}
+		}
+		return out
+	})
+
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 		httpx.WriteJSON(w, ix.Sessions(days, r.URL.Query().Get("project"), r.URL.Query().Get("status")))

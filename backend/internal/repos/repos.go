@@ -41,13 +41,78 @@ type Sessions interface {
 	Snapshot() []*index.Session
 }
 
-// Resolver maps a scope to on-disk repo roots. The git tab and the code
-// graph both go through it, so the two always list the same repo set — and
-// every drill-down endpoint validates its ?repo against ResolveRoot, which is
-// why those endpoints are safe to expose at all.
-type Resolver struct{ sessions Sessions }
+// Binding is one repo a scope's projects are BOUND to — the project page's own
+// answer to "which repos are these", stated in the registry rather than
+// inferred from the directories sessions happened to run in.
+type Binding struct {
+	Root    string
+	Project string // the project that declared it — what the UI names the repo
+}
+
+// Bindings answers that for a scope label. main supplies it (it is the only
+// place that holds both the registry and the group store); nil leaves Bound
+// empty, which is the honest answer for a resolver with no registry behind it.
+type Bindings func(scope string) []Binding
+
+// Resolver maps a scope to on-disk repo roots, two different ways for two
+// different questions. Bound answers from the project registry — the git tab
+// and the code graph go through it, so the two always list the same repos, and
+// every drill-down validates its ?repo against BoundRoot, which is why those
+// endpoints are safe to expose at all. Repos answers from the session index
+// instead, which is what the binding PICKER and the registry's opening offer
+// need: where has work actually happened.
+type Resolver struct {
+	sessions Sessions
+	bindings Bindings
+}
 
 func New(ss Sessions) *Resolver { return &Resolver{sessions: ss} }
+
+// UseBindings wires the project registry in. Separate from New so the resolver
+// keeps working (session-derived only) for callers that have no registry.
+func (rr *Resolver) UseBindings(fn Bindings) { rr.bindings = fn }
+
+// Bound is the scope's repos as its projects declare them. A binding whose path
+// has gone missing is kept rather than filtered: the git tab showing a repo it
+// cannot read is how you find out, whereas dropping it silently shortens the
+// list and explains nothing.
+func (rr *Resolver) Bound(scope string) []Repo {
+	out := []Repo{}
+	if rr.bindings == nil {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, b := range rr.bindings(scope) {
+		if b.Root == "" || seen[b.Root] {
+			continue
+		}
+		seen[b.Root] = true
+		_, err := os.Stat(DBPath(b.Root))
+		out = append(out, Repo{Root: b.Root, Folder: b.Project, HasIndex: err == nil, CommitsSince: -1})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].HasIndex != out[j].HasIndex {
+			return out[i].HasIndex
+		}
+		return out[i].Folder < out[j].Folder
+	})
+	return out
+}
+
+// BoundRoot reports whether root is one of the scope's bound repos — the
+// whitelist every git / GitHub / code-graph drill-down checks its ?repo
+// against, so an arbitrary path is a 404 rather than a filesystem read.
+func (rr *Resolver) BoundRoot(scope, root string) bool {
+	if root == "" {
+		return false
+	}
+	for _, r := range rr.Bound(scope) {
+		if r.Root == root {
+			return true
+		}
+	}
+	return false
+}
 
 // Repos maps the scope's folders to on-disk repo roots. For each folder the
 // candidates are its sessions' cwds, newest first; the first one that still
@@ -156,23 +221,6 @@ func (rr *Resolver) Dirs() []string {
 		}
 	}
 	return out
-}
-
-// ResolveRoot reports whether root is one of the scope's resolved repo roots.
-// Every git and GitHub drill-down endpoint validates its ?repo through here,
-// so it can only ever touch a repo the scope already surfaced, never an
-// arbitrary path. It lives beside the resolution rather than in git.go so the
-// guard and the list it guards cannot drift apart.
-func (rr *Resolver) ResolveRoot(project, root string) bool {
-	if root == "" {
-		return false
-	}
-	for _, rp := range rr.Repos(project) {
-		if rp.Root == root {
-			return true
-		}
-	}
-	return false
 }
 
 // findIndexedDir looks for a directory named `folder` that carries its own

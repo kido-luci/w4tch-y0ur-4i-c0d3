@@ -9,13 +9,14 @@ import { getGit } from "../api";
 import type { GitRepo } from "../api";
 import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
 import { showError } from "../app/live";
-import { getScopeParam } from "../scope";
+import { getScope } from "../scope";
 
 /** Renders the git view into `container`; returns a cleanup callback. */
 export function renderGitView(container: HTMLElement): () => void {
-  // The nav's project scope resolves to the folder list the server maps to repo
-  // roots; a scope change re-renders the whole view, so reading it once is fine.
-  const scope = getScopeParam();
+  // The scope LABEL, not its Claude folders: the server resolves it through the
+  // project registry's repo bindings now. A scope change re-renders the whole
+  // view, so reading it once is fine.
+  const scope = getScope();
   let dead = false;
   let repos: GitRepo[] = [];
   // Row filters. None on = show everything; several on = OR (a repo matching any

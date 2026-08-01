@@ -324,8 +324,8 @@ func parseGitLog(s string) []gitCommit {
 // snapshots run concurrently — the unscoped case can resolve to many repos, and
 // each carries up to a handful of ×3s-timeout git calls — bounded so a large
 // scope doesn't fork one goroutine per repo unbounded.
-func gitRepos(rr *repos.Resolver, project string) []gitRepo {
-	roots := rr.Repos(project)
+func gitRepos(rr *repos.Resolver, scope string) []gitRepo {
+	roots := rr.Bound(scope)
 	out := make([]gitRepo, len(roots))
 	const workers = 6
 	sem := make(chan struct{}, workers)
@@ -557,7 +557,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	// root; on a miss it writes the 404 and returns ok=false.
 	scoped := func(w http.ResponseWriter, r *http.Request) (string, bool) {
 		root := r.URL.Query().Get("repo")
-		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
+		if !rr.BoundRoot(r.URL.Query().Get("scope"), root) {
 			httpx.WriteJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false
 		}
@@ -567,7 +567,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	mux.HandleFunc("GET /api/git", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, struct {
 			Repos []gitRepo `json:"repos"`
-		}{Repos: gitRepos(rr, r.URL.Query().Get("project"))})
+		}{Repos: gitRepos(rr, r.URL.Query().Get("scope"))})
 	})
 
 	mux.HandleFunc("GET /api/git/commit", func(w http.ResponseWriter, r *http.Request) {

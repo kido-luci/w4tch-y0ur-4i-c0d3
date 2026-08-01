@@ -360,7 +360,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 
 	slugFor := func(w http.ResponseWriter, r *http.Request) (string, bool, bool) {
 		root := r.URL.Query().Get("repo")
-		if !rr.ResolveRoot(r.URL.Query().Get("project"), root) {
+		if !rr.BoundRoot(r.URL.Query().Get("scope"), root) {
 			httpx.WriteJSONError(w, http.StatusNotFound, "unknown repo for this scope")
 			return "", false, false
 		}
