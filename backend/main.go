@@ -284,9 +284,9 @@ func main() {
 	log.Printf("watch-your-ai-code on http://%s (root: %s, config: %s)", *addr, *root, cfgDir)
 	// hostGuard wraps EVERYTHING (API, MCP, static): loopback alone doesn't
 	// stop DNS rebinding or blind cross-origin POSTs — see internal/httpx.
-	// Inside it, PresentationGuard subtracts private projects from the
-	// session-endpoint family while presentation mode is on.
-	handler := httpapi.PresentationGuard(settingsStore, projectStore, ix.Projects, mux)
+	// Inside it, PresentationGuard narrows the session-endpoint family to the
+	// public projects' folders while presentation mode is on.
+	handler := httpapi.PresentationGuard(settingsStore, projectStore, mux)
 	log.Fatal(http.ListenAndServe(*addr, httpx.HostGuard(*addr, handler)))
 }
 

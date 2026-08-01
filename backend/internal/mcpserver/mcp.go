@@ -218,7 +218,7 @@ func newServer(drawings *board.DrawingStore, todos *board.TodoStore, states *boa
 	scoped := func(label string) board.ScopeSet {
 		s := board.ResolveScope(strings.TrimSpace(label), groups, projects)
 		if settings != nil && settings.PresentationHidden() {
-			names, _ := projects.PrivateSets()
+			names := projects.PrivateNames()
 			s = s.WithExclude(names)
 		}
 		return s
