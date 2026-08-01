@@ -164,6 +164,23 @@ export interface Activity {
   days: ActivityDay[];
 }
 
+/** One entry in the CLAUDE family's own scope list: a repo its sessions ran in,
+    with the Claude folders that resolve to it. Derived from the transcripts —
+    the project registry has no say here. A folder that resolves to no repo is
+    its own entry, under its own name. */
+export interface ClaudeScope {
+  key: string; // the URL scope segment
+  name: string;
+  slug?: string;
+  root?: string;
+  folders: string[]; // what the session endpoints filter on
+  sessions: number;
+}
+
+export function getClaudeScopes(): Promise<ClaudeScope[]> {
+  return getJSON<ClaudeScope[]>("/api/claude/scopes");
+}
+
 export function getSessions(days: number, project?: string, status?: string): Promise<Session[]> {
   return getJSON<Session[]>(`/api/sessions${buildQuery({ days, project, status })}`);
 }

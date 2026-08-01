@@ -87,6 +87,18 @@ type activityDay struct {
 	CostUSD  float64 `json:"costUsd"`
 }
 
+// claudeScope is one entry in the session views' own scope list: a repo the
+// transcripts show work happening in, with the Claude folders that resolve to
+// it. Folders that resolve to no repo appear as themselves.
+type claudeScope struct {
+	Key      string   `json:"key"`  // the URL scope segment — never contains "/"
+	Name     string   `json:"name"` // what to show
+	Slug     string   `json:"slug,omitempty"`
+	Root     string   `json:"root,omitempty"`
+	Folders  []string `json:"folders"` // what the session endpoints filter on
+	Sessions int      `json:"sessions"`
+}
+
 // docWithBody is the GET /api/docs/{id} payload: a page's metadata plus its
 // markdown body (the List payload carries metadata only, to keep the tree light).
 type docWithBody struct {
@@ -1034,6 +1046,78 @@ func Register(mux *http.ServeMux, d Deps) {
 		}
 		hub.Broadcast("projects-updated", projects.List())
 		httpx.WriteJSON(w, p)
+	})
+
+	// The CLAUDE family's own taxonomy — the counterpart to /api/scopes, which
+	// serves the project family. Every Claude folder is grouped by the repo its
+	// sessions actually ran in, so the session views scope by repo without
+	// asking the project registry anything: /project curates names, /claude
+	// reports what happened, and neither is the other's source of truth.
+	//
+	// A folder whose sessions resolve to no repo — a directory since deleted,
+	// work outside any checkout — stands as its own scope under its raw name
+	// rather than being dropped or guessed into someone else's repo. So does a
+	// folder whose only match was by name (Guessed): grouping on that would
+	// merge two projects' sessions on the strength of a coincidence.
+	//
+	// `key` is what rides the URL's scope segment, so it never contains "/" —
+	// the repo's own name, or the folder's. On the rare collision (two hosts,
+	// one repo name) the owner is prefixed, which keeps it stable rather than
+	// letting whichever loaded first win.
+	claudeScopes := func() []claudeScope {
+		counts := map[string]int{}
+		for _, s := range ix.Snapshot() {
+			counts[s.Project]++
+		}
+		byRoot := map[string]*claudeScope{}
+		out := []claudeScope{}
+		for _, folder := range ix.Projects() {
+			rs := rr.Repos(folder)
+			if len(rs) == 0 || rs[0].Guessed {
+				out = append(out, claudeScope{
+					Key: folder, Name: folder, Folders: []string{folder}, Sessions: counts[folder],
+				})
+				continue
+			}
+			root := git.CanonicalRoot(rs[0].Root)
+			if cur, ok := byRoot[root]; ok {
+				cur.Folders = append(cur.Folders, folder)
+				cur.Sessions += counts[folder]
+				continue
+			}
+			cs := &claudeScope{
+				Key: git.RepoName(root), Name: git.RepoName(root), Root: root,
+				Folders: []string{folder}, Sessions: counts[folder],
+			}
+			if s, ok := github.Slug(root); ok {
+				cs.Slug = s
+			}
+			byRoot[root] = cs
+		}
+		for _, cs := range byRoot {
+			out = append(out, *cs)
+		}
+		// Disambiguate a repeated key with its owner, both sides, so neither
+		// entry wins by load order.
+		seen := map[string]int{}
+		for i := range out {
+			seen[out[i].Key]++
+		}
+		for i := range out {
+			if seen[out[i].Key] > 1 && out[i].Slug != "" {
+				out[i].Key = strings.ReplaceAll(out[i].Slug, "/", "-")
+			}
+		}
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Sessions != out[j].Sessions {
+				return out[i].Sessions > out[j].Sessions // busiest first
+			}
+			return out[i].Name < out[j].Name
+		})
+		return out
+	}
+	mux.HandleFunc("GET /api/claude/scopes", func(w http.ResponseWriter, r *http.Request) {
+		httpx.WriteJSON(w, claudeScopes())
 	})
 
 	// The repos this machine knows about, for the manager's binding picker:

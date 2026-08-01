@@ -860,6 +860,42 @@ a {
   color: var(--text-muted);
 }
 
+/* The claude family's chip is a switcher, not a link: its scopes are derived,
+   so there is no manager page to send you to. It wears the chip's own border
+   and the select inside is stripped bare, so the control reads as one object
+   rather than a chip with a form control loose inside it. */
+.scope-chip--select {
+  cursor: pointer;
+  align-items: center;
+  gap: var(--px-sp-2);
+}
+/* The caret rides the label, not the select: appearance:none takes the native
+   one away, and without something in its place the control reads as text. */
+.scope-chip--select::after {
+  content: "▾";
+  font-size: var(--px-label);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.scope-chip--select select {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text);
+  cursor: pointer;
+  /* Wide enough for the longest real label plus its session count — a repo
+     name cut mid-word ("w4tch-y0ur-4i-c0d3 (1") reads as a rendering bug. */
+  max-width: 32ch;
+  text-overflow: ellipsis;
+}
+.scope-chip--select select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* A wide table has to scroll inside its own box, or it scrolls the page — and a
    page that scrolls sideways takes the fixed header off the left edge with it.
    This is the chrome-less half of .sessions-table-wrap below, for the tables

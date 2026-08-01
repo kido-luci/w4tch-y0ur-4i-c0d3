@@ -3,7 +3,7 @@ import "./editorial.css";
 import { migrateLegacyHash, parseRoute } from "./app/router";
 import { announce } from "./app/live";
 import { initNotifications } from "./app/notify";
-import { navigate, syncScopeToURL } from "./scope";
+import { loadClaudeScopeIndex, navigate, setScope, syncScopeToURL } from "./scope";
 import { mountPresentationToggle } from "./app/presentation";
 import { initTheme, mountThemeToggle } from "./app/theme";
 import { mountScopeRail } from "./ui/scopeRail";
@@ -252,6 +252,16 @@ document.addEventListener("click", (e) => {
   navigate(href);
 });
 
+// The claude family's scope switcher (rendered by scopeChipHtml into whichever
+// session view is mounted). One delegated listener rather than three view-level
+// ones: the control is re-rendered on every route change, so nothing that binds
+// to the element itself would survive.
+document.addEventListener("change", (e) => {
+  const sel = e.target as HTMLElement;
+  if (sel.id !== "claude-scope-select") return;
+  setScope((sel as HTMLSelectElement).value);
+});
+
 // Old #/… bookmarks → the new path, once, before anything reads the location.
 migrateLegacyHash();
 
@@ -260,3 +270,9 @@ migrateLegacyHash();
 mountScopeRail(railEl, render);
 initNotifications();
 render();
+
+// The claude taxonomy is derived server-side (folders grouped by the repo they
+// ran in), so it arrives after the first paint; re-render once it does, the
+// same way the rail re-renders when the registry lands. Until then a scope
+// resolves to itself as a folder, which is a degenerate answer, not a wrong one.
+void loadClaudeScopeIndex().then(render);

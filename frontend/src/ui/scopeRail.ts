@@ -20,7 +20,6 @@ import {
   getKnownGroups,
   getKnownProjects,
   getScope,
-  getScopeParam,
   getScopeSet,
   loadScopeIndex,
   setKnownTaxonomy,
@@ -96,6 +95,12 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
 
   // Which tree nodes are folded (persisted). Read once; toggles mutate it.
   const collapsed = loadCollapsed();
+
+  /** What the active scope COVERS, as a comparable string — the rail's own
+      change detector. It used to use getScopeParam(), which now answers for the
+      claude family only: a project label would resolve to itself there and the
+      detector would go blind to exactly the changes it exists to catch. */
+  const coveredKey = (): string => [...(getScopeSet() ?? [])].sort().join(",");
 
   const isPrivateName = (name: string): boolean =>
     !!getKnownProjects().find((p) => p.name === name)?.private;
@@ -713,25 +718,25 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     }
     if (type === "groups-updated") {
       const scope = getScope();
-      const before = getScopeParam();
+      const before = coveredKey();
       setKnownTaxonomy(getKnownProjects(), (data as ProjectGroup[] | null) ?? []);
       renderRows();
       // Group membership changed, so what a label covers did too — the server
       // owns that rule, so refetch rather than recompute.
       void loadScopeIndex().then(onChange);
       if (!groupPanel.hidden && !groupPanel.querySelector(".scope-panel-form")) renderGroupPanel();
-      const after = getScopeParam();
+      const after = coveredKey();
       if (scope && before !== after) onChange();
       return;
     }
     if (type === "projects-updated") {
-      const before = getScopeParam();
+      const before = coveredKey();
       setKnownTaxonomy((data as Project[] | null) ?? [], getKnownGroups());
       renderRows();
       void loadScopeIndex().then(onChange); // the parent tree moved; see above
       if (!projPanel.hidden && !projPanel.querySelector(".scope-panel-form")) renderProjectPanel();
       refreshUnmapped(); // ownership changed → the unmapped set did too
-      const after = getScopeParam();
+      const after = coveredKey();
       if (before !== after) onChange();
       return;
     }
@@ -755,7 +760,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // empty, then fill in the registry and groups.
   renderRows();
   const hadScope = getScope();
-  const beforeParam = getScopeParam(); // pre-load: labels resolve as their own folder
+  const beforeParam = coveredKey(); // pre-load: a label covers only itself
   Promise.all([
     getProjectRegistry(),
     getGroups(),
@@ -777,7 +782,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       // Re-render the views when the load changed what the active scope resolves
       // to: a default was applied, a group scope expanded to its members, or a
       // merged project now owns more than its own name.
-      if (getScopeParam() !== beforeParam) onChange();
+      if (coveredKey() !== beforeParam) onChange();
     })
     .catch(() => {
       /* the persisted-scope-only rows stay */

@@ -23,7 +23,8 @@ import { navigate, setScope, syncScopeToURL } from "./scope";
 // stub mirrors the one browser behaviour the invariants depend on — push and
 // replace update location.pathname synchronously.
 
-const SCOPE_KEY = "wyac-scope";
+const SCOPE_KEY = "wyac-scope"; // the project family's
+const CLAUDE_SCOPE_KEY = "wyac-scope-claude";
 
 interface HistoryCall {
   kind: "push" | "replace";
@@ -192,9 +193,11 @@ describe("setScope — a scope change drops the detail segment", () => {
 
   it("persists the scope but leaves the URL alone off a scoped family", () => {
     at("/");
-    setScope("myproj");
+    setScope("myrepo");
     expect(calls).toEqual([]);
-    expect(store[SCOPE_KEY]).toBe("myproj");
+    // The root belongs to the claude family, so that is whose scope it is.
+    expect(store[CLAUDE_SCOPE_KEY]).toBe("myrepo");
+    expect(store[SCOPE_KEY]).toBeUndefined();
   });
 
   it("defaults a bare claude path to the sessions tab", () => {
@@ -232,10 +235,20 @@ describe("navigate — every path canonicalises, including the replace branch", 
 
 describe("syncScopeToURL", () => {
   it("expands the root to the default scoped landing", () => {
+    store[CLAUDE_SCOPE_KEY] = "myrepo";
+    at("/");
+    syncScopeToURL();
+    expect(fakeWindow.location.pathname).toBe("/claude/myrepo/sessions");
+  });
+
+  it("leaves the root scope-less when claude has no remembered scope", () => {
+    // "" is a legitimate claude scope — every folder — so the root does not
+    // borrow the project family's, which would name something that means
+    // nothing over there.
     store[SCOPE_KEY] = "myproj";
     at("/");
     syncScopeToURL();
-    expect(fakeWindow.location.pathname).toBe("/claude/myproj/sessions");
+    expect(fakeWindow.location.pathname).toBe("/claude/sessions");
   });
 
   it("re-gains the scope segment on a scope-less path", () => {
@@ -259,5 +272,38 @@ describe("syncScopeToURL", () => {
     syncScopeToURL();
     expect(calls).toEqual([]);
     expect(store[SCOPE_KEY]).toBe("theirs");
+  });
+});
+
+// The two families carry two taxonomies — project names on one side, the repos
+// the sessions ran in on the other — so a scope means different things in each
+// and must be remembered separately. They shared one key until the split, which
+// is how switching family carried a project name into the session views.
+describe("the families remember their scopes separately", () => {
+  it("writes each family's scope to its own key", () => {
+    at("/claude/repo-a/sessions");
+    setScope("repo-b");
+    at("/project/proj-a/board");
+    setScope("proj-b");
+    expect(store[CLAUDE_SCOPE_KEY]).toBe("repo-b");
+    expect(store[SCOPE_KEY]).toBe("proj-b");
+  });
+
+  it("does not carry one family's scope into the other's URL", () => {
+    store[CLAUDE_SCOPE_KEY] = "repo-a";
+    store[SCOPE_KEY] = "proj-a";
+    at("/project/board");
+    syncScopeToURL();
+    expect(fakeWindow.location.pathname).toBe("/project/proj-a/board");
+    at("/claude/sessions");
+    syncScopeToURL();
+    expect(fakeWindow.location.pathname).toBe("/claude/repo-a/sessions");
+  });
+
+  it("keeps the other family's scope untouched when one changes", () => {
+    store[SCOPE_KEY] = "proj-a";
+    at("/claude/repo-a/sessions");
+    setScope("repo-b");
+    expect(store[SCOPE_KEY]).toBe("proj-a");
   });
 });
