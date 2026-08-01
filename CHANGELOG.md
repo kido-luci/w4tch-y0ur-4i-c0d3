@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- **A new project was born public.** The `private` column defaults to
+  public and the insert omitted it, so every project created — by the
+  manager, or by seeding from a label — was showable for the up to five
+  minutes before the visibility sync first reached it. With presentation
+  mode on that is a private repo's cards on screen mid-demo, which is the
+  one thing the mode exists to prevent. New rows are written private;
+  what the sync derives afterwards still wins.
+
 ## v2.4.0 — 2026-08-01
 
 ### Changed

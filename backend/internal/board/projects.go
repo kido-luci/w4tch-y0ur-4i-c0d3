@@ -200,11 +200,15 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	}
 	defer tx.Rollback()
 
-	// `private` and the repo-link columns are deliberately absent on both sides
-	// of the upsert: the sync loop deriving them is their only writer, so a
-	// manager save can never clobber what the sync found.
+	// `private` and the repo-link columns are absent from the UPDATE side: the
+	// sync loop deriving them is their only writer, so a manager save can never
+	// clobber what the sync found. A brand-new row does write `private`, and
+	// writes it TRUE — the column defaults to public, which is the wrong answer
+	// for a row nothing has looked at yet. Presentation mode's whole premise is
+	// that what cannot be shown to be public stays hidden, and a row born public
+	// is shown for the up-to-five minutes before the first tick reaches it.
 	if _, err := tx.Exec(
-		`INSERT INTO projects(name, folders, hidden, ord, parent) VALUES(?, ?, ?, ?, ?)
+		`INSERT INTO projects(name, folders, hidden, ord, parent, private) VALUES(?, ?, ?, ?, ?, 1)
 		 ON CONFLICT(name) DO UPDATE SET folders=excluded.folders, hidden=excluded.hidden, ord=excluded.ord, parent=excluded.parent`,
 		name, string(raw), boolToInt(hidden), ord, parent); err != nil {
 		return Project{}, fmt.Errorf("write project: %w", err)
@@ -257,8 +261,10 @@ func (ps *ProjectStore) Upsert(name string, folders []string, hidden bool, ord i
 	if p == nil {
 		// LinkKind is left at LinkUnset ("") to match the column's default:
 		// a brand-new row has never been resolved, which is the state that
-		// lets the sync make its opening binding offer exactly once.
-		p = &Project{Name: name}
+		// lets the sync make its opening binding offer exactly once. Private
+		// mirrors what the INSERT above writes, so the row this call returns
+		// and the row on disk cannot disagree about whether it may be shown.
+		p = &Project{Name: name, Private: true}
 		ps.projects = append(ps.projects, p)
 	}
 	p.Folders, p.Hidden, p.Ord, p.Parent = cleaned, hidden, ord, parent
@@ -545,14 +551,15 @@ func (ps *ProjectStore) Seed(names []string) int {
 		if err != nil {
 			continue
 		}
+		// private=1 for the same reason as Upsert: unproven is hidden.
 		if _, err := ps.db.Exec(
-			`INSERT INTO projects(name, folders, hidden, ord) VALUES(?, ?, 0, ?)
+			`INSERT INTO projects(name, folders, hidden, ord, private) VALUES(?, ?, 0, ?, 1)
 			 ON CONFLICT(name) DO NOTHING`,
 			name, string(folders), next); err != nil {
 			log.Printf("projects: seed %q: %v", name, err)
 			continue
 		}
-		ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{name}, Ord: next})
+		ps.projects = append(ps.projects, &Project{Name: name, Folders: []string{name}, Private: true, Ord: next})
 		next++
 		added++
 	}

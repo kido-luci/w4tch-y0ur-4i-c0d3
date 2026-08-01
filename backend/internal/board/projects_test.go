@@ -100,6 +100,48 @@ func TestProjectRepoBinding(t *testing.T) {
 	}
 }
 
+// A row nothing has looked at yet must not be showable. The column defaults to
+// public, so an INSERT that omits it left every new project visible for the up
+// to five minutes before the sync's first tick reached it — with presentation
+// mode on, that is a private repo's cards on screen mid-demo.
+func TestNewProjectIsBornPrivate(t *testing.T) {
+	db := newTestDataDB(t)
+	ps := NewProjectStore(db)
+
+	p, err := ps.Upsert("fresh", []string{"f1"}, false, 0, "")
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if !p.Private {
+		t.Error("the returned row should be private")
+	}
+	if got := NewProjectStore(db).List()[0]; !got.Private { // reload = a restart
+		t.Errorf("the stored row should be private, got %+v", got)
+	}
+
+	// Once the sync says otherwise, a later manager save must not undo it —
+	// that column belongs to the sync, and only the INSERT side seeds it.
+	if !ps.SetPrivate("fresh", false) {
+		t.Fatal("SetPrivate should report a change")
+	}
+	if _, err := ps.Upsert("fresh", []string{"f1", "f2"}, true, 2, ""); err != nil {
+		t.Fatalf("re-upsert: %v", err)
+	}
+	if got := NewProjectStore(db).List()[0]; got.Private {
+		t.Errorf("an upsert must not reset what the sync derived, got %+v", got)
+	}
+
+	// Seeding from a label takes the same default.
+	if n := ps.Seed([]string{"seeded"}); n != 1 {
+		t.Fatalf("seed should add one, added %d", n)
+	}
+	for _, q := range NewProjectStore(db).List() {
+		if q.Name == "seeded" && !q.Private {
+			t.Errorf("a seeded row should be private, got %+v", q)
+		}
+	}
+}
+
 // A folder belongs to exactly one project: claiming it for B strips it off A.
 func TestProjectStoreExclusiveOwnership(t *testing.T) {
 	db := newTestDataDB(t)
