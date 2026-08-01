@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## v2.4.1 — 2026-08-01
 
 ### Fixed
 - **A new project was born public.** The `private` column defaults to
