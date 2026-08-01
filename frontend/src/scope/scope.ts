@@ -107,6 +107,16 @@ export function getScope(): string {
   return remembered(familyOf(window.location.pathname));
 }
 
+/** The PROJECT family's scope no matter where you are standing. The rail mounts
+    on every route and has to render, default and compare against its own
+    family's scope — getScope() would hand it the claude one on a session route.
+    The path wins only when the path IS the project family's. */
+export function getProjectScope(): string {
+  const loc = parseLocation(window.location.pathname);
+  if (loc.family === "project" && loc.scope) return loc.scope;
+  return remembered("project");
+}
+
 /** label -> the project names that scope covers, as RESOLVED BY THE SERVER
     (/api/scopes). Empty until the boot fetch lands, exactly like knownProjects. */
 let scopeIndex: Record<string, string[]> = {};
@@ -260,13 +270,17 @@ export function navigate(path: string, replace = false): void {
     previous scope); a boot default or rename passes replace=true to swap it in
     place. Service routes have no scope segment, so a scope change there is a
     persist-only no-op on the URL. */
-export function setScope(label: string, replace = false): void {
-  saveScope(label);
+export function setScope(label: string, replace = false, fam?: Family): void {
   const loc = parseLocation(window.location.pathname);
+  const target = fam ?? familyOf(window.location.pathname);
+  saveScope(label, target);
   let { family, tab, detail } = loc;
-  if (family === "") {
-    // No scoped path to rewrite — the next scoped navigation will carry the
-    // persisted scope.
+  // Only the family you are LOOKING at owns the URL. The project rail mounts on
+  // every route and applies its default at boot, so without this it splices a
+  // project name into a claude path — where it names nothing, and the session
+  // list goes empty. A family-less path (the root) has nothing to rewrite
+  // either; the next scoped navigation carries the persisted scope.
+  if (family === "" || family !== target) {
     return;
   }
   if (family === "claude" && tab === "") tab = "sessions";

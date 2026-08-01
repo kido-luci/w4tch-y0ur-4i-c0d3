@@ -322,6 +322,16 @@ scope-LESS (`href="/project/git"`) and `syncScopeToURL` splices the active scope
 in during `render()` — which is why adding a link never means threading the scope
 through it, and why a link's `href` and the address bar legitimately differ.
 
+**The two families share the grammar and nothing else.** The segment sits in the
+same place, but on `/project` it names a registry project (or group) and on
+`/claude` it names a repo the sessions ran in — two taxonomies, so two remembered
+scopes (`wyac-scope`, `wyac-scope-claude`). `setScope` therefore takes the family
+it applies to, and rewrites the URL only when you are standing in that family:
+the project rail mounts on EVERY route and applies its default at boot, so
+without that check it spliced a project name into a claude path, where it names
+nothing and the session list came back empty. For the same reason the rail reads
+`getProjectScope()`, never `getScope()`.
+
 Two rules that exist because breaking them shipped bugs:
 
 - **A scope change must DROP the detail segment.** Carry it over and you land on a

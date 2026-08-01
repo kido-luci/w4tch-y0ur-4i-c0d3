@@ -17,7 +17,7 @@ const PROJECT_TABS = new Set([
   "codegraph",
   "git",
 ]);
-const CLAUDE_TABS = new Set(["sessions", "insights", "search", "session"]);
+const CLAUDE_TABS = new Set(["sessions", "usage", "insights", "search", "session"]);
 
 export interface Loc {
   family: "claude" | "project" | "";

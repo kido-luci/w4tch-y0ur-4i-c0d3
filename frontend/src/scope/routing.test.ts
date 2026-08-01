@@ -113,6 +113,21 @@ describe("parseLocation", () => {
     });
   });
 
+  it("knows the usage tab, so /claude/usage is a tab and not a scope named usage", () => {
+    expect(parseLocation("/claude/usage")).toEqual({
+      family: "claude",
+      scope: "",
+      tab: "usage",
+      detail: "",
+    });
+    expect(parseLocation("/claude/myrepo/usage")).toEqual({
+      family: "claude",
+      scope: "myrepo",
+      tab: "usage",
+      detail: "",
+    });
+  });
+
   it("treats a known tab name in the scope slot as the TAB, not a scope", () => {
     // Documented consequence of the disambiguation above: a project literally
     // named "board" is shadowed in the scope slot. Locked here as known

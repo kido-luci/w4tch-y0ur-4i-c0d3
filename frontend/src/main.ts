@@ -19,6 +19,7 @@ import { renderGitRepoView } from "./views/gitRepo";
 import { renderInsightsView } from "./views/insights";
 import { renderSearchView } from "./views/search";
 import { renderSessionsView } from "./views/sessions";
+import { renderUsageView } from "./views/usage";
 import { renderShipsView } from "./views/ships";
 
 initTheme();
@@ -63,6 +64,7 @@ app.innerHTML = `
   </nav>
   <nav class="px-subnav">
     <a class="px-subnav-link" href="/" data-nav="list" data-fam="claude">sessions</a>
+    <a class="px-subnav-link" href="/claude/usage" data-nav="usage" data-fam="claude">usage</a>
     <a class="px-subnav-link" href="/claude/insights" data-nav="insights" data-fam="claude">insights</a>
     <a class="px-subnav-link" href="/claude/search" data-nav="search" data-fam="claude">search</a>
     <a class="px-subnav-link" href="/project/board" data-nav="board" data-fam="project">board</a>
@@ -127,6 +129,8 @@ function render(): void {
   const active =
     route.view === "board"
       ? "board"
+      : route.view === "usage"
+        ? "usage"
       : route.view === "cycles"
         ? "cycles"
       : route.view === "design" || route.view === "designEditor"
@@ -149,7 +153,9 @@ function render(): void {
   // The family follows the active view; the sub-row shows only that family's
   // tabs and lights the active one.
   const family =
-    active === "list" || active === "insights" || active === "search" ? "claude" : "project";
+    active === "list" || active === "usage" || active === "insights" || active === "search"
+      ? "claude"
+      : "project";
   // aria-current alongside the class: the underline says "you are here" to
   // anyone who can see it, and said nothing to anyone who can't. "page" is the
   // right token for both rows — each is a link to a location, and the active
@@ -196,7 +202,9 @@ function render(): void {
             ? renderUIView(view)
             : route.view === "docs"
               ? renderDocsView(view, route.id)
-              : route.view === "insights"
+              : route.view === "usage"
+                ? renderUsageView(view)
+                : route.view === "insights"
                 ? renderInsightsView(view)
                 : route.view === "search"
                   ? renderSearchView(view)

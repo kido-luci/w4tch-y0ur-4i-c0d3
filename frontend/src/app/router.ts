@@ -8,6 +8,7 @@ export type Route =
   | { view: "designEditor"; id: string }
   | { view: "ui" }
   | { view: "docs"; id?: string }
+  | { view: "usage" }
   | { view: "insights" }
   | { view: "search" }
   | { view: "ships" }
@@ -25,6 +26,7 @@ export function parseRoute(pathname: string): Route {
     if (loc.tab === "session" && loc.detail) {
       return { view: "detail", id: loc.detail };
     }
+    if (loc.tab === "usage") return { view: "usage" };
     if (loc.tab === "insights") return { view: "insights" };
     if (loc.tab === "search") return { view: "search" };
     return { view: "list" }; // sessions — the default landing
@@ -69,6 +71,7 @@ export function migrateLegacyHash(): void {
   const detail = segs[1] ?? "";
   let path: string;
   switch (tab) {
+    case "usage":
     case "insights":
     case "search":
     case "session":

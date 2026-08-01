@@ -19,7 +19,7 @@ import { escapeHtml } from "../domain/format";
 import {
   getKnownGroups,
   getKnownProjects,
-  getScope,
+  getProjectScope,
   getScopeSet,
   loadScopeIndex,
   setKnownTaxonomy,
@@ -174,7 +174,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   };
 
   function renderRows(): void {
-    const current = getScope();
+    const current = getProjectScope();
     const projs = visibleProjects();
 
     // Children of each project, by parent name, in rail order (ord then name).
@@ -349,7 +349,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     groupPanel.hidden = true;
     projPanel.hidden = true;
     renderRows(); // instant highlight; setScope's popstate also re-renders view + rows
-    setScope(scope); // persist + push into the path; the view re-renders via popstate
+    setScope(scope, false, "project"); // persist + push into the path; the view re-renders via popstate
   });
 
   // --- group manager panel -------------------------------------------------
@@ -430,7 +430,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
         // A rename is save-under-new-name + drop the old row; the scope follows.
         if (editing && editing !== name) {
           await deleteGroup(editing);
-          if (getScope() === editing) setScope(name, true);
+          if (getProjectScope() === editing) setScope(name, true, "project");
         }
         renderGroupPanel();
       } catch (err) {
@@ -679,7 +679,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           )
             return;
           await renameProject(editing, name);
-          if (getScope() === editing) setScope(name, true);
+          if (getProjectScope() === editing) setScope(name, true, "project");
         }
         await putProject(name, { folders, hidden, ord, parent, repoRoot });
         renderProjectPanel();
@@ -703,12 +703,12 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       // projects while the mode is on) — refetch, then either bounce off a
       // scope the mode just hid or re-render the view where it stands.
       void loadScopeIndex().then(() => {
-        const cur = getScope();
+        const cur = getProjectScope();
         const covered = getScopeSet()?.size ?? 0;
         if (presentationOn && cur && (isPrivateName(cur) || covered === 0)) {
           const def = firstScope();
           if (def && def !== cur) {
-            setScope(def); // popstate re-renders the view and the rows
+            setScope(def, false, "project"); // popstate re-renders the view and the rows
             return;
           }
         }
@@ -717,7 +717,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       return;
     }
     if (type === "groups-updated") {
-      const scope = getScope();
+      const scope = getProjectScope();
       const before = coveredKey();
       setKnownTaxonomy(getKnownProjects(), (data as ProjectGroup[] | null) ?? []);
       renderRows();
@@ -751,7 +751,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
 
   // The scope now lives in the path, so any navigation (a rail pick, Back/Forward,
   // or a bare-path link that syncScopeToURL re-scoped) must re-light the active
-  // row. renderRows reads getScope(), which reads the path — so this stays correct.
+  // row. renderRows reads getProjectScope(), which prefers the path — so this stays correct.
   window.addEventListener("popstate", renderRows);
 
   // --- boot ----------------------------------------------------------------
@@ -759,7 +759,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
   // Render immediately with just the persisted scope so the rail never flashes
   // empty, then fill in the registry and groups.
   renderRows();
-  const hadScope = getScope();
+  const hadScope = getProjectScope();
   const beforeParam = coveredKey(); // pre-load: a label covers only itself
   Promise.all([
     getProjectRegistry(),
@@ -776,7 +776,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       // default project so a scope is always active.
       if (!hadScope) {
         const def = firstScope();
-        if (def) setScope(def, true);
+        if (def) setScope(def, true, "project");
       }
       renderRows();
       // Re-render the views when the load changed what the active scope resolves
