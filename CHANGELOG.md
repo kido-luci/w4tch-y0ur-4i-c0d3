@@ -34,11 +34,15 @@ All notable changes to this project are documented here. Versions follow
   everything that aggregates. The filter window is shared between them.
 
 ### Fixed
-- **Presentation mode hid private projects but not unclaimed folders.** It
+- **Presentation mode asked the wrong thing about visibility.** It
   subtracted the private projects' folders, so every folder no project
   owned stayed on screen mid-demo — nine of them here, raw directory names
-  and all. It keeps the public projects' folders now, which is a different
-  question with a different answer.
+  and all. Asking the registry instead meant a session showed only if some
+  project had claimed its folder AND that project was bound to a public
+  repo: two conditions for a question about one repo, which on this board
+  left 11 sessions visible out of six public repos' worth. It is the
+  REPO's own visibility now — public on GitHub or hidden, with no repo at
+  all counting as hidden.
 - **A reload could leave you on a scope presentation mode hides.** Only the
   toggle bounced off it, so a refresh (or a shared link) left the chip and
   the URL printing a private project's name while the views quietly showed

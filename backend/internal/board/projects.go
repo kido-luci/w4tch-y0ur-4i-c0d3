@@ -370,29 +370,6 @@ func (ps *ProjectStore) PrivateNames() map[string]bool {
 	return names
 }
 
-// PublicFolders returns the Claude folders owned by projects that are NOT
-// private — the ALLOWLIST the session-derived endpoints filter to while
-// presentation mode is on.
-//
-// An allowlist, deliberately, and not the complement of the private folders: a
-// folder no project owns is not covered by anything that could be public, so
-// subtracting only the known-private ones left every unclaimed folder on screen
-// mid-demo, raw folder name and all. Claiming a folder is what makes it public.
-func (ps *ProjectStore) PublicFolders() map[string]bool {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	folders := map[string]bool{}
-	for _, p := range ps.projects {
-		if p.Private {
-			continue
-		}
-		for _, f := range p.Folders {
-			folders[f] = true
-		}
-	}
-	return folders
-}
-
 // wouldCycle reports whether making parent the parent of name would create a
 // loop — parent is name, or name sits somewhere up parent's existing chain.
 // Caller holds ps.mu. The seen guard also stops a pre-existing cycle from

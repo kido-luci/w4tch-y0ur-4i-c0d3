@@ -128,6 +128,10 @@ type Deps struct {
 	Groups   *board.GroupStore
 	Projects *board.ProjectStore
 	Settings *board.SettingsStore
+	// PublicFolders answers which Claude folders may be shown while
+	// presentation mode is on — the same closure PresentationGuard is built
+	// with, so the switcher and the content it offers cannot disagree.
+	PublicFolders func() map[string]bool
 }
 
 func Register(mux *http.ServeMux, d Deps) {
@@ -138,7 +142,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	todos, states, cycles, events := d.Todos, d.States, d.Cycles, d.Events
 	views, drawings, docs := d.Views, d.Drawings, d.Docs
 	groups, projects := d.Groups, d.Projects
-	settings := d.Settings
+	settings, publicFolders := d.Settings, d.PublicFolders
 
 	// Repo resolution, ship records and transcript search read the index but are
 	// not part of it — each takes the narrow slice of it that it needs, so none
@@ -1071,8 +1075,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		// while the mode is on this list is narrower than what /claude can
 		// actually show; the two agreeing beats each being right alone.
 		var public map[string]bool
-		if settings != nil && settings.PresentationHidden() {
-			public = projects.PublicFolders()
+		if settings != nil && settings.PresentationHidden() && publicFolders != nil {
+			public = publicFolders()
 		}
 		keep := func(folder string) bool { return public == nil || public[folder] }
 
@@ -1593,10 +1597,16 @@ func Register(mux *http.ServeMux, d Deps) {
 // folder — raw name, session titles and all — on screen mid-demo. Which is also
 // why there is no "no private projects, pass through" shortcut here.
 //
+// What counts as public is the REPO's own visibility, not the registry's view
+// of it (see the closure in main). Keying it on the registry meant a session
+// only showed if some project had claimed its folder AND that project was
+// bound to a public repo — two conditions for a question about one repo, and
+// on a real board it hid work that had been public on GitHub all along.
+//
 // /api/ships is the one exception: its `project` values are Makefile-reported
 // names, a different namespace, so its handler subtracts by project NAME
 // itself. Writes, non-/api paths and the SSE stream pass through untouched.
-func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectStore, next http.Handler) http.Handler {
+func PresentationGuard(settings *board.SettingsStore, publicFolders func() map[string]bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if settings == nil || !settings.PresentationHidden() ||
 			r.Method != http.MethodGet ||
@@ -1605,7 +1615,7 @@ func PresentationGuard(settings *board.SettingsStore, projects *board.ProjectSto
 			next.ServeHTTP(w, r)
 			return
 		}
-		public := projects.PublicFolders()
+		public := publicFolders()
 		q := r.URL.Query()
 		var keep []string
 		if cur := q.Get("project"); cur != "" {

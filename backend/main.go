@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"watch-your-ai-code/internal/board"
@@ -131,21 +132,65 @@ func main() {
 		log.Printf("projects: seeded %d registry entries", n)
 	}
 
+	// Repo resolution: the bindings half serves the project page's tabs (wired
+	// inside httpapi.Register), the session half serves the picker, the opening
+	// offer and the visibility answer just below.
+	rr := repos.New(ix)
+
+	// Which Claude folders may be shown while presentation mode is on: the ones
+	// whose sessions ran in a repo that is PUBLIC on GitHub. Everything else —
+	// a private repo, a repo with no GitHub remote, sessions that ran outside
+	// any checkout, or a root only a name match found — stays hidden, because
+	// a public screenshot must only ever show work that is already public.
+	//
+	// The repo answers this, not the project registry. Asking the registry
+	// meant a session showed only if some project had claimed its folder AND
+	// that project was bound to a public repo: two conditions for a question
+	// about one repo, and on the real board it left 11 sessions visible out of
+	// several public repos' worth.
+	//
+	// Memoised for a minute. The guard consults it on every GET while the mode
+	// is on, and it walks every folder's session cwds; the answer itself moves
+	// at the speed of a `gh` call (already cached per slug), not of requests.
+	var visMu sync.Mutex
+	var visAt time.Time
+	var visSet map[string]bool
+	publicFolders := func() map[string]bool {
+		visMu.Lock()
+		defer visMu.Unlock()
+		if visSet != nil && time.Since(visAt) < time.Minute {
+			return visSet
+		}
+		out := map[string]bool{}
+		for _, folder := range ix.Projects() {
+			rs := rr.Repos(folder)
+			if len(rs) == 0 || rs[0].Guessed {
+				continue
+			}
+			if priv, ok := github.IsPrivate(git.CanonicalRoot(rs[0].Root)); ok && !priv {
+				out[folder] = true
+			}
+		}
+		visAt, visSet = time.Now(), out
+		return out
+	}
+
 	mux := http.NewServeMux()
 	httpapi.Register(mux, httpapi.Deps{
-		Index:    ix,
-		Hub:      hub,
-		Sum:      summarize.New(),
-		Todos:    todoStore,
-		States:   stateStore,
-		Cycles:   cycleStore,
-		Events:   eventStore,
-		Views:    viewStore,
-		Drawings: drawingStore,
-		Docs:     docStore,
-		Groups:   groupStore,
-		Projects: projectStore,
-		Settings: settingsStore,
+		Index:         ix,
+		Hub:           hub,
+		Sum:           summarize.New(),
+		Todos:         todoStore,
+		States:        stateStore,
+		Cycles:        cycleStore,
+		Events:        eventStore,
+		Views:         viewStore,
+		Drawings:      drawingStore,
+		Docs:          docStore,
+		Groups:        groupStore,
+		Projects:      projectStore,
+		Settings:      settingsStore,
+		PublicFolders: publicFolders,
 	})
 	mux.Handle("/mcp", mcpserver.Handler(drawingStore, todoStore, stateStore, cycleStore, docStore, groupStore, projectStore, settingsStore, shipStore, ix, hub))
 
@@ -167,8 +212,6 @@ func main() {
 	// missing, or a failed gh call → private, because public screenshots must
 	// only ever show work that is already public. The gh answer is cached per
 	// slug (github.IsPrivate), so a tick is cheap.
-	rr := repos.New(ix)
-
 	syncRegistry := func() bool {
 		changed := false
 		for _, p := range projectStore.List() {
@@ -285,8 +328,8 @@ func main() {
 	// hostGuard wraps EVERYTHING (API, MCP, static): loopback alone doesn't
 	// stop DNS rebinding or blind cross-origin POSTs — see internal/httpx.
 	// Inside it, PresentationGuard narrows the session-endpoint family to the
-	// public projects' folders while presentation mode is on.
-	handler := httpapi.PresentationGuard(settingsStore, projectStore, mux)
+	// folders whose repo is public while presentation mode is on.
+	handler := httpapi.PresentationGuard(settingsStore, publicFolders, mux)
 	log.Fatal(http.ListenAndServe(*addr, httpx.HostGuard(*addr, handler)))
 }
 
