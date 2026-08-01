@@ -247,9 +247,10 @@ func TestBurndownRefusesACycleOutsideTheScope(t *testing.T) {
 
 func TestScopeSetWithExcludeHidesPrivateProjects(t *testing.T) {
 	gs, ps := scopeFixture(t)
-	// Mark one group member private, the way the GitHub-visibility sync would.
-	if !ps.SetPrivate("blog-backend", true) {
-		t.Fatal("SetPrivate should report a change")
+	// Rows are born private, so the sync's job here is to declare the PUBLIC
+	// ones; leaving blog-backend alone is what makes it the private member.
+	for _, name := range []string{"blog-frontend", "blog-worker", "standalone"} {
+		ps.SetPrivate(name, false)
 	}
 	private := ps.PrivateNames()
 	if !private["blog-backend"] || len(private) != 1 {
