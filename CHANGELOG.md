@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## v2.5.0 — 2026-08-02
 
 ### Added
 - **A Windows build.** The release now cross-compiles `windows/amd64`
