@@ -39,12 +39,16 @@ check-run:
 	@echo "check: all gates green"
 
 # `make release VERSION=v0.43.0` — fail-fast guards, full check, then the same
-# four platforms release.yml used to build, tag push, gh release. The guards run
+# platforms release.yml builds, tag push, gh release. The guards run
 # before check on purpose: a missing CHANGELOG entry should fail in seconds, not
-# after a five-minute build. dist/ is wiped of old tarballs before the build so
-# the `dist/*.tar.gz` upload glob carries only this version's four binaries —
+# after a five-minute build. dist/ is wiped of old archives before the build so
+# the `dist/*.tar.gz dist/*.zip` upload globs carry only this version's binaries —
 # without the wipe it accumulated across every release (156 tarballs by v0.79.0)
 # and the upload eventually timed the release out and left it a draft.
+#
+# PLATFORMS is the single source of the count: anything that reports how many
+# were built reads `$(words $(PLATFORMS))` rather than spelling a number, which
+# is how "4 platforms" survived windows/amd64 being added.
 PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64
 
 release-guards:
@@ -147,8 +151,8 @@ release-dry-run: release-dry-guards release-guards check-run release-build
 	done; \
 	code=$$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$(DRY_PORT)/api/nope"); \
 	[ "$$code" = "404" ] || { echo "release-dry: /api/nope -> $$code, want 404"; exit 1; }; \
-	rm -f dist/*.tar.gz; \
-	echo "release-dry: $(VERSION) — 4 platforms built; the $$(go env GOOS)/$$(go env GOARCH) tarball was unpacked and served. Nothing tagged, nothing published."
+	rm -f dist/*.tar.gz dist/*.zip; \
+	echo "release-dry: $(VERSION) — $(words $(PLATFORMS)) platforms built; the $$(go env GOOS)/$$(go env GOARCH) tarball was unpacked and served. Nothing tagged, nothing published."
 
 # --- dev loop -----------------------------------------------------------------
 # Two servers, neither of them the one on 4777. Vite serves the frontend with
