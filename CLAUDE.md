@@ -440,3 +440,40 @@ Traps, each of which cost a debugging cycle:
   more (one page capped at 100).
 - **Only GitHub is supported** for the remote sections (`gh`). A repo on any other
   host shows an empty state *by design*.
+
+## A project's NAME is its identity in three stores that don't know each other
+
+The registry row is only one of them. The same string is also the owner key on
+every board card in `data.db`, the `project` column of the ships table in
+`index.db`, and an entry in a group's member list. Nothing enforces agreement
+between them, and a name that matches nothing does not error — it renders.
+
+`POST /api/projects/{name}/rename` covers most of it: the row, its children's
+`parent`, todos, board states, cycles, docs and drawings groups, views, and
+group membership. What it cannot reach is **ships**, because those do not live
+in the database it is renaming. Each record is a JSON file in
+`~/.wyac/ships` whose `project` field the Makefile wrote at ship time, and
+`Store.Scan` only reads that file back. Rename a project and its whole ship
+history stays behind under the old name, invisible under every scope — it
+survives only in the all-projects view, which is exactly where nobody looks.
+Measured twice in one session: 99 records, then 83.
+
+**Editing those files in place does nothing.** `Scan` keys the table by
+FILENAME and skips any name it already holds, so a changed `project` field is
+never re-read. Renaming the file is what makes it re-ingest, and the row for the
+vanished old filename is deleted in the same pass — no `index.db` rebuild, no
+downtime, the watcher picks it up in seconds.
+
+The filename is `<epoch>-<pid>-<project>-<kind>.json`, and **substring
+replacement on it is wrong** whenever one project name contains another:
+`luci_web_blog-backend` holds `luci_web_blog` whole, so a naive replace turns 20
+backend records into `luci-studio-workspace-backend`. Match the exact suffix
+`-<project>-<kind>.json`, built from the `project` and `kind` you read out of
+that same file. Back the files up first; they are the only copy.
+
+The group list has the same shape of bug from the other side: it stores project
+NAMES, while the thing people reach for is the FOLDER name — a different
+namespace. `luci-studio` carried `luci_web_blog-frontend` for a long time, which
+was never a project. The rail drew it as a plain text row with no icon, no link
+and no warning. That is what a dangling member looks like, and it is the only
+symptom you get.
