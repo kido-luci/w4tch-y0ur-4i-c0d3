@@ -12,7 +12,11 @@ import (
 // active/archived status exists. macOS path; absent on other platforms, or if
 // the app has never run.
 func sessionStoreDir() string {
-	return filepath.Join(os.Getenv("HOME"),
+	// UserHomeDir rather than $HOME: the variable is usually unset on Windows,
+	// where this path does not exist anyway — an absolute miss reads as "no
+	// store", a relative one would go looking under the working directory.
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home,
 		"Library", "Application Support", "Claude", "claude-code-sessions")
 }
 

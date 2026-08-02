@@ -184,3 +184,12 @@ func TestShipsJoinSessions(t *testing.T) {
 		t.Errorf("a run from another project joined %q", r.SessionID)
 	}
 }
+
+// The drop directory has to be absolute. It used to be built from $HOME, which
+// Windows usually leaves unset — filepath.Join then returns ".wyac/ships", and
+// the server watches a directory relative to wherever it was started.
+func TestDefaultDirIsAbsolute(t *testing.T) {
+	if d := DefaultDir(); !filepath.IsAbs(d) {
+		t.Fatalf("DefaultDir must be absolute, got %q", d)
+	}
+}

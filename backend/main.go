@@ -32,7 +32,11 @@ import (
 var distFS embed.FS
 
 func main() {
-	defaultRoot := filepath.Join(os.Getenv("HOME"), ".claude", "projects")
+	// UserHomeDir, not $HOME: on Windows that variable is usually unset, and
+	// filepath.Join would then quietly build a RELATIVE path — the server would
+	// index whatever happened to sit under its working directory.
+	home, _ := os.UserHomeDir()
+	defaultRoot := filepath.Join(home, ".claude", "projects")
 	root := flag.String("root", defaultRoot, "Claude Code projects directory")
 	addr := flag.String("addr", "127.0.0.1:4777", "listen address (keep it on loopback)")
 	configDir := flag.String("config-dir", "", "board + design library directory (default: the OS config dir)")
@@ -341,7 +345,8 @@ func main() {
 func defaultConfigDir() string {
 	base, err := os.UserConfigDir()
 	if err != nil {
-		base = filepath.Join(os.Getenv("HOME"), ".config")
+		home, _ := os.UserHomeDir()
+		base = filepath.Join(home, ".config")
 	}
 	return filepath.Join(base, "watch-your-ai-code")
 }
