@@ -45,7 +45,7 @@ check-run:
 # the `dist/*.tar.gz` upload glob carries only this version's four binaries —
 # without the wipe it accumulated across every release (156 tarballs by v0.79.0)
 # and the upload eventually timed the release out and left it a draft.
-PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64
+PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64
 
 release-guards:
 	@[ -n "$(VERSION)" ] || { echo "usage: make release VERSION=vX.Y.Z"; exit 1; }
@@ -63,26 +63,33 @@ release:
 # cross-compile. A dry run with its own copy of this loop stops covering the
 # real path the moment either is edited — which would defeat the only reason it
 # exists.
+# Windows gets a .exe inside a .zip: tar is not a thing you can double-click on
+# that platform, and a binary without the extension will not run.
 release-build:
 	@set -e; mkdir -p dist; \
-	rm -f dist/*.tar.gz; \
+	rm -f dist/*.tar.gz dist/*.zip; \
 	for platform in $(PLATFORMS); do \
 		goos=$${platform%/*}; goarch=$${platform#*/}; \
 		name="watch-your-ai-code_$(VERSION)_$${goos}_$${goarch}"; \
+		bin="$$name"; [ "$$goos" = windows ] && bin="$$name.exe"; \
 		echo "building $$name"; \
 		GOOS=$$goos GOARCH=$$goarch CGO_ENABLED=0 \
-				go build -C backend -trimpath -ldflags "-s -w" -o "../dist/$$name" .; \
-		tar -czf "dist/$$name.tar.gz" -C dist "$$name"; \
-		rm "dist/$$name"; \
+				go build -C backend -trimpath -ldflags "-s -w" -o "../dist/$$bin" .; \
+		if [ "$$goos" = windows ]; then \
+			(cd dist && zip -q "$$name.zip" "$$bin"); \
+		else \
+			tar -czf "dist/$$name.tar.gz" -C dist "$$name"; \
+		fi; \
+		rm "dist/$$bin"; \
 	done
 
 release-run: release-guards check-run release-build
 	git tag "$(VERSION)" 2>/dev/null || echo "tag $(VERSION) already exists locally, reusing"
 	git push origin "$(VERSION)"
 	@if gh release view "$(VERSION)" >/dev/null 2>&1; then \
-		gh release upload "$(VERSION)" dist/*.tar.gz --clobber; \
+		gh release upload "$(VERSION)" dist/*.tar.gz dist/*.zip --clobber; \
 	else \
-		gh release create "$(VERSION)" --title "$(VERSION)" --generate-notes dist/*.tar.gz; \
+		gh release create "$(VERSION)" --title "$(VERSION)" --generate-notes dist/*.tar.gz dist/*.zip; \
 	fi
 
 # `make release-dry` — everything `make release` does except the two steps that

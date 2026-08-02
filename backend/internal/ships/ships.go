@@ -60,7 +60,10 @@ type ShipsResult struct {
 // A fixed, HOME-anchored path on purpose: every project's Makefile must be
 // able to name it without knowing this app's config dir.
 func DefaultDir() string {
-	return filepath.Join(os.Getenv("HOME"), ".wyac", "ships")
+	// UserHomeDir, not $HOME — unset on Windows, and a relative drop directory
+	// would follow whatever directory the server was started from.
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".wyac", "ships")
 }
 
 // Sessions is the slice of the session index that ship records join

@@ -32,15 +32,22 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           version="${GITHUB_REF_NAME}"
-          for platform in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do
+          for platform in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64; do
             goos="${platform%/*}"
             goarch="${platform#*/}"
             name="watch-your-ai-code_${version}_${goos}_${goarch}"
+            # Windows needs the .exe to be runnable, and a .zip to be openable.
+            bin="${name}"
+            [ "$goos" = windows ] && bin="${name}.exe"
             echo "Building ${name}"
             GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
-              go build -C backend -trimpath -ldflags "-s -w" -o "../dist/${name}" .
-            tar -czf "dist/${name}.tar.gz" -C dist "${name}"
-            rm "dist/${name}"
+              go build -C backend -trimpath -ldflags "-s -w" -o "../dist/${bin}" .
+            if [ "$goos" = windows ]; then
+              (cd dist && zip -q "${name}.zip" "${bin}")
+            else
+              tar -czf "dist/${name}.tar.gz" -C dist "${name}"
+            fi
+            rm "dist/${bin}"
           done
           ls -la dist
       - name: Publish release
@@ -50,10 +57,11 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME}"
           if gh release view "$version" >/dev/null 2>&1; then
-            gh release upload "$version" dist/*.tar.gz --clobber
+            gh release upload "$version" dist/*.tar.gz dist/*.zip --clobber
           else
             gh release create "$version" \
               --title "$version" \
               --generate-notes \
               dist/*.tar.gz
+              dist/*.zip
           fi

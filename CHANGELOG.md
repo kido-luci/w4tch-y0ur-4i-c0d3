@@ -3,6 +3,23 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+- **A Windows build.** The release now cross-compiles `windows/amd64`
+  alongside the two darwin and two linux targets, shipped as a `.zip`
+  holding a `.exe` — a tarball is neither runnable nor openable over
+  there. Nothing needed a CGO escape hatch: the SQLite driver has been
+  pure Go since the index cache landed.
+
+### Fixed
+- **Four paths were built from `$HOME`, which Windows usually leaves
+  unset.** `filepath.Join` then quietly returns a RELATIVE path, so the
+  transcript root, the config fallback, the archived-session store and the
+  ship-drop directory would all have pointed at whatever directory the
+  server happened to be started from. They ask `os.UserHomeDir()` now,
+  which reads `USERPROFILE` there and `$HOME` everywhere else.
+
 ## v2.4.1 — 2026-08-01
 
 ### Fixed
