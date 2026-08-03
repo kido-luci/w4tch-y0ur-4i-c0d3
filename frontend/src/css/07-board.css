@@ -1,0 +1,944 @@
+/* ---------- todo board ---------- */
+
+/* Actions are underlined pink text, not boxes — the mock draws every small
+   action ("+ new task", "edit") this way. Padding stays for the hit area. */
+.nav-link {
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-meta);
+  color: var(--px-pink-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: none;
+  padding: var(--px-sp-2) var(--px-sp-2);
+  cursor: pointer;
+}
+
+.nav-link:hover {
+  color: var(--text);
+}
+
+.board-layout {
+  display: flex;
+  gap: var(--px-sp-5);
+  align-items: flex-start;
+}
+
+/* The columns are user-defined since data.db v12, so the grid can no longer
+   name a count: it flows along one row and scrolls sideways once the workflow
+   outgrows the viewport. A fixed repeat(3) squeezed a five-column board into
+   unreadable slivers. */
+.board {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(230px, 1fr);
+  gap: var(--px-sp-5);
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: var(--px-sp-2);
+}
+
+/* The table and timeline are one wide block, not a column track. */
+.board.board-wide {
+  display: block;
+  overflow-x: auto;
+}
+
+@media (max-width: 800px) {
+  .board {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    overflow-x: visible;
+  }
+
+  .board-layout {
+    flex-direction: column-reverse;
+  }
+
+  .board-panel {
+    width: 100% !important;
+    position: static !important;
+  }
+}
+
+/* Columns are OPEN — no box, no shadow: the serif head and its rule are the
+   whole structure, and the cards float on the ground. The mock never draws a
+   column as a surface; boxing them is the pixel language, not this one. */
+.board-col {
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-4);
+  min-height: 180px;
+}
+
+/* Per-category colour, straight from the mock: In-progress columns speak
+   purple (rule, name, a card edge), done columns speak green and cross their
+   cards off. */
+.board-col--started .board-col-head {
+  border-bottom-color: var(--px-purple);
+}
+
+.board-col--started .board-col-name {
+  color: var(--px-purple-text);
+}
+
+.board-col--started .todo-card {
+  border-left: 3px solid var(--px-purple);
+}
+
+.board-col--done .board-col-head {
+  border-bottom-color: var(--px-green);
+}
+
+.board-col--done .board-col-name {
+  color: var(--px-green-text);
+}
+
+.board-col--done .todo-card {
+  background: var(--row-hover);
+  opacity: 0.75;
+}
+
+.board-col--done .todo-title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* The editorial signature: a serif column head over a heavy ink rule. Where
+   the mock colours a column (In Progress purple, Done green) the board's
+   per-state classes recolour the rule below. */
+.board-col-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-1) var(--px-sp-2) var(--px-sp-3);
+  border-bottom: var(--px-rule-heavy);
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-sans-sm);
+  color: var(--text);
+}
+
+/* Bare mono, no box — the count rides the serif head's baseline. */
+.board-count {
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  color: var(--text-muted);
+}
+
+.board-sum {
+  margin-left: auto;
+  font-size: var(--px-meta);
+  color: var(--live);
+}
+
+.board-search {
+  background: var(--card);
+  color: var(--text);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  width: 150px;
+  box-shadow: var(--px-shadow-sm);
+}
+
+.board-search:focus {
+  border-color: var(--border-hover);
+  outline: none;
+}
+
+.board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-4);
+  min-height: 40px; /* empty columns stay droppable */
+  flex: 1;
+}
+
+.todo-card {
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-4) var(--px-sp-5);
+  cursor: grab;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.todo-card:hover {
+  border-color: var(--px-line-strong);
+  box-shadow: var(--px-shadow-sm);
+}
+
+.todo-card.dragging {
+  opacity: 0.45;
+  border-style: dashed;
+  border-color: var(--accent);
+  background: transparent;
+}
+
+.todo-card.selected {
+  border-color: var(--accent);
+}
+
+.board-cards.drag-over {
+  background: var(--row-hover);
+  border-radius: var(--px-r-card);
+  outline: 1px dashed var(--border-hover);
+  outline-offset: 2px;
+}
+
+.todo-title {
+  font-weight: 600;
+}
+
+.todo-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  margin-top: var(--px-sp-3);
+  min-height: 18px;
+}
+
+.todo-repo {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--px-muted-on-fill);
+  background: var(--px-rule-soft);
+  border-radius: 2px;
+  padding: 1px var(--px-sp-4);
+}
+
+.todo-seq {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.todo-note-ind {
+  color: var(--text-muted);
+  font-size: var(--px-body);
+}
+
+/* label chips: name hashed onto a fixed 6-slot palette (see labelClass) */
+
+.todo-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-sp-2);
+  margin-bottom: var(--px-sp-2);
+}
+
+.todo-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-sp-2);
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  border-radius: var(--px-r-pill);
+  padding: 0 var(--px-sp-4);
+  line-height: 16px;
+  color: var(--lc);
+  background: color-mix(in srgb, var(--lc) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lc) 45%, transparent);
+}
+
+.lbl-0 { --lc: #e0703c; }
+.lbl-1 { --lc: #22c55e; }
+.lbl-2 { --lc: #3b82f6; }
+.lbl-3 { --lc: #ec4899; }
+.lbl-4 { --lc: #ca8a04; }
+.lbl-5 { --lc: #8b5cf6; }
+
+.label-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: var(--px-label-xs);
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.label-remove:hover {
+  opacity: 1;
+}
+
+.todo-actions {
+  display: flex;
+  gap: var(--px-sp-1);
+  margin-left: auto;
+  opacity: 0;
+}
+
+.todo-card:hover .todo-actions {
+  opacity: 1;
+}
+
+.todo-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--px-body);
+  padding: var(--px-sp-1) var(--px-sp-3);
+  border-radius: var(--px-r-card);
+}
+
+.todo-btn:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+
+.todo-btn-danger:hover {
+  color: var(--danger);
+}
+
+.board-add {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-4);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  cursor: pointer;
+}
+
+.board-add:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+/* type-and-Enter card composer at the bottom of each column */
+
+.composer-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--px-r-card);
+  font-family: var(--sans);
+  font-size: var(--px-body);
+  padding: var(--px-sp-4) var(--px-sp-5);
+}
+
+/* docked right panel — the selected card's editor */
+
+.board-panel {
+  width: 300px;
+  flex-shrink: 0;
+  position: sticky;
+  top: calc(var(--chrome-h) + 16px);
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-panel);
+  padding: var(--px-sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-4);
+  box-shadow: var(--px-shadow);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+}
+
+.panel-status {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-4);
+}
+
+.panel-close {
+  margin-left: auto;
+}
+
+.panel-title {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--px-r-card);
+  font-family: var(--sans);
+  font-size: var(--px-sans-sm);
+  font-weight: 600;
+  padding: var(--px-sp-3) var(--px-sp-4);
+  margin: 0 -var(--px-sp-4);
+}
+
+.panel-title:hover {
+  border-color: var(--border);
+}
+
+.panel-title:focus {
+  border-color: var(--border-hover);
+  background: var(--bg);
+  outline: none;
+}
+
+.panel-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-2);
+}
+
+.panel-label {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.panel-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-sp-2);
+  align-items: center;
+}
+
+.panel-label-input {
+  background: transparent;
+  color: var(--text);
+  border: none;
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-1) var(--px-sp-2);
+  min-width: 90px;
+  flex: 1;
+}
+
+.panel-label-input:focus {
+  /* Borderless, transparent input, so a border-color cue can't show — a hard
+     accent outline is the visible keyboard-focus indicator. Drawn outside the
+     box (offset pulled in by 1px), so it doesn't reflow the flex row. */
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.panel-repo,
+.panel-note {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--sans);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  resize: vertical;
+}
+
+.panel-repo:focus,
+.panel-note:focus,
+.composer-input:focus {
+  border-color: var(--border-hover);
+  outline: none;
+}
+
+.panel-label-hint {
+  opacity: 0.55;
+  font-size: var(--px-label);
+}
+
+/* markdown-rendered note — click to swap in the textarea */
+
+.panel-note-md {
+  border: 1px solid transparent;
+  border-radius: var(--px-r-card);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  cursor: text;
+  overflow-wrap: break-word;
+  line-height: 1.5;
+}
+
+.panel-note-md:hover {
+  border-color: var(--border);
+}
+
+.panel-note-empty {
+  color: var(--text-muted);
+}
+
+/* markdown content (rendered by renderMarkdown / renderInlineMarkdown) */
+
+.md p {
+  margin: 0 0 var(--px-sp-4);
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+/* Headings speak the serif; prose below stays sans in the secondary grey.
+   The ink comes back on the heading so it reads above its section. */
+.md h1,
+.md h2,
+.md h3 {
+  margin: var(--px-sp-4) 0 var(--px-sp-3);
+  line-height: 1.3;
+  font-family: var(--px-serif);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.md > h1:first-child,
+.md > h2:first-child,
+.md > h3:first-child {
+  margin-top: 0;
+}
+
+.md h1 {
+  font-size: var(--px-display);
+}
+
+.md h2 {
+  font-size: var(--px-title);
+}
+
+.md h3 {
+  font-size: var(--px-sans-sm);
+}
+
+.md code,
+.md-inline code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: var(--row-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  padding: 0 var(--px-sp-2);
+}
+
+.md pre {
+  background: var(--bg);
+  border: var(--px-edge-inner);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-4);
+  overflow-x: auto;
+  margin: var(--px-sp-4) 0;
+}
+
+.md pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  display: block;
+  font-size: var(--px-meta);
+}
+
+/* The editorial pull-quote: a green rule and serif italic — the mock's docs
+   abstract. */
+.md blockquote {
+  border-left: 2px solid var(--px-green);
+  margin: var(--px-sp-4) 0;
+  padding: var(--px-sp-1) var(--px-sp-5);
+  color: var(--px-sub);
+  font-family: var(--px-serif);
+  font-style: italic;
+  font-size: var(--px-sans-sm);
+  line-height: 1.6;
+}
+
+.md ul,
+.md ol {
+  margin: var(--px-sp-3) 0;
+  padding-left: var(--px-sp-7);
+}
+
+/* a nested list hugs its parent item instead of adding the full block gap */
+.md li ul,
+.md li ol {
+  margin: var(--px-sp-1) 0;
+}
+
+.md li {
+  margin: var(--px-sp-1) 0;
+}
+
+/* Block content inside a list item (loose-item paragraphs, code, quotes) hugs
+   the item rather than taking the full inter-block gap; the same tightening
+   applies to a blockquote's own paragraphs. */
+.md li > p,
+.md blockquote > p {
+  margin: var(--px-sp-2) 0;
+}
+
+.md li > p:first-child,
+.md blockquote > p:first-child {
+  margin-top: 0;
+}
+
+.md li > p:last-child,
+.md blockquote > p:last-child {
+  margin-bottom: 0;
+}
+
+.md li > pre,
+.md li > blockquote,
+.md li > .md-table {
+  margin: var(--px-sp-3) 0;
+}
+
+.md hr {
+  border: none;
+  border-top: var(--px-edge);
+  margin: var(--px-sp-5) 0;
+}
+
+.md dl {
+  margin: var(--px-sp-3) 0;
+}
+
+.md dt {
+  font-weight: 600;
+  margin-top: var(--px-sp-3);
+}
+
+.md dd {
+  margin: 0 0 var(--px-sp-2) var(--px-sp-6);
+  color: var(--text-muted);
+}
+
+.md img {
+  max-width: 100%;
+  border-radius: var(--px-r-card);
+}
+
+.md a,
+.md-inline a {
+  color: var(--accent-text);
+}
+
+.md .md-table {
+  overflow-x: auto;
+  margin: var(--px-sp-4) 0;
+}
+
+/* Editorial table, straight from the mock's property map: a heavy rule above
+   and below, hairlines between rows, no cell walls and no header fill. */
+.md table {
+  border-collapse: collapse;
+  font-size: var(--px-body);
+  border-top: var(--px-rule-heavy);
+  border-bottom: var(--px-rule-heavy);
+}
+
+.md th,
+.md td {
+  border: none;
+  border-bottom: var(--px-edge-inner);
+  padding: var(--px-sp-4) var(--px-sp-6) var(--px-sp-4) 0;
+  text-align: left;
+}
+
+.md th {
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--px-sp-1);
+}
+
+.panel-created {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.panel-delete {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-2) var(--px-sp-5);
+  cursor: pointer;
+}
+
+.panel-delete:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* linked-session strip on cards + link/pick block in the panel */
+
+.todo-sess {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  margin-top: var(--px-sp-2);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.panel-sess,
+.panel-sess-cand {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  flex-wrap: wrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  text-decoration: none;
+  text-align: left;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--px-body);
+  cursor: pointer;
+  width: 100%;
+}
+
+.panel-sess:hover,
+.panel-sess-cand:hover {
+  border-color: var(--border-hover);
+}
+
+.panel-sess-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-2);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.cand-title {
+  font-weight: 600;
+}
+
+.cand-meta {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.panel-sess-empty {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  padding: var(--px-sp-2) 0;
+}
+
+.todo-sess-frozen {
+  color: var(--live);
+}
+
+/* how many sessions a card's live numbers cover (only shown past the first) */
+.todo-sess-n {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.panel-sess-row {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+}
+
+.panel-sess-unlink {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--px-meta);
+  padding: 0;
+  cursor: pointer;
+}
+
+.panel-sess-unlink:hover {
+  color: var(--text);
+}
+
+/* the review end of the loop: PR / branch a card's sessions are working in */
+
+.todo-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--px-sp-2);
+  margin-top: var(--px-sp-2);
+}
+
+/* Mono DATA wears teal — the mock's split: blue is for navigation and links,
+   teal for ids, hashes and PR numbers. */
+.todo-pr,
+.panel-sess-pr {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--px-teal-text);
+  border: 1px solid var(--px-teal);
+  padding: 0 var(--px-sp-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.todo-pr:hover,
+.panel-sess-pr:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.todo-branch {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* linked wireframes: chip rows + the link/create controls */
+
+.todo-draw-ind,
+.todo-doc-ind {
+  color: var(--text-muted);
+  font-size: var(--px-meta);
+  font-family: var(--mono);
+}
+
+.panel-draw-row,
+.panel-doc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+}
+
+.panel-draw,
+.panel-doc {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.panel-draw:hover,
+.panel-doc:hover {
+  text-decoration: underline;
+}
+
+.panel-draw-unlink,
+.panel-doc-unlink {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--px-meta);
+  padding: 0;
+  cursor: pointer;
+}
+
+.panel-draw-unlink:hover,
+.panel-doc-unlink:hover {
+  color: var(--text);
+}
+
+.panel-draw-add,
+.panel-doc-add {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-4);
+  max-width: 100%;
+}
+
+.panel-draw-new,
+.panel-doc-new {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--px-pink-text);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-meta);
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.panel-draw-new:hover,
+.panel-doc-new:hover {
+  color: var(--text);
+}
+
+/* the card's journey timeline — see fillJourney in board.ts */
+
+.panel-journey-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--px-sp-3);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  position: relative;
+  padding: 0 0 var(--px-sp-3) var(--px-sp-5);
+  border-left: 1px solid var(--border);
+}
+
+.panel-journey-row::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--border-hover);
+}
+
+.panel-journey-row--done::before {
+  background: var(--live);
+}
+
+.panel-journey-when {
+  flex-shrink: 0;
+}
+
+.panel-journey-sess {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--border-hover);
+  text-underline-offset: 2px;
+}
+
+.panel-journey-sess:hover {
+  text-decoration-color: var(--text);
+}
+
+.panel-journey-done {
+  color: var(--live);
+}
+
+.panel-ships-more {
+  display: block;
+  margin-top: var(--px-sp-1);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+.panel-ships-more:hover {
+  color: var(--text);
+}

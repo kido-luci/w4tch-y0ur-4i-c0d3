@@ -1,0 +1,332 @@
+/* W4tch y0ur 4I c0d3 — Paper Editorial Cool design system (dark + light) */
+
+/* These names are the app's original vocabulary; every screen and every
+   visualisation already speaks it. Rather than restyle 300 classes one by
+   one, the names alias the editorial tokens in editorial.css — repointing
+   them moves the whole app, bespoke chart chrome included.
+
+   Colour lives in ONE place: editorial.css defines the light values and the
+   dark overrides, so there is no per-theme block here to keep in sync.
+   theme.ts still sets data-theme on <html> exactly as before. */
+:root {
+  --bg: var(--px-ground);
+  --card: var(--px-surface);
+  /* Frames use --px-line, never --px-ink: pointing this at the text ink drew
+     every border at reading contrast, which is what made the language shout. */
+  --border: var(--px-line);
+  --border-hover: var(--px-accent-deep);
+  --text: var(--px-ink);
+  --text-muted: var(--px-muted);
+  --live: var(--px-green);
+  --accent: var(--px-accent);
+
+  /* Accent as a letterform, not as a frame — see the note in pixel.css. Use
+     this for `color:`, keep --accent for borders, fills and rules. */
+  --accent-text: var(--px-accent-text);
+
+  --row-hover: var(--px-rule-soft);
+  --chip-active-bg: var(--px-rule-soft);
+  --danger: var(--px-red);
+
+  /* Was a blur colour, now a full hard-offset shadow — see the --shadow
+     users below, which no longer supply their own offsets. */
+  --shadow: var(--px-shadow);
+
+  --sans: var(--px-sans);
+  --mono: var(--px-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--px-sans-sm);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--text);
+}
+
+.page {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: var(--px-sp-6) var(--px-sp-7) var(--px-sp-9);
+}
+
+/* Visually gone, still announced. Not display:none and not visibility:hidden —
+   both remove the node from the accessibility tree, which is the opposite of
+   what a live region needs. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Docs is four columns deep, so reaching content by keyboard meant tabbing past
+   the whole chrome and the entire scope rail — around thirty stops, on every
+   navigation. Off-screen until focused, then a normal control in the app's
+   language. */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 100;
+  padding: var(--px-sp-4) var(--px-sp-6);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  box-shadow: var(--px-shadow-sm);
+  color: var(--text);
+  font: 600 var(--px-meta) var(--px-sans);
+  text-decoration: none;
+  transition: top 120ms ease;
+}
+
+/* :focus, not :focus-visible — a skip link is only ever reached by keyboard, and
+   :focus-visible would leave it hidden for any focus the browser judges
+   non-keyboard, which for this control means hidden when it matters. */
+.skip-link:focus {
+  top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
+}
+
+/* The skip target. It takes focus programmatically, so it must not also draw a
+   focus ring — the ring belongs to whatever the user tabs to next. */
+#view:focus {
+  outline: none;
+}
+
+/* Shell under the nav: the project rail (board / design / docs' shared scope
+   switcher) flanks #view as the leftmost column; other routes hide it and
+   #view takes the full width. */
+.app-shell {
+  display: flex;
+  align-items: stretch;
+}
+
+.app-shell > #view {
+  flex: 1;
+  min-width: 0;
+}
+
+/* On a phone the rail's fixed 240px is most of the screen, and what it leaves
+   is narrower than the min-content of everything it flanks — so the shell
+   itself overflowed and took the page sideways with it. Below the same 800px
+   where .doc-layout already folds to one column, the rail becomes a normal
+   block above the content: full width, its own height, no longer pinned (a
+   sticky element that starts a stacked page would sit on top of it). Capped
+   so a long project list can't push the view off the first screen. */
+@media (max-width: 800px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  /* Selector carries the parent deliberately: the .proj-rail block below sets
+     `flex: 0 0 240px` and sits later in the file, so a bare .proj-rail here
+     would tie on specificity and lose on source order. Two classes settle it
+     wherever either rule moves to.
+
+     `flex: none` is the load-bearing part. Once the shell is a column, that
+     240px basis stops being a width and becomes a HEIGHT — the rail rendered
+     as a 240px-tall empty box above the content. */
+  .app-shell > .proj-rail {
+    flex: none;
+    width: auto;
+    position: static;
+    height: auto;
+    max-height: 45vh;
+    border-right: none;
+    border-bottom: var(--px-edge);
+  }
+}
+
+/* Content hugs the rail: next to a left column, `margin: 0 auto` centering
+   would strand the page as an island past a void — left-align it instead.
+   Rail-less routes keep the centered page.
+
+   The width cap goes with it. Left-aligned AND capped meant rail + page ended
+   at a fixed 1440px while the nav above ran full-bleed, so every rail route
+   (board / design / docs / code graph / git) trailed a dead strip down its
+   right edge that only grew with the display. These are dashboards, not
+   documents — let them take the shell. */
+.proj-rail:not([hidden]) + #view .page {
+  margin: 0;
+  max-width: none;
+}
+
+.proj-rail {
+  /* One constant width on every view that carries the rail — its content is
+     route-independent, so its geometry is too. min-width: 0 beats the flex
+     min-content floor — without it, one long nowrap row (a doc title)
+     silently widens the whole rail past its basis. */
+  flex: 0 0 240px;
+  width: 240px;
+  min-width: 0;
+  /* A sticky sidebar that scrolls its own overflow: the project list + manager
+     panels can outrun the viewport, so pin it and scroll internally rather than
+     clipping (the old overflow:hidden hid every row past the fold). An explicit
+     height overrides the flex `align-items: stretch` cleanly; overflow-x stays
+     hidden so one long nowrap row can't widen the rail past its basis
+     (min-width: 0 beats the flex min-content floor).
+
+     It pins BELOW the sticky chrome, and its height is the viewport minus
+     that chrome. A full 100vh starting 86px down was 86px taller than the
+     space it had: it made short routes scroll for no reason (the board, with
+     nothing to scroll, measured 986px of document against a 900px viewport)
+     and put the rail's own last rows out of reach until you did. */
+  position: sticky;
+  top: var(--chrome-h);
+  height: calc(100vh - var(--chrome-h));
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--px-sp-6) var(--px-sp-5) var(--px-sp-7);
+  /* Same raised layer as .px-chrome — the two are the app's only pinned
+     chrome, so they read as one. Without a background of its own the rail
+     showed the body's dot grid straight through, which is the scrolling
+     page's texture, not a pinned column's. */
+  background: var(--card);
+  border-right: var(--px-edge);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+}
+
+/* Scoped under .proj-rail because the session rail (.session-rail, far below)
+   reuses .rail-list / .rail-item / :hover with different values. Bare, the two
+   share the global class and source order silently lets the later (session)
+   block win on both rails — so these declarations were dead. Keep both rails'
+   copies container-scoped; the active modifier is scoped too so it still
+   out-ranks this now-two-class base. */
+.proj-rail .rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-1);
+}
+
+.rail-heading {
+  margin: var(--px-sp-4) var(--px-sp-2) var(--px-sp-1);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* A row is a flex line, not a block, so the trailing git mark survives a long
+   name: the LABEL truncates and the mark holds its place. As one block with
+   ellipsis on the button, the overflow ate the mark — a project with a long
+   name silently showed no link at all, which is the one thing the mark exists
+   to prevent. */
+.proj-rail .rail-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--px-sans);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-4);
+  cursor: pointer;
+  overflow: hidden;
+}
+.rail-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proj-rail .rail-item:hover {
+  color: var(--text);
+}
+
+/* Tree fold toggle (▾/▸) or, on a leaf, an alignment spacer — leads each row. */
+.rail-tree-toggle,
+.rail-tree-spacer {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 12px;
+  margin-right: var(--px-sp-2);
+  text-align: center;
+  color: var(--text-muted);
+  user-select: none;
+}
+.rail-tree-toggle {
+  cursor: pointer;
+}
+.rail-tree-toggle:hover {
+  color: var(--text);
+}
+
+/* A project's logo, inline before its name in the rail. */
+.rail-logo {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  vertical-align: -3px;
+  margin-right: var(--px-sp-3);
+  border-radius: 2px;
+}
+
+/* The git mark trailing a project name: this project is bound to a repo the
+   server resolved. It sits quiet — a scope's own name is what you read the
+   rail for — so it takes the muted ink and only nudges to full ink on hover.
+   --weak is the unproven binding (matched by folder name, or no remote): same
+   glyph at half opacity, because it must not read as the proven one. */
+.rail-git {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: var(--px-sp-2);
+  color: var(--text-muted);
+  vertical-align: -1px;
+}
+.rail-git--weak {
+  opacity: 0.45;
+}
+.rail-item:hover .rail-git {
+  color: var(--text);
+}
+
+/* Active scope is a purple left bar and a purple word, not a box — the 2px
+   transparent border on .rail-item reserves the room so nothing shifts. */
+.proj-rail .rail-item--active {
+  border-left-color: var(--px-purple);
+  color: var(--px-purple-text);
+  font-weight: 600;
+}
+
+.rail-manage {
+  margin-top: var(--px-sp-4);
+  color: var(--text-muted);
+}
+
+.hidden {
+  display: none !important;
+}

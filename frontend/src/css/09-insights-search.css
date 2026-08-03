@@ -1,0 +1,309 @@
+/* ---------- insights / rework radar ---------- */
+
+.section-desc {
+  color: var(--text-muted);
+  font-size: var(--px-word);
+  margin: -var(--px-sp-2) 0 var(--px-sp-5);
+  line-height: 1.45;
+  /* These run the full shell width — measured at 191 characters per line on
+     the cycles page, roughly 2.5x the readable maximum, because the eye loses
+     the start of the next line on the way back. The doc body already sets a
+     sane measure; this is prose too and gets the same treatment. ch is the
+     right unit: it tracks the font, so the cap stays ~90 characters whatever
+     the size becomes. */
+  max-width: 90ch;
+}
+
+/* Right-align the count and money columns on the insights tables. Left-aligned,
+   4268 / 1109 / 870 / 853 do not line up on the units digit, so the column
+   can't be read as magnitudes at a glance — which is the entire job of a
+   "ranked by churn" table. Header and cell are aligned together so the label
+   stays over its own numbers. Column indexes are one-based and count the
+   churn table's leading chevron <th>. */
+.churn-table th:nth-child(3),
+.churn-table td:nth-child(3),
+.churn-table th:nth-child(4),
+.churn-table td:nth-child(4),
+.churn-table th:nth-child(5),
+.churn-table td:nth-child(5),
+.friction-table th:nth-child(3),
+.friction-table td:nth-child(3),
+.friction-table th:nth-child(4),
+.friction-table td:nth-child(4),
+.friction-table th:nth-child(5),
+.friction-table td:nth-child(5),
+.friction-table th:nth-child(6),
+.friction-table td:nth-child(6),
+.ledger-table th:nth-child(n + 2):nth-child(-n + 5),
+.ledger-table td:nth-child(n + 2):nth-child(-n + 5),
+.ledger-table th:nth-child(7),
+.ledger-table td:nth-child(7),
+.ledger-table th:nth-child(8),
+.ledger-table td:nth-child(8),
+.sizing-table th:nth-child(3),
+.sizing-table td:nth-child(3),
+.sizing-table th:nth-child(4),
+.sizing-table td:nth-child(4),
+.sizing-table th:nth-child(5),
+.sizing-table td:nth-child(5) {
+  text-align: right;
+}
+
+.churn-table th:first-child,
+.churn-table td.churn-chevron {
+  width: 18px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.churn-row {
+  cursor: pointer;
+}
+
+/* The column the ranking is on — carries the weight so the order reads as
+   deliberate rather than arbitrary. */
+.churn-churned {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.churn-row-open td {
+  border-bottom: none;
+}
+
+.churn-detail-row td {
+  padding: 0 var(--px-sp-5) var(--px-sp-5) var(--px-sp-8);
+  border-bottom: 1px solid var(--border);
+}
+
+.churn-refs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-3);
+  padding-top: var(--px-sp-2);
+}
+
+.churn-ref {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.churn-ref:hover {
+  border-color: var(--border-hover);
+  background: var(--row-hover);
+}
+
+.churn-ref-title {
+  font-family: var(--sans);
+  font-size: var(--px-body);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.churn-ref-meta {
+  color: var(--text-muted);
+}
+
+.churn-ref-cost {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+.table-caption {
+  padding: var(--px-sp-4) var(--px-sp-5) var(--px-sp-1);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.friction-totals,
+.sizing-medians {
+  margin: -var(--px-sp-2) 0 var(--px-sp-4);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.sizing-medians b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The column the ranking is on. */
+.sizing-compactions {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+/* The two derived columns — the point of the table. */
+.ledger-per {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+/* The summed row reads against the weeks above it, so it keeps their columns
+   and only gains a rule to sit behind. */
+.ledger-total td {
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+  padding-top: var(--px-sp-5);
+}
+
+.ledger-total .cell-title {
+  color: var(--text-muted);
+}
+
+/* The column the ranking is on. */
+.friction-esc {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.friction-link {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.friction-link:hover {
+  text-decoration: underline;
+}
+
+.cell-muted {
+  color: var(--text-muted);
+}
+
+/* Footnote scale on purpose — 16 denials in a whole corpus is a remark, not a
+   ranking, so it never grows past one muted line. */
+.friction-denials {
+  padding: var(--px-sp-1) var(--px-sp-5) 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+/* ---------- search ---------- */
+
+.search-input {
+  width: 100%;
+  padding: var(--px-sp-5) var(--px-sp-5);
+  margin-bottom: var(--px-sp-5);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--px-word);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--border-hover);
+}
+
+.search-meta {
+  padding: 0 var(--px-sp-1) var(--px-sp-4);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.search-hits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-3);
+}
+
+.search-hit {
+  display: block;
+  padding: var(--px-sp-4) var(--px-sp-5);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.search-hit:hover {
+  border-color: var(--border-hover);
+  background: var(--row-hover);
+}
+
+.search-hit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--px-sp-4);
+  margin-bottom: var(--px-sp-2);
+}
+
+.search-hit-role {
+  padding: var(--px-sp-1) var(--px-sp-3);
+  background: var(--px-rule-soft);
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  color: var(--px-muted-on-fill);
+}
+
+/* Your own words, marked — you scan for those first. */
+.search-hit-role--user {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.search-hit-title {
+  font-size: var(--px-body);
+  font-weight: 500;
+}
+
+.search-hit-meta {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.search-hit-snippet {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  line-height: 1.5;
+}
+
+/* #fff rather than a token: the accent stays the same orange in both themes,
+   so the text on it does too — matching .ms-gcard-top, which does the same. */
+.search-mark {
+  background: var(--accent);
+  color: #fff;
+  padding: 0 1px;
+}
+
+/* ---------- reduced motion ---------- */
+
+/* Card hover lift stays put for users who opt out of motion. */
+@media (prefers-reduced-motion: reduce) {
+  .live-card,
+  .cost-card,
+  .todo-card,
+  .design-card {
+    transition: none;
+  }
+
+  .live-card:hover,
+  .cost-card:hover,
+  .todo-card:hover,
+  .design-card:hover {
+    transform: none;
+  }
+
+  /* .insp-pill-dot's pulse is defined further down the file than the first
+     reduced-motion block, so its reset must live here — an earlier block at
+     equal specificity would lose on source order. */
+  .insp-pill-dot {
+    animation: none;
+  }
+}

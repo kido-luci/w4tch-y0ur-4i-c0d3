@@ -1,0 +1,242 @@
+/* ---------- design files (.fig / .pen, opened in OpenPencil) ---------- */
+
+/* A list, not a grid: these have no thumbnail to show and the scope rarely has
+   many. Sits above the wireframe library and hides itself when empty. */
+.design-files {
+  margin-bottom: var(--px-sp-7);
+}
+
+.design-file-repo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: var(--px-sp-5);
+}
+
+.design-file-repo-name {
+  font: 400 10px var(--mono);
+  color: var(--text-muted);
+  opacity: 0.7;
+  margin-bottom: var(--px-sp-3);
+}
+
+.design-file {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--px-sp-5);
+  width: 100%;
+  padding: var(--px-sp-4) var(--px-sp-5);
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.design-file:hover {
+  background: var(--row-hover);
+}
+
+.design-file-name {
+  font: 400 12px var(--mono);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.design-file-meta {
+  flex: none;
+  font: 400 10px var(--mono);
+  color: var(--text-muted);
+}
+
+/* ---------- design library (Excalidraw wireframes) ---------- */
+
+/* The grid sectioned by topic tag: a heading per tag, its cards below.
+   Topics are many-to-many, so one drawing legitimately appears in several
+   sections. A tagless library renders one bare .design-grid — no headings. */
+.design-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-7);
+}
+
+.design-topic-head {
+  margin: 0 0 var(--px-sp-4);
+  font: 400 11px var(--mono);
+  color: var(--text-muted);
+}
+
+.design-topic-count {
+  margin-left: var(--px-sp-4);
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.design-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--px-sp-6);
+  align-items: start;
+}
+
+.design-grid .empty-state {
+  grid-column: 1 / -1;
+}
+
+.design-card {
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-5);
+  box-shadow: var(--px-shadow);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.design-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  transform: translate(-2px, -2px);
+}
+
+.design-card-thumb {
+  height: 130px;
+  margin: -var(--px-sp-5) -var(--px-sp-5) var(--px-sp-4);
+  border-bottom: var(--px-edge);
+  /* Deliberately #fff in both themes, not a token: the thumbnail PNG is
+     exported on the scene's viewBackgroundColor (white by default, see
+     thumbs.ts) and letterboxed with object-fit:contain — a white frame is
+     seamless with it, where a dark token would just draw bars around a still
+     white image. Same fixed-value reasoning as .search-mark. */
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.design-card-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.design-thumb-empty {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.design-card-name {
+  font-family: var(--mono);
+  font-size: var(--px-word);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.design-card-meta {
+  margin-top: var(--px-sp-2);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.design-card-actions {
+  margin-top: var(--px-sp-4);
+  display: flex;
+  gap: var(--px-sp-4);
+}
+
+.design-act {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.design-act:hover {
+  color: var(--text);
+}
+
+.design-rename {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-word);
+  padding: var(--px-sp-1) var(--px-sp-2);
+  width: 100%;
+}
+
+.design-rename:focus {
+  outline: none;
+  /* Rest already draws a --border-hover border, so focus lifts it to accent
+     to stay a visible keyboard-focus cue rather than removing the outline
+     with no replacement. */
+  border-color: var(--accent);
+}
+
+/* The editor wants the viewport, not the reading column. */
+.design-editor-page {
+  max-width: none;
+  padding-bottom: var(--px-sp-7);
+}
+
+.design-editor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-5);
+  padding: 0 0 var(--px-sp-5);
+}
+
+.design-editor-name {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--px-meta);
+  color: var(--text);
+}
+
+.design-editor-cards {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.design-save,
+.doc-save {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.design-save-failed,
+.doc-save-failed {
+  color: var(--live);
+}
+
+/* Excalidraw fills its host and needs a hard height to lay out at all. */
+.design-editor-host {
+  height: calc(100vh - 156px);
+  min-height: 420px;
+  border: var(--px-edge);
+  border-radius: var(--px-r-panel);
+  box-shadow: var(--px-shadow);
+  background: var(--card);
+  overflow: hidden;
+}
+
+/* "Browse libraries" inside the canvas links out to
+   libraries.excalidraw.com — hide it so the editor stays fully offline. */
+.design-editor-host a[href*="libraries.excalidraw.com"] {
+  display: none !important;
+}

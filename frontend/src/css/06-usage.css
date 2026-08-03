@@ -1,0 +1,435 @@
+/* ---------- model distribution ---------- */
+
+.dist-bar {
+  display: flex;
+  height: 14px;
+  border-radius: var(--px-r-card);
+  overflow: hidden;
+  background: var(--px-rule-soft);
+}
+
+.dist-seg {
+  height: 100%;
+}
+
+.dist-legend {
+  margin-top: var(--px-sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-3);
+}
+
+.dist-legend-row {
+  display: grid;
+  grid-template-columns: 12px 72px 1fr auto;
+  align-items: center;
+  gap: var(--px-sp-4);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+}
+
+.dist-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dist-name {
+  color: var(--text);
+}
+
+.dist-meta {
+  color: var(--text-muted);
+}
+
+.dist-cost {
+  color: var(--text);
+  text-align: right;
+}
+
+/* ---------- subagent cost cards ---------- */
+
+.cost-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--px-sp-4);
+}
+
+.cost-card {
+  background: var(--bg);
+  border: var(--px-edge-inner);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-5) var(--px-sp-5);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.cost-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  transform: translate(-2px, -2px);
+  box-shadow: var(--px-shadow-sm);
+}
+
+.cost-card.node-selected {
+  border-color: var(--accent);
+}
+
+.cost-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--px-sp-3);
+  margin-bottom: var(--px-sp-4);
+}
+
+.cost-card-type {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cost-card-value {
+  font-family: var(--mono);
+  font-size: var(--px-display);
+  font-weight: 650;
+}
+
+.cost-card-meta {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  margin-top: var(--px-sp-1);
+}
+
+.cost-card-bar {
+  margin-top: var(--px-sp-4);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--px-rule-soft);
+  overflow: hidden;
+}
+
+.cost-card-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+/* ---------- main-thread tool usage ---------- */
+
+.tool-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-3);
+}
+
+.tool-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 44px;
+  align-items: center;
+  gap: var(--px-sp-4);
+}
+
+.tool-name {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-bar {
+  height: 8px;
+  background: var(--px-rule-soft);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tool-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.tool-count {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Main row in the agents table gets a faint accent tint. */
+.agents-table tbody tr.agent-row-main td {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+/* ---------- changed-lines badge ---------- */
+
+.cell-lines {
+  white-space: nowrap;
+}
+
+.lines-add {
+  color: var(--live);
+}
+
+.lines-del {
+  color: var(--danger);
+}
+
+/* ---------- notifications toggle ---------- */
+
+.notify-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--px-r-card);
+  font-size: var(--px-word);
+  line-height: 1;
+  padding: var(--px-sp-2) var(--px-sp-4);
+  cursor: pointer;
+  opacity: 0.45;
+  filter: grayscale(1);
+  /* Was 31x23. A 23px-tall control is under the 24px floor these two were the
+     only things in the app to miss, and they are the app-wide toggles — the
+     ones most likely to be hit on a trackpad or a phone. */
+  min-width: 26px;
+  min-height: 26px;
+}
+
+.notify-btn:hover {
+  border-color: var(--border-hover);
+  opacity: 0.7;
+}
+
+.notify-btn-on {
+  opacity: 1;
+  filter: none;
+  border-color: var(--accent);
+}
+
+/* ---------- theme toggle ---------- */
+
+/* A bare glyph in the chrome, per the mock — no frame. The transparent
+   border keeps the hit area. */
+.theme-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--px-r-card);
+  color: var(--text-muted);
+  font-size: var(--px-title);
+  line-height: 1;
+  padding: var(--px-sp-2) var(--px-sp-4);
+  cursor: pointer;
+  /* Same 24px floor as .notify-btn above. */
+  min-width: 26px;
+  min-height: 26px;
+}
+
+.theme-btn:hover {
+  color: var(--text);
+}
+
+.theme-btn:hover {
+  border-color: var(--border-hover);
+}
+
+/* ---------- tokens over time ---------- */
+
+.tot-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--px-sp-6);
+  flex-wrap: wrap;
+}
+
+.tot-title {
+  margin: 0;
+}
+
+.tot-sub {
+  margin-top: var(--px-sp-2);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.tot-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-5);
+  flex-wrap: wrap;
+}
+
+.tot-leg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-sp-2);
+}
+
+.tot-leg-sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.tot-leg-name {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text);
+}
+
+.tot-leg-pct {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.tot-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  flex-wrap: wrap;
+  margin-top: var(--px-sp-5);
+}
+
+.tot-toggle {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-2) var(--px-sp-5);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tot-toggle:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.tot-toggle.tot-on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.tot-range {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.tot-range input[type="range"] {
+  accent-color: var(--accent);
+  width: 110px;
+  cursor: pointer;
+}
+
+.tot-range-val {
+  min-width: 3ch;
+  color: var(--text);
+}
+
+.tot-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--px-sp-4);
+  margin-top: var(--px-sp-5);
+}
+
+@media (max-width: 720px) {
+  .tot-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Nested inside .tot-panel, and already darker than the surface it sits on —
+   the fill is doing the shape work, so a frame at --px-line is the third
+   level of the same ink and reads as noise. Hairline instead. */
+.tot-kpi {
+  background: var(--bg);
+  border: var(--px-edge-inner);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-5) var(--px-sp-5);
+}
+
+.tot-kpi-label {
+  color: var(--text-muted);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: var(--px-label);
+}
+
+.tot-kpi-val {
+  font-family: var(--mono);
+  font-size: var(--px-display);
+  font-weight: 600;
+  margin-top: var(--px-sp-2);
+  line-height: 1.1;
+}
+
+.tot-unit {
+  font-size: 0.6em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 0.15em;
+}
+
+.tot-kpi-note {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  margin-top: var(--px-sp-2);
+}
+
+.tot-chart {
+  margin-top: var(--px-sp-6);
+}
+
+.tot-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tot-axis {
+  font-size: var(--px-word);
+  fill: var(--text-muted);
+  font-weight: 500;
+}
+
+.tot-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  margin-top: var(--px-sp-4);
+  min-height: 14px;
+}
+
+.tot-foot-dash {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2px dotted var(--text-muted);
+}
+
+.tot-foot-text {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}

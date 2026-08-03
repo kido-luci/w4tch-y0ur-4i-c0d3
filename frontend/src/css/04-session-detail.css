@@ -1,0 +1,193 @@
+/* ---------- detail view ---------- */
+
+.detail-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--px-sp-5);
+  margin-bottom: var(--px-sp-5);
+}
+
+.back-link {
+  display: inline-block;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  text-decoration: none;
+  margin-bottom: var(--px-sp-5);
+}
+
+.detail-topbar .back-link {
+  margin-bottom: 0;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.card {
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-6) var(--px-sp-6);
+  margin-bottom: var(--px-sp-5);
+  box-shadow: var(--px-shadow);
+}
+
+/* Detail view tabs: the header card stays pinned; the rest of the cards are
+   grouped into tab panels so the view no longer needs a long scroll. */
+.detail-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-sp-1);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--px-sp-5);
+}
+
+.detail-tab {
+  padding: var(--px-sp-4) var(--px-sp-6);
+  margin-bottom: -1px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.detail-tab:hover {
+  color: var(--text);
+}
+
+.detail-tab-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.tab-panel-active {
+  display: block;
+}
+
+.detail-title {
+  font-size: var(--px-display);
+  font-weight: 650;
+  margin: 0 0 var(--px-sp-3);
+  line-height: 1.3;
+}
+
+.detail-meta {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.detail-meta .dot-sep {
+  margin: 0 var(--px-sp-3);
+  color: var(--border-hover);
+}
+
+.pr-link {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--border-hover);
+  text-underline-offset: 2px;
+}
+
+.pr-link:hover {
+  text-decoration-color: var(--text);
+}
+
+/* card backlinks — the chip a session / doc / drawing wears for each board
+   card that links to it, and the detail header's link-to-a-card picker */
+
+.card-link {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--border-hover);
+  text-underline-offset: 2px;
+}
+
+.card-link:hover {
+  text-decoration-color: var(--text);
+}
+
+.card-link-add {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px var(--px-sp-2);
+}
+
+/* card-links-slot manages its own leading separator; an empty slot is invisible */
+#card-links-slot {
+  display: contents;
+}
+
+.totals-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--px-sp-4);
+  margin-top: var(--px-sp-5);
+  padding-top: var(--px-sp-5);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .totals-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.totals-label {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.totals-value {
+  font-family: var(--mono);
+  font-size: var(--px-title);
+  font-weight: 600;
+}
+
+.section-heading {
+  font-family: var(--px-sans);
+  font-size: var(--px-label);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 var(--px-sp-4);
+}
+
+/* The serif page title the mock opens each view with. */
+.view-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--px-sp-5);
+  margin: 0 0 var(--px-sp-4);
+}
+
+.view-h1 {
+  margin: 0;
+  font-family: var(--px-serif);
+  font-size: var(--px-head);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.graph-card {
+  padding-bottom: var(--px-sp-4);
+}
