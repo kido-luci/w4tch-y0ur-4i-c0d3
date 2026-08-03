@@ -38,6 +38,15 @@ function excalidrawAssets(): Plugin {
 
 export default defineConfig({
   plugins: [excalidrawAssets()],
+  test: {
+    // jsdom, not node: until this was set there was no way to test a view at
+    // all, and the suite covered only the pure modules (domain/*, scope/*) —
+    // 5 test files against 57 source modules, with every module that renders
+    // on the wrong side of the line. A dead link in a template string
+    // (`href="/project/git"` after that tab was removed) passed tsc and the
+    // whole suite, and was caught only by opening a browser.
+    environment: "jsdom",
+  },
   server: {
     // Vite would otherwise bind [::1] only, so http://127.0.0.1:5173 — the form
     // every other address in this project takes — would just hang. Same
