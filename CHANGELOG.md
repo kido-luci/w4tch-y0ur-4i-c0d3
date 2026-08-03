@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- **Checkout names in the code tab were ellipsised at the wrong end.** The label
+  is the last two path segments, so several checkouts under one workspace share a
+  long prefix and differ only at the end — trimming the tail rendered four
+  distinct repos as four identical `luci-studio_workspace/luc…` rows. The name
+  cell now trims the FRONT (`…rkspace/luci-studio_admin`), with the path in a
+  `<bdi>` so the right-to-left trick cannot reorder it.
+
 ## v2.6.0 — 2026-08-03
 
 ### Added

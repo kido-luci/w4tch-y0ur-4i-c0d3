@@ -53,6 +53,19 @@
 .git-row-name {
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Ellipsise the FRONT, not the tail. The label is the last two path segments
+     (see checkoutKey), so several checkouts under one workspace share a long
+     prefix and differ only at the end — trimming the tail turned four distinct
+     repos into four identical "luci-studio_workspace/luc…" rows. rtl moves the
+     overflow to the left edge; the inner span is forced back to ltr so the path
+     itself is not reordered by the bidi algorithm, which would otherwise be free
+     to move the slash. */
+  direction: rtl;
+  text-align: left;
+}
+.git-row-name > bdi {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .git-cell .git-branch {
