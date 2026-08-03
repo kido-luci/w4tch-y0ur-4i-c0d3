@@ -3,6 +3,7 @@ module watch-your-ai-code
 go 1.26.2
 
 require (
+	github.com/go-chi/chi/v5 v5.3.1
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	modernc.org/sqlite v1.54.0
 )

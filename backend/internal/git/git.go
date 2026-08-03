@@ -11,6 +11,7 @@ package git
 
 import (
 	"context"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -552,7 +553,7 @@ func gitBranches(root string) []gitBranch {
 	return branches
 }
 
-func Register(mux *http.ServeMux, rr *repos.Resolver) {
+func Register(router chi.Router, rr *repos.Resolver) {
 	// scoped validates ?repo against the scope's resolved roots and returns the
 	// root; on a miss it writes the 404 and returns ok=false.
 	scoped := func(w http.ResponseWriter, r *http.Request) (string, bool) {
@@ -564,13 +565,13 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 		return root, true
 	}
 
-	mux.HandleFunc("GET /api/git", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/git", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, struct {
 			Repos []gitRepo `json:"repos"`
 		}{Repos: gitRepos(rr, r.URL.Query().Get("scope"))})
 	})
 
-	mux.HandleFunc("GET /api/git/commit", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/git/commit", func(w http.ResponseWriter, r *http.Request) {
 		root, ok := scoped(w, r)
 		if !ok {
 			return
@@ -583,7 +584,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("GET /api/git/diff", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/git/diff", func(w http.ResponseWriter, r *http.Request) {
 		root, ok := scoped(w, r)
 		if !ok {
 			return
@@ -594,7 +595,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	// One page of history past the snapshot's first gitLogLimit commits — the
 	// detail view's "load more". skip/limit are clamped, so a crafted request
 	// can't ask for an unbounded slice of a huge repo.
-	mux.HandleFunc("GET /api/git/commits", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/git/commits", func(w http.ResponseWriter, r *http.Request) {
 		root, ok := scoped(w, r)
 		if !ok {
 			return
@@ -626,7 +627,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 		httpx.WriteJSON(w, resp)
 	})
 
-	mux.HandleFunc("GET /api/git/branches", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/git/branches", func(w http.ResponseWriter, r *http.Request) {
 		root, ok := scoped(w, r)
 		if !ok {
 			return
