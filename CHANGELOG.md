@@ -6,6 +6,19 @@ All notable changes to this project are documented here. Versions follow
 ## Unreleased
 
 ### Changed
+- **The view layer can be tested at all now.** vitest ran in a node environment,
+  so the suite covered only the pure modules — 5 files against 57 — and every
+  module that renders was on the wrong side of that line. A dead link left by
+  the `code` tab rename passed tsc and the whole suite and was found by opening
+  a browser. jsdom is configured, and two tests come with it: one asserts every
+  internal `/project` and `/claude` link in the source names a tab that still
+  exists (it reproduces that bug when reverted), one renders the code view and
+  pins that two clones of one repo get distinct links and distinct names.
+- **`httpapi/api.go` is 1201 lines rather than 1684.** Drawings, docs and the
+  read-only analytics moved into their own files. The extracted functions take
+  parameters named for the locals they replaced, so the handler bodies moved
+  verbatim — a rename sweep across sixty bodies is where this kind of refactor
+  goes wrong.
 - **Routing moved from `http.ServeMux` to go-chi.** All 79 routes and 33 path
   params were converted; every package that owns a slice of the API now takes a
   `chi.Router` instead of a `*http.ServeMux`. No route, method or status changed

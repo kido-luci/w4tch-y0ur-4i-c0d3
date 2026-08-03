@@ -97,6 +97,21 @@ seconds and still climbing. Key a fetch to the data it depends on, not to the
 repaint: `ui/summaryGate.ts` mirrors the server's freshness hash so the request
 fires when the milestones change and not otherwise.
 
+`httpapi` is split by resource — `drawings.go`, `docs.go`, `analytics.go` beside
+`api.go` — and the extracted functions take parameters **named for the locals
+they replaced**, which is what let the handler bodies move verbatim. Keep that
+when you split the next group: a rename sweep across sixty bodies is where this
+goes wrong, and the compiler cannot see a body that captured the wrong
+same-typed variable. The projects/claude/repos/presentation routes are still
+interleaved in `api.go` and were left for that reason, not overlooked.
+
+**Views are testable now** — vitest runs under jsdom. It ran in a node
+environment until `code` replaced the `git` tab and left `href="/project/git"`
+behind in the repo detail: tsc cannot see a string in a template literal, no
+test rendered that view, and the suite stayed green. `app/links.test.ts` now
+asserts every internal link in the source names a tab that still exists, by
+running it through `parseLocation` rather than a second copy of the tab sets.
+
 Two files are deliberately still large: `views/board.ts` (~1.5k lines) and
 `style.css` (~6.2k). `renderBoardView` is one closure over 19 mutable variables
 and that closure IS the per-mount state isolation, so splitting it means
