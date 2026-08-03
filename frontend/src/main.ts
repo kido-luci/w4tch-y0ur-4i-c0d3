@@ -8,14 +8,13 @@ import { mountPresentationToggle } from "./app/presentation";
 import { initTheme, mountThemeToggle } from "./app/theme";
 import { mountScopeRail } from "./ui/scopeRail";
 import { renderBoardView } from "./views/board";
-import { renderCodegraphView } from "./views/codegraph";
 import { renderCyclesView } from "./views/cycles";
 import { renderDesignEditorView, renderDesignView } from "./views/design";
 import { renderUIView } from "./views/ui";
 import { renderSessionDetailView } from "./views/detail";
 import { renderDocsView } from "./views/docs";
-import { renderGitView } from "./views/git";
-import { renderGitRepoView } from "./views/gitRepo";
+import { renderCodeView } from "./views/code";
+import { renderCodeRepoView } from "./views/codeRepo";
 import { renderInsightsView } from "./views/insights";
 import { renderSearchView } from "./views/search";
 import { renderSessionsView } from "./views/sessions";
@@ -73,8 +72,7 @@ app.innerHTML = `
     <a class="px-subnav-link" href="/project/ui" data-nav="ui" data-fam="project">ui</a>
     <a class="px-subnav-link" href="/project/docs" data-nav="docs" data-fam="project">docs</a>
     <a class="px-subnav-link" href="/project/ships" data-nav="ships" data-fam="project">ships</a>
-    <a class="px-subnav-link" href="/project/codegraph" data-nav="codegraph" data-fam="project">code graph</a>
-    <a class="px-subnav-link" href="/project/git" data-nav="git" data-fam="project">git</a>
+    <a class="px-subnav-link" href="/project/code" data-nav="code" data-fam="project">code</a>
   </nav>
   </div>
   <div class="app-shell">
@@ -145,10 +143,8 @@ function render(): void {
               ? "search"
               : route.view === "ships"
                 ? "ships"
-                : route.view === "codegraph"
-                  ? "codegraph"
-                  : route.view === "git" || route.view === "gitRepo"
-                  ? "git"
+                : route.view === "code" || route.view === "codeRepo"
+                  ? "code"
                   : "list";
   // The family follows the active view; the sub-row shows only that family's
   // tabs and lights the active one.
@@ -182,9 +178,8 @@ function render(): void {
     route.view === "design" ||
     route.view === "ui" ||
     route.view === "docs" ||
-    route.view === "codegraph" ||
-    route.view === "git" ||
-    route.view === "gitRepo"
+    route.view === "code" ||
+    route.view === "codeRepo"
   );
 
   cleanup =
@@ -210,12 +205,10 @@ function render(): void {
                   ? renderSearchView(view)
                   : route.view === "ships"
                     ? renderShipsView(view)
-                    : route.view === "codegraph"
-                      ? renderCodegraphView(view)
-                      : route.view === "git"
-                        ? renderGitView(view)
-                        : route.view === "gitRepo"
-                        ? renderGitRepoView(view, route.folder)
+                    : route.view === "code"
+                      ? renderCodeView(view)
+                      : route.view === "codeRepo"
+                        ? renderCodeRepoView(view, route.folder)
                         : renderSessionsView(view);
 
   // After the view is mounted, not before — the label describes what is now on

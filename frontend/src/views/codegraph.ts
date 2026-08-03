@@ -1,4 +1,4 @@
-// View 8 — code graph (route `/project/codegraph`): the scoped repo's architecture as
+// View 8 — code graph (the `graph` tab of `/project/<scope>/code/<folder>`): one repo's architecture as
 // a dependency graph, read from the .codegraph/codegraph.db index the codegraph
 // MCP maintains (wyac never writes it, never runs the indexer).
 //
@@ -218,13 +218,17 @@ function groupDirs(paths: string[]): Map<string, string> {
   return out;
 }
 
-/** Renders the code-graph view into `container`; returns a cleanup callback. */
-export function renderCodegraphView(container: HTMLElement): () => void {
+/** Renders the code-graph view into `container` for ONE repo; returns a cleanup
+ *  callback. The repo arrives from the route (`/project/<scope>/code/<folder>`,
+ *  resolved to a root by the caller) rather than from a picker inside this view:
+ *  it is a tab of the repo detail now, so the repo is already chosen upstream and
+ *  a second selector here could only disagree with the URL. */
+export function renderCodegraphView(container: HTMLElement, repoRoot: string): () => void {
   // The scope LABEL, not its Claude folders: the git and code-graph endpoints
   // resolve a scope through the project registry's repo bindings now.
   const scope = getScope();
   let resp: CGResponse | null = null;
-  let repoOverride: string | undefined;
+  const repoOverride: string = repoRoot;
   let showTests = false;
   let showWeak = false;
   let focusDir: string | null = null;
@@ -252,7 +256,6 @@ export function renderCodegraphView(container: HTMLElement): () => void {
     <div class="page">
       <header class="topbar">
         <div class="topbar-controls">
-          <select class="project-select" id="cg-repo" hidden></select>
           <div class="filter-row" id="cg-kinds"></div>
           <div class="filter-row" id="cg-layouts"></div>
           <div class="filter-row cg-subsys" id="cg-subsys" hidden></div>
@@ -273,7 +276,6 @@ export function renderCodegraphView(container: HTMLElement): () => void {
     </div>
   `;
 
-  const repoEl = container.querySelector<HTMLSelectElement>("#cg-repo")!;
   const kindsEl = container.querySelector<HTMLElement>("#cg-kinds")!;
   const layoutsEl = container.querySelector<HTMLElement>("#cg-layouts")!;
   const subsysEl = container.querySelector<HTMLElement>("#cg-subsys")!;
@@ -416,28 +418,6 @@ export function renderCodegraphView(container: HTMLElement): () => void {
     if (!(e.target as HTMLElement).closest("[data-up]")) return;
     focusDir = null;
     renderGraph();
-  });
-
-  function renderRepoSelect(): void {
-    if (!resp) return;
-    repoEl.hidden = resp.repos.length <= 1;
-    repoEl.innerHTML = resp.repos
-      .map(
-        (r) =>
-          `<option value="${escapeHtml(r.root)}"${r.root === resp!.active ? " selected" : ""}>` +
-          `${escapeHtml(basename(r.root))}${r.hasIndex ? "" : " (no index)"}</option>`,
-      )
-      .join("");
-  }
-
-  repoEl.addEventListener("change", () => {
-    repoOverride = repoEl.value;
-    // Cancel any pending search and clear the box, so an in-flight/debounced
-    // search (its guard checks searchEl.value) can't run the old query against
-    // the newly-selected repo and reopen the panel this switch just closed.
-    window.clearTimeout(searchTimer);
-    searchEl.value = "";
-    void load();
   });
 
   function renderMeta(extra = ""): void {
@@ -856,7 +836,6 @@ export function renderCodegraphView(container: HTMLElement): () => void {
       resp = null;
     }
     searchEl.disabled = !resp?.active;
-    renderRepoSelect();
     renderMeta();
     closeSide();
     renderGraph();

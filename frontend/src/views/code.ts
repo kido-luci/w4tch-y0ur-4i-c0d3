@@ -1,9 +1,10 @@
-// View 9 — git (route `/project/git`): a read-only status dashboard over the
+// View 9 — code (route `/project/code`): a read-only status dashboard over the
 // scope's repos. One compact clickable ROW per repo — name · branch · clean/dirty
 // · ahead/behind · its latest commit — so a scope with many repos reads at a
-// glance. The full commit history, diffs, branches, PRs and CI live one click
-// deeper, in the repo detail (`/project/git/<folder>`). wyac only reads: the
-// server shells `git log` / `status` / `branch`, nothing that mutates a repo.
+// glance. The full commit history, diffs, branches, PRs, CI and the architecture
+// graph live one click deeper, in the repo detail (`/project/code/<folder>`).
+// wyac only reads: the server shells `git log` / `status` / `branch`, nothing
+// that mutates a repo.
 
 import { getGit } from "../api";
 import type { GitRepo } from "../api";
@@ -11,8 +12,8 @@ import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
 import { showError } from "../app/live";
 import { getScope } from "../scope";
 
-/** Renders the git view into `container`; returns a cleanup callback. */
-export function renderGitView(container: HTMLElement): () => void {
+/** Renders the code view into `container`; returns a cleanup callback. */
+export function renderCodeView(container: HTMLElement): () => void {
   // The scope LABEL, not its Claude folders: the server resolves it through the
   // project registry's repo bindings now. A scope change re-renders the whole
   // view, so reading it once is fine.
@@ -118,7 +119,7 @@ export function renderGitView(container: HTMLElement): () => void {
     // The whole row is the entry point into the detail view; a resolved-but-not-a
     // -repo root isn't clickable (there's nothing to drill into).
     return r.isRepo && r.folder
-      ? `<a class="git-row" href="/project/git/${encodeURIComponent(r.folder)}" title="mở chi tiết — ${escapeHtml(r.root)}">${inner}</a>`
+      ? `<a class="git-row" href="/project/code/${encodeURIComponent(r.folder)}" title="mở chi tiết — ${escapeHtml(r.root)}">${inner}</a>`
       : `<div class="git-row git-row--norepo" title="${escapeHtml(r.root)}">${inner}</div>`;
   }
 

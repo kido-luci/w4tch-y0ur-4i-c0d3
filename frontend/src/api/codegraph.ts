@@ -1,6 +1,6 @@
 import { getJSON, buildQuery } from "./client";
 
-// --- code graph (/project/codegraph) ------------------------------------------
+// --- code graph (the `graph` tab of /project/<scope>/code/<folder>) ------------
 // Read-only views over each repo's .codegraph/codegraph.db (internal/codegraph).
 
 export interface CGRepo {

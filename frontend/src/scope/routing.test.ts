@@ -93,22 +93,42 @@ beforeEach(() => {
 
 describe("parseLocation", () => {
   it("reads family / scope / tab / detail from a fully-formed path", () => {
-    expect(parseLocation("/project/myproj/git/some-repo")).toEqual({
+    expect(parseLocation("/project/myproj/code/some-repo")).toEqual({
       family: "project",
       scope: "myproj",
-      tab: "git",
+      tab: "code",
       detail: "some-repo",
     });
   });
 
   it("reports no scope for the transient scope-less form", () => {
-    // Internal links are deliberately scope-LESS (href="/project/git"), and
+    // Internal links are deliberately scope-LESS (href="/project/code"), and
     // syncScopeToURL splices the active scope in at render. Telling this apart
     // from a scoped path is what the tab sets are for.
-    expect(parseLocation("/project/git")).toEqual({
+    expect(parseLocation("/project/code")).toEqual({
       family: "project",
       scope: "",
-      tab: "git",
+      tab: "code",
+      detail: "",
+    });
+  });
+
+  it("no longer knows `git` or `codegraph`, so those segments read as scopes", () => {
+    // `code` replaced both tabs and the old spellings were dropped rather than
+    // redirected. The tab set is the only record of that: with `git` gone from
+    // PROJECT_TABS the segment can only be a scope name, which is what makes
+    // /project/git dead instead of quietly still working. Put either string back
+    // and this fails — asserting the absence is the whole point.
+    expect(parseLocation("/project/git")).toEqual({
+      family: "project",
+      scope: "git",
+      tab: "",
+      detail: "",
+    });
+    expect(parseLocation("/project/codegraph")).toEqual({
+      family: "project",
+      scope: "codegraph",
+      tab: "",
       detail: "",
     });
   });
@@ -137,7 +157,7 @@ describe("parseLocation", () => {
   });
 
   it("decodes percent-encoded segments", () => {
-    const loc = parseLocation("/project/my%20proj/git/a%2Fb");
+    const loc = parseLocation("/project/my%20proj/code/a%2Fb");
     expect(loc.scope).toBe("my proj");
     expect(loc.detail).toBe("a/b");
   });
@@ -166,11 +186,11 @@ describe("parseLocation", () => {
 
 describe("buildPath", () => {
   it("omits the scope segment when there is no scope yet", () => {
-    expect(buildPath("project", "", "git", "")).toBe("/project/git");
+    expect(buildPath("project", "", "code", "")).toBe("/project/code");
   });
 
   it("encodes the scope and the detail", () => {
-    expect(buildPath("project", "my proj", "git", "a/b")).toBe("/project/my%20proj/git/a%2Fb");
+    expect(buildPath("project", "my proj", "code", "a/b")).toBe("/project/my%20proj/code/a%2Fb");
   });
 
   it("round-trips through parseLocation", () => {
@@ -186,13 +206,13 @@ describe("buildPath", () => {
 
 describe("setScope — a scope change drops the detail segment", () => {
   it("lands on the tab, not on the previous scope's detail", () => {
-    at("/project/old/git/repo-1");
+    at("/project/old/code/repo-1");
     setScope("new");
-    expect(fakeWindow.location.pathname).toBe("/project/new/git");
-    expect(calls).toEqual([{ kind: "push", path: "/project/new/git" }]);
+    expect(fakeWindow.location.pathname).toBe("/project/new/code");
+    expect(calls).toEqual([{ kind: "push", path: "/project/new/code" }]);
   });
 
-  it("drops the detail for every family, not just git", () => {
+  it("drops the detail for every family, not just code", () => {
     at("/claude/old/session/abc-123");
     setScope("new");
     expect(fakeWindow.location.pathname).toBe("/claude/new/session");
@@ -200,9 +220,9 @@ describe("setScope — a scope change drops the detail segment", () => {
 
   it("KEEPS the detail on a replace — the boot default or a rename", () => {
     // The one case where the detail is still valid: same scope, new name.
-    at("/project/old/git/repo-1");
+    at("/project/old/code/repo-1");
     setScope("new", true);
-    expect(fakeWindow.location.pathname).toBe("/project/new/git/repo-1");
+    expect(fakeWindow.location.pathname).toBe("/project/new/code/repo-1");
     expect(events).toEqual([]); // a replace must not re-render
   });
 
