@@ -3,15 +3,24 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## v2.6.0 — 2026-08-03
 
-### Fixed
-- **`make release-dry` replaced the production binary.** It depends on
-  `check-run`, whose build wrote `-o ../watch-your-ai-code` — the file the
-  launchd agent runs — so the one target that "tags nothing, pushes nothing,
-  publishes nothing" was swapping the running binary underneath a live process.
-  `check-run` takes a `CHECK_BIN` path now, still defaulting to the everyday
-  binary (that delivery is deliberate); `release-dry-run` points it at `.dev/`.
+### Added
+- **A project can be bound to several local checkouts of its repo.** A second
+  clone kept on another branch, a copy made to try something — each gets its own
+  row in the code tab, with its own branch and dirty count, and its own detail.
+  The manager takes one path per line; the first line is the one anything needing
+  a single root uses (the slug, the code graph, design files).
+  - They must all be the **same repo** — the server compares remotes and refuses
+    the save otherwise, naming the path that disagreed. A project's slug, GitHub
+    sections and visibility are single values derived from the binding, and two
+    remotes under one project would make each of them a coin toss.
+  - A git **worktree is not a separate checkout**: it canonicalises to the repo
+    it belongs to, so listing one alongside its parent collapses to a single row.
+  - Rows are labelled by the last two path segments rather than the Claude
+    folder, which is the same string for every clone of one repo.
+- Schema v15 adds `project_repos`; existing bindings are copied into it and
+  `projects.repo_root` stays as the first root.
 
 ### Changed
 - **`style.css` is split into fifteen parts.** It was 6446 lines, and the reason
@@ -42,24 +51,6 @@ All notable changes to this project are documented here. Versions follow
   handler, which would have returned an empty body where `/api/*` has always
   answered JSON.
 
-### Added
-- **A project can be bound to several local checkouts of its repo.** A second
-  clone kept on another branch, a copy made to try something — each gets its own
-  row in the code tab, with its own branch and dirty count, and its own detail.
-  The manager takes one path per line; the first line is the one anything needing
-  a single root uses (the slug, the code graph, design files).
-  - They must all be the **same repo** — the server compares remotes and refuses
-    the save otherwise, naming the path that disagreed. A project's slug, GitHub
-    sections and visibility are single values derived from the binding, and two
-    remotes under one project would make each of them a coin toss.
-  - A git **worktree is not a separate checkout**: it canonicalises to the repo
-    it belongs to, so listing one alongside its parent collapses to a single row.
-  - Rows are labelled by the last two path segments rather than the Claude
-    folder, which is the same string for every clone of one repo.
-- Schema v15 adds `project_repos`; existing bindings are copied into it and
-  `projects.repo_root` stays as the first root.
-
-### Changed
 - **The `git` and `codegraph` tabs are now one tab, `code`.** The overview is
   unchanged — one status row per repo in the scope — and the repo detail gained
   a `graph` tab alongside commits, changes, branches, pull requests and issues &
@@ -72,6 +63,14 @@ All notable changes to this project are documented here. Versions follow
   are not redirected — `code` replaced both, and the old spellings now parse as
   a scope name rather than a tab. A saved link to either lands on the default
   view.
+
+### Fixed
+- **`make release-dry` replaced the production binary.** It depends on
+  `check-run`, whose build wrote `-o ../watch-your-ai-code` — the file the
+  launchd agent runs — so the one target that "tags nothing, pushes nothing,
+  publishes nothing" was swapping the running binary underneath a live process.
+  `check-run` takes a `CHECK_BIN` path now, still defaulting to the everyday
+  binary (that delivery is deliberate); `release-dry-run` points it at `.dev/`.
 
 ## v2.5.0 — 2026-08-02
 
