@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## Unreleased
+## v2.6.1 — 2026-08-03
 
 ### Fixed
 - **Checkout names in the code tab were ellipsised at the wrong end.** The label
