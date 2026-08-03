@@ -581,7 +581,11 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
       // machine has seen); the field below it takes any checkout's path, so a
       // repo nobody has opened Claude in is bindable too. Picking from the list
       // just fills the field — the path is what gets saved.
-      const curRoot = p?.repoRoot ?? "";
+      // Several checkouts of the SAME repo are allowed — a worktree, a second
+      // clone kept on another branch. One per line, and the FIRST line is what
+      // anything needing a single root uses (the slug, the code graph, design
+      // files), so the order here is a decision rather than a detail.
+      const curRoots = (p?.repoRoots ?? (p?.repoRoot ? [p.repoRoot] : [])).join("\n");
       const repoOpts = [`<option value="">(pick a repo…)</option>`]
         .concat(
           knownRepos.map((k) => {
@@ -597,9 +601,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
         p && p.linkKind === "missing" ? " — bound path is missing" : ""
       }</div>
         <select class="scope-panel-input scope-panel-repo-pick">${repoOpts}</select>
-        <input class="scope-panel-input scope-panel-repo" name="repoRoot" value="${escapeHtml(
-          curRoot,
-        )}" placeholder="/path/to/repo (empty = not bound)">`;
+        <textarea class="scope-panel-input scope-panel-repo" name="repoRoots" rows="3"
+          placeholder="/path/to/repo — one checkout per line, empty = not bound">${escapeHtml(
+            curRoots,
+          )}</textarea>`;
       form = `
       <form class="scope-panel-form" data-editing="${escapeHtml(editing)}">
         ${nameField}
@@ -648,8 +653,14 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     // what the project stores, so it stays visible and editable before the save.
     const pick = (e.target as HTMLElement).closest<HTMLSelectElement>(".scope-panel-repo-pick");
     if (pick) {
-      const field = pick.closest("form")?.querySelector<HTMLInputElement>(".scope-panel-repo");
-      if (field && pick.value) field.value = pick.value;
+      const field = pick.closest("form")?.querySelector<HTMLTextAreaElement>(".scope-panel-repo");
+      if (field && pick.value) {
+        // Append rather than replace: picking a second suggestion is how you add
+        // another checkout, and replacing would silently drop the first.
+        const lines = field.value.split("\n").map((l) => l.trim()).filter(Boolean);
+        if (!lines.includes(pick.value)) lines.push(pick.value);
+        field.value = lines.join("\n");
+      }
       return;
     }
     const input = (e.target as HTMLElement).closest<HTMLInputElement>(".scope-panel-logo-input");
@@ -682,7 +693,10 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
     const parent = form.querySelector<HTMLSelectElement>('select[name="parent"]')?.value ?? "";
     // The binding rides the same save. Sent only from this form, so every other
     // caller of putProject leaves it alone (the field is optional server-side).
-    const repoRoot = form.querySelector<HTMLInputElement>('input[name="repoRoot"]')?.value.trim() ?? "";
+    const repoRoots = (form.querySelector<HTMLTextAreaElement>('textarea[name="repoRoots"]')?.value ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     // ord is preserved on an edit/rename (from the original row), fresh on a new one.
     const cur = getKnownProjects().find((k) => k.name === editing);
     const ord = cur ? cur.ord : getKnownProjects().reduce((m, p) => Math.max(m, p.ord), -1) + 1;
@@ -701,7 +715,7 @@ export function mountScopeRail(host: HTMLElement, onChange: () => void): void {
           await renameProject(editing, name);
           if (getProjectScope() === editing) setScope(name, true, "project");
         }
-        await putProject(name, { folders, hidden, ord, parent, repoRoot });
+        await putProject(name, { folders, hidden, ord, parent, repoRoots });
         renderProjectPanel();
       } catch (err) {
         console.error("save project failed", err);

@@ -401,9 +401,26 @@ in, which is what these tabs used to do and what made the project page's answer
 depend on where Claude had wandered. A project with no binding lists no repos,
 on purpose: the fix is to bind it in the manager, not to guess for it.
 
+**A project may be bound to SEVERAL checkouts of one repo** — a second clone on
+another branch, a copy made to try something. They live in `project_repos`
+(schema v15); `projects.repo_root` survives as the FIRST of them, rewritten
+whenever the list changes, so everything that needs only "a" root — slug
+derivation, figfiles, the graph — keeps reading the column. That projection is
+sound only because the API refuses roots whose remotes differ: one project is one
+repo, and its slug, GitHub sections and visibility are single values.
+
+Two consequences worth knowing before you debug them. A git **worktree is not a
+second checkout**: `CanonicalRoot` resolves it to the repo it belongs to, so
+listing one beside its parent collapses to a single row. And the route segment is
+`checkoutKey` (the last two path segments), not the Claude folder — every clone
+of a repo shares that folder name, so a link keyed on it would resolve to
+whichever row happened to come first. The list and the detail both compute the
+key from `root` with the same function, which is what stops them disagreeing.
+
 Every drill-down endpoint (`/api/git/{commit,diff,branches,commits,prs,activity}`)
 validates `?repo` against that bound set (`BoundRoot`); an arbitrary path is a
-404. That guard is *why* these endpoints are safe to expose — keep it on anything
+404. That check needed no change for multiple checkouts — it always matched a
+full path against a list, so more roots simply make the list longer. That guard is *why* these endpoints are safe to expose — keep it on anything
 new you add here. It is also why binding accepts only a real checkout
 (`git.IsRepo`): the binding IS the whitelist now, so the gate sits where the path
 enters, in `PUT /api/projects/{name}`.

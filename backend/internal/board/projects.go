@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -44,9 +45,14 @@ type Project struct {
 	// Deliberately NOT resolved from the Claude folders below: the project page
 	// is its own taxonomy, and a binding nobody stated is a guess.
 	RepoRoot string `json:"repoRoot,omitempty"`
-	RepoSlug string `json:"repoSlug,omitempty"`
-	LinkKind string `json:"linkKind"`
-	Ord      int    `json:"ord"`
+	// RepoRoots is every local checkout of that one repo — a worktree, a second
+	// clone on another branch, a copy made to try something. RepoRoot above is
+	// the first of these, kept in sync as a projection: the API requires all of
+	// them to be the same repo, so whichever one answers a slug answers for all.
+	RepoRoots []string `json:"repoRoots,omitempty"`
+	RepoSlug  string   `json:"repoSlug,omitempty"`
+	LinkKind  string   `json:"linkKind"`
+	Ord       int      `json:"ord"`
 	// Parent is the name of the project this one nests under in the rail tree,
 	// "" for a top-level project. It is a display-only edge (the scope of a
 	// parent covers its subtree); a folder still belongs to exactly one project.
@@ -67,6 +73,7 @@ func (p *Project) clone() Project {
 		Hidden:      p.Hidden,
 		Private:     p.Private,
 		RepoRoot:    p.RepoRoot,
+		RepoRoots:   append([]string{}, p.RepoRoots...),
 		RepoSlug:    p.RepoSlug,
 		LinkKind:    p.LinkKind,
 		Ord:         p.Ord,
@@ -106,6 +113,7 @@ type ProjectStore struct {
 func NewProjectStore(db *sql.DB) *ProjectStore {
 	ps := &ProjectStore{db: db}
 	ps.loadDB()
+	ps.loadRepoRoots() // must follow loadDB, not run inside it — see its comment
 	return ps
 }
 
@@ -131,6 +139,36 @@ func (ps *ProjectStore) loadDB() {
 		p.Private = private != 0
 		p.Ord = ord
 		ps.projects = append(ps.projects, p)
+	}
+}
+
+// loadRepoRoots fills RepoRoots from project_repos. Kept separate from the row
+// scan above rather than joined into it: a project with three roots would come
+// back as three rows, and every field but the root would be repeated — the join
+// would have to be de-duplicated back into what two plain queries already give.
+//
+// Called AFTER loadDB has returned, never from inside it: its rows are still
+// open until that function's deferred Close runs, and a second query on the same
+// connection while they are silently returns nothing. That failure mode is the
+// worst kind — every project simply has no roots, and nothing errors.
+func (ps *ProjectStore) loadRepoRoots() {
+	rows, err := ps.db.Query(`SELECT project, root FROM project_repos ORDER BY project, ord, root`)
+	if err != nil {
+		log.Printf("projects: load repo roots: %v", err)
+		return
+	}
+	defer rows.Close()
+	byName := map[string][]string{}
+	for rows.Next() {
+		var project, root string
+		if err := rows.Scan(&project, &root); err != nil {
+			log.Printf("projects: load repo root row: %v", err)
+			continue
+		}
+		byName[project] = append(byName[project], root)
+	}
+	for _, p := range ps.projects {
+		p.RepoRoots = byName[p.Name]
 	}
 }
 
@@ -289,35 +327,76 @@ func (ps *ProjectStore) SetPrivate(name string, private bool) bool {
 	return true
 }
 
-// SetRepoRoot binds a project to a repo, or clears the binding with "". This
-// one is the USER's write — the manager's repo picker — which is what makes
-// the project page independent of the session index: the binding is stated,
-// not inferred. Clearing it stamps LinkNone rather than the empty "never
-// resolved" state, so the sync's initial offer is not made a second time.
-func (ps *ProjectStore) SetRepoRoot(name, root string) error {
-	root = strings.TrimSpace(root)
+// SetRepoRoots binds a project to every local checkout of its repo, or clears
+// the binding with an empty list. This one is the USER's write — the manager's
+// repo picker — which is what makes the project page independent of the session
+// index: the binding is stated, not inferred. Clearing it stamps LinkNone rather
+// than the empty "never resolved" state, so the sync's initial offer is not made
+// a second time.
+//
+// The caller validates the roots (a real checkout, all of them the same repo);
+// this stores what it is given, in the order given, and mirrors the first into
+// projects.repo_root.
+//
+// Returns the list as STORED — blanks and repeats dropped. Canonicalising two
+// worktrees of one repo yields the same root twice, so the caller's slice and
+// the stored one legitimately differ; returning it is what stops a reply from
+// advertising a duplicate the database does not hold.
+func (ps *ProjectStore) SetRepoRoots(name string, roots []string) ([]string, error) {
+	clean := make([]string, 0, len(roots))
+	seen := map[string]bool{}
+	for _, r := range roots {
+		r = strings.TrimSpace(r)
+		if r == "" || seen[r] {
+			continue
+		}
+		seen[r] = true
+		clean = append(clean, r)
+	}
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	p := ps.find(name)
 	if p == nil {
-		return ErrProjectNotFound
+		return nil, ErrProjectNotFound
 	}
-	if p.RepoRoot == root {
-		return nil
+	if slices.Equal(p.RepoRoots, clean) {
+		return clean, nil
+	}
+	first := ""
+	if len(clean) > 0 {
+		first = clean[0]
 	}
 	kind, slug := LinkNone, ""
-	if root != "" {
+	if first != "" {
 		// The sync fills in what the filesystem says on its next pass; until
 		// then the row states the binding without claiming more than that.
 		kind = LinkUnset
 	}
-	if _, err := ps.db.Exec(
-		`UPDATE projects SET repo_root=?, repo_slug=?, link_kind=? WHERE name=?`,
-		root, slug, kind, name); err != nil {
-		return fmt.Errorf("set repo root: %w", err)
+	tx, err := ps.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("set repo roots: %w", err)
 	}
-	p.RepoRoot, p.RepoSlug, p.LinkKind = root, slug, kind
-	return nil
+	defer tx.Rollback() //nolint:errcheck // a committed tx rolls back to a no-op
+	if _, err := tx.Exec(`DELETE FROM project_repos WHERE project=?`, name); err != nil {
+		return nil, fmt.Errorf("set repo roots: %w", err)
+	}
+	for i, r := range clean {
+		if _, err := tx.Exec(
+			`INSERT INTO project_repos(project, root, ord) VALUES(?,?,?)`, name, r, i); err != nil {
+			return nil, fmt.Errorf("set repo roots: %w", err)
+		}
+	}
+	if _, err := tx.Exec(
+		`UPDATE projects SET repo_root=?, repo_slug=?, link_kind=? WHERE name=?`,
+		first, slug, kind, name); err != nil {
+		return nil, fmt.Errorf("set repo roots: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("set repo roots: %w", err)
+	}
+	p.RepoRoots = clean
+	p.RepoRoot, p.RepoSlug, p.LinkKind = first, slug, kind
+	return clean, nil
 }
 
 // SetRepoDerived records what the sync could confirm about the binding — the
@@ -353,11 +432,27 @@ func (ps *ProjectStore) AdoptRepoRoot(name, root string) bool {
 	if p == nil || root == "" || p.RepoRoot != "" || p.LinkKind != LinkUnset {
 		return false
 	}
-	if _, err := ps.db.Exec(`UPDATE projects SET repo_root=? WHERE name=?`, root, name); err != nil {
+	tx, err := ps.db.Begin()
+	if err != nil {
+		log.Printf("projects: adopt repo root: %v", err)
+		return false
+	}
+	defer tx.Rollback() //nolint:errcheck // a committed tx rolls back to a no-op
+	if _, err := tx.Exec(`UPDATE projects SET repo_root=? WHERE name=?`, root, name); err != nil {
+		log.Printf("projects: adopt repo root: %v", err)
+		return false
+	}
+	if _, err := tx.Exec(
+		`INSERT OR IGNORE INTO project_repos(project, root, ord) VALUES(?,?,0)`, name, root); err != nil {
+		log.Printf("projects: adopt repo root: %v", err)
+		return false
+	}
+	if err := tx.Commit(); err != nil {
 		log.Printf("projects: adopt repo root: %v", err)
 		return false
 	}
 	p.RepoRoot = root
+	p.RepoRoots = []string{root}
 	return true
 }
 

@@ -181,8 +181,14 @@ func Register(mux *http.ServeMux, d Deps) {
 		in := board.ResolveScope(strings.TrimSpace(scope), groups, projects).WithExclude(privateNames())
 		out := []repos.Binding{}
 		for _, p := range projects.List() {
-			if p.RepoRoot != "" && in.Covers(p.Name) {
-				out = append(out, repos.Binding{Root: p.RepoRoot, Project: p.Name})
+			if !in.Covers(p.Name) {
+				continue
+			}
+			// One Binding per CHECKOUT, not per project: BoundRoot whitelists by
+			// full path, so several clones of one repo simply make the allowed
+			// set larger, and the overview lists each checkout as its own row.
+			for _, root := range p.RepoRoots {
+				out = append(out, repos.Binding{Root: root, Project: p.Name})
 			}
 		}
 		return out
@@ -995,11 +1001,13 @@ func Register(mux *http.ServeMux, d Deps) {
 			Hidden  bool     `json:"hidden"`
 			Ord     int      `json:"ord"`
 			Parent  string   `json:"parent"`
-			// RepoRoot is the project's binding to a repo. A pointer so that
-			// omitting the field leaves the binding alone: every other caller
-			// of this endpoint (rename, reorder, a folder edit) would otherwise
-			// send "" and silently unbind the project.
-			RepoRoot *string `json:"repoRoot"`
+			// RepoRoots is the project's binding: every local checkout of the one
+			// repo it IS. A pointer so that omitting the field leaves the binding
+			// alone — every other caller of this endpoint (rename, reorder, a
+			// folder edit) would otherwise send an empty list and silently unbind
+			// the project. Sent whole, so removing a path is the same request
+			// shape as adding one.
+			RepoRoots *[]string `json:"repoRoots"`
 		}
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
@@ -1010,25 +1018,57 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if in.RepoRoot != nil {
-			root := strings.TrimSpace(*in.RepoRoot)
-			// Only a real checkout may be bound: the git and code-graph
-			// endpoints will operate on whatever is stored here, so this is the
-			// gate that keeps them pointed at repos instead of at any path a
-			// request cared to name. Stored canonical, so a worktree binds to
-			// the repo it belongs to.
-			if root != "" {
+		if in.RepoRoots != nil {
+			// Only real checkouts may be bound: the git and code-graph endpoints
+			// will operate on whatever is stored here, so this is the gate that
+			// keeps them pointed at repos instead of at any path a request cared
+			// to name. Stored canonical, so a worktree binds to the repo it
+			// belongs to — which is also what makes the sameness check below
+			// meaningful, since two worktrees of one repo canonicalise equal.
+			roots := make([]string, 0, len(*in.RepoRoots))
+			for _, raw := range *in.RepoRoots {
+				root := strings.TrimSpace(raw)
+				if root == "" {
+					continue
+				}
 				if !git.IsRepo(root) {
-					httpx.WriteJSONError(w, http.StatusBadRequest, "that path is not a git repository")
+					httpx.WriteJSONError(w, http.StatusBadRequest,
+						fmt.Sprintf("%q is not a git repository", root))
 					return
 				}
-				root = git.CanonicalRoot(root)
+				roots = append(roots, git.CanonicalRoot(root))
 			}
-			if err := projects.SetRepoRoot(p.Name, root); err != nil {
+			// Several roots mean several CHECKOUTS OF ONE REPO, never several
+			// repos: the project's slug, its GitHub sections and its visibility
+			// are single values derived from the binding, and two different
+			// remotes under one project would make each of them a coin toss.
+			// Compared by remote URL, so a clone and its worktree pass and two
+			// unrelated repos do not. A root with no remote at all can only join
+			// other rootless ones — nothing else could confirm they match.
+			if len(roots) > 1 {
+				first, _ := git.RemoteURL(roots[0], "origin")
+				for _, other := range roots[1:] {
+					if u, _ := git.RemoteURL(other, "origin"); u != first {
+						httpx.WriteJSONError(w, http.StatusBadRequest,
+							"every path must be a checkout of the same repo — "+other+" has a different remote")
+						return
+					}
+				}
+			}
+			stored, err := projects.SetRepoRoots(p.Name, roots)
+			if err != nil {
 				httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			p.RepoRoot = root
+			// Reply with what was STORED, not with what arrived: two worktrees of
+			// one repo canonicalise to the same root and collapse to one entry,
+			// and echoing the request would advertise a duplicate that is not
+			// there.
+			root := ""
+			if len(stored) > 0 {
+				root = stored[0]
+			}
+			p.RepoRoot, p.RepoRoots = root, stored
 			if root != "" {
 				// Read the remote here rather than leaving the row unresolved
 				// until the next five-minute tick: that window would render as

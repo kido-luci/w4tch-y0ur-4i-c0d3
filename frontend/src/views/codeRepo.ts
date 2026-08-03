@@ -21,7 +21,7 @@ import {
   getGitPRs,
 } from "../api";
 import type { GitBranch, GitCommit, GitCommitDetail, GitFileChange, GitPR, GitRepo } from "../api";
-import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
+import { checkoutKey, chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
 import { getScope } from "../scope";
 import { renderCodegraphView } from "./codegraph";
 
@@ -663,7 +663,9 @@ export function renderCodeRepoView(container: HTMLElement, folder: string): () =
     try {
       const res = await getGit(scope);
       if (dead) return;
-      repo = (res.repos ?? []).find((r) => r.folder === folder) ?? null;
+      // Matched on the SAME key the list built the link from, not on folder:
+      // two checkouts of one repo share a folder and would both answer to it.
+      repo = (res.repos ?? []).find((r) => checkoutKey(r.root, r.folder) === folder) ?? null;
       if (!repo) {
         bodyEl.innerHTML = `<div class="empty-state">repo “${escapeHtml(folder)}” is not in the current scope. <a href="/project/code">← back</a></div>`;
         return;

@@ -3,6 +3,7 @@ package board
 import (
 	"database/sql"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -88,7 +89,7 @@ func TestProjectRepoBinding(t *testing.T) {
 	}
 
 	// Clearing is a statement, not an absence: it must not be re-offered.
-	if err := ps.SetRepoRoot("proj", ""); err != nil {
+	if _, err := ps.SetRepoRoots("proj", nil); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
 	cleared := NewProjectStore(db).List()[0]
@@ -97,6 +98,59 @@ func TestProjectRepoBinding(t *testing.T) {
 	}
 	if ps.AdoptRepoRoot("proj", "/repos/proj") {
 		t.Fatal("a binding the user cleared must never be re-offered")
+	}
+}
+
+// Several checkouts of one repo under one project: the list is what the user
+// stated, and repo_root stays the first of it. The projection is the part worth
+// pinning — everything that only needs "a" root still reads that column, so a
+// list write that forgot to update it would leave the graph and the slug
+// pointing at a path the user had removed.
+func TestProjectRepoRootsKeepFirstAsTheProjection(t *testing.T) {
+	db := newTestDataDB(t)
+	ps := NewProjectStore(db)
+	if _, err := ps.Upsert("proj", nil, false, 0, ""); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	roots := []string{"/repos/main", "/repos/worktree", "/repos/copy"}
+	if _, err := ps.SetRepoRoots("proj", roots); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	got := NewProjectStore(db).List()[0] // reload = a restart
+	if !slices.Equal(got.RepoRoots, roots) {
+		t.Fatalf("all three roots should survive a reload, got %v", got.RepoRoots)
+	}
+	if got.RepoRoot != "/repos/main" {
+		t.Fatalf("repo_root must mirror the FIRST root, got %q", got.RepoRoot)
+	}
+
+	// Dropping the first one moves the projection with it.
+	if _, err := ps.SetRepoRoots("proj", []string{"/repos/worktree", "/repos/copy"}); err != nil {
+		t.Fatalf("shrink: %v", err)
+	}
+	shrunk := NewProjectStore(db).List()[0]
+	if shrunk.RepoRoot != "/repos/worktree" || len(shrunk.RepoRoots) != 2 {
+		t.Fatalf("removing the first root should re-point the projection, got %+v", shrunk)
+	}
+
+	// Blanks and repeats are the user's typing, not a second binding.
+	if _, err := ps.SetRepoRoots("proj", []string{"/repos/a", "", "/repos/a", "  "}); err != nil {
+		t.Fatalf("dedupe: %v", err)
+	}
+	deduped := NewProjectStore(db).List()[0]
+	if !slices.Equal(deduped.RepoRoots, []string{"/repos/a"}) {
+		t.Fatalf("blank and duplicate roots should collapse, got %v", deduped.RepoRoots)
+	}
+
+	// Clearing the list clears the projection and states LinkNone, exactly as
+	// clearing a single binding did.
+	if _, err := ps.SetRepoRoots("proj", nil); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	cleared := NewProjectStore(db).List()[0]
+	if cleared.RepoRoot != "" || len(cleared.RepoRoots) != 0 || cleared.LinkKind != LinkNone {
+		t.Fatalf("clearing should leave an explicit none, got %+v", cleared)
 	}
 }
 
