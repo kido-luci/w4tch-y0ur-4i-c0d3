@@ -23,7 +23,7 @@ import { parseLocation } from "../scope/location";
 const SRC = join(process.cwd(), "src");
 
 function sourceFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((entry) => {
+  return readdirSync(dir).flatMap((entry: string) => {
     const p = join(dir, entry);
     if (statSync(p).isDirectory()) return sourceFiles(p);
     if (!/\.tsx?$/.test(entry) || /\.test\.tsx?$/.test(entry)) return [];

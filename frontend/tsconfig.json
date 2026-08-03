@@ -4,7 +4,12 @@
     "module": "esnext",
     "lib": ["ES2023", "DOM"],
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    /* "node" is here for the TESTS, not the app: app/links.test.ts reads the
+       source tree off disk to check every internal link still names a live
+       route, and `include` covers src/** so tsc typechecks the tests too. An
+       explicit types array excludes @types/node otherwise, and the failure is
+       CI-only — vitest does not typecheck, so the suite goes green locally. */
+    "types": ["vite/client", "node"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
