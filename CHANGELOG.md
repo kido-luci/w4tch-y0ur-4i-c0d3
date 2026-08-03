@@ -60,7 +60,6 @@ All notable changes to this project are documented here. Versions follow
   because chi answers a known path with an unregistered method from its own 405
   handler, which would have returned an empty body where `/api/*` has always
   answered JSON.
-
 - **The `git` and `codegraph` tabs are now one tab, `code`.** The overview is
   unchanged — one status row per repo in the scope — and the repo detail gained
   a `graph` tab alongside commits, changes, branches, pull requests and issues &
