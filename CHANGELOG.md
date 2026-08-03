@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+- **The `git` and `codegraph` tabs are now one tab, `code`.** The overview is
+  unchanged — one status row per repo in the scope — and the repo detail gained
+  a `graph` tab alongside commits, changes, branches, pull requests and issues &
+  CI. The graph reads the repo from the route rather than from a picker of its
+  own, which removes the second place a repo could be selected: the URL and the
+  graph could previously disagree about which repo you were looking at.
+
+### Removed
+- **The `/project/<scope>/git` and `/project/<scope>/codegraph` routes.** They
+  are not redirected — `code` replaced both, and the old spellings now parse as
+  a scope name rather than a tab. A saved link to either lands on the default
+  view.
+
 ## v2.5.0 — 2026-08-02
 
 ### Added

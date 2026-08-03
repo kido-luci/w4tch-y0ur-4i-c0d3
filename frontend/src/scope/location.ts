@@ -1,7 +1,7 @@
 // The route lives in the real path (History API), shaped family/scope/tab[/detail]:
-//   /project/<scope>/git , /claude/<scope>/sessions.
-// The tab sets let parseLocation tell a scope-less transient path (/project/git,
-// before syncScopeToURL injects the scope) apart from a scoped one (/project/x/git):
+//   /project/<scope>/code , /claude/<scope>/sessions.
+// The tab sets let parseLocation tell a scope-less transient path (/project/code,
+// before syncScopeToURL injects the scope) apart from a scoped one (/project/x/code):
 // if the segment after the family names a known tab, there's no scope segment.
 // `design` is the legacy spelling of `wireframe` (renamed when the OpenPencil
 // `ui` tab split off) — still parsed so old bookmarks and drawing deep links
@@ -14,8 +14,11 @@ const PROJECT_TABS = new Set([
   "ui",
   "docs",
   "ships",
-  "codegraph",
-  "git",
+  // `code` is the git status dashboard and the code graph under one tab: the
+  // list of the scope's repos, then per repo its history, working tree, branches,
+  // GitHub sections and architecture graph. It replaced the separate `git` and
+  // `codegraph` tabs, and those spellings are gone rather than redirected.
+  "code",
 ]);
 const CLAUDE_TABS = new Set(["sessions", "usage", "insights", "search", "session"]);
 

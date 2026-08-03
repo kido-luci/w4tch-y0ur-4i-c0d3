@@ -12,9 +12,8 @@ export type Route =
   | { view: "insights" }
   | { view: "search" }
   | { view: "ships" }
-  | { view: "codegraph" }
-  | { view: "git" }
-  | { view: "gitRepo"; folder: string }
+  | { view: "code" }
+  | { view: "codeRepo"; folder: string }
   | { view: "cycles" };
 
 // Routes are real paths, shaped family/scope/tab[/detail] (see scope/location.ts). The
@@ -49,10 +48,8 @@ export function parseRoute(pathname: string): Route {
         return loc.detail ? { view: "docs", id: loc.detail } : { view: "docs" };
       case "ships":
         return { view: "ships" };
-      case "codegraph":
-        return { view: "codegraph" };
-      case "git":
-        return loc.detail ? { view: "gitRepo", folder: loc.detail } : { view: "git" };
+      case "code":
+        return loc.detail ? { view: "codeRepo", folder: loc.detail } : { view: "code" };
     }
   }
   return { view: "list" };
@@ -85,10 +82,11 @@ export function migrateLegacyHash(): void {
     case "board":
     case "docs":
     case "ships":
-    case "codegraph":
-    case "git":
       path = buildPath("project", scope, tab, detail);
       break;
+    // `codegraph` and `git` are deliberately absent: the tabs they named no
+    // longer exist, so a hash bookmark for one falls to the default rather than
+    // being rewritten into a path that parses as a scope named "git".
     default:
       path = buildPath("claude", scope, "sessions", "");
   }

@@ -331,7 +331,7 @@ That turns "flaky" into a fact in about a minute.
 ## Routing — real paths, and the scope lives in one of the segments
 
 Routes are real paths (History API), not `#/`: **`family/scope/tab[/detail]`** —
-`/project/<scope>/git/<repo>`, `/claude/<scope>/session/<id>` (`/` canonicalises
+`/project/<scope>/code/<repo>`, `/claude/<scope>/session/<id>` (`/` canonicalises
 to `/claude/<scope>/sessions`). `backend/main.go` holds the SPA fallback that lets a deep
 path reload instead of 404. On the client the grammar and the state are separate
 modules: `scope/location.ts` owns `parseLocation` / `buildPath` and imports
@@ -341,7 +341,7 @@ change routing and it stays green, suspect the change, not the tests.
 
 The scope SEGMENT is the source of truth; localStorage is only the fallback that
 remembers your last one and seeds a bare path. Internal links deliberately stay
-scope-LESS (`href="/project/git"`) and `syncScopeToURL` splices the active scope
+scope-LESS (`href="/project/code"`) and `syncScopeToURL` splices the active scope
 in during `render()` — which is why adding a link never means threading the scope
 through it, and why a link's `href` and the address bar legitimately differ.
 
@@ -371,26 +371,30 @@ Two rules that exist because breaking them shipped bugs:
   that. A link copied in that window resolves against the READER's remembered
   scope, not yours. So the replace branch canonicalises itself.
 
-## The git tab — read-only, and it shares the code graph's repo resolution
+## The code tab — read-only, and the graph is one of its tabs
 
 Two views over the scope's repos. Both are strictly **READ-ONLY**: the server
 shells `git log` / `status` / `branch` / `show` / `for-each-ref`, and `gh` for
 GitHub. Nothing here commits, pushes, merges, or checks anything out — don't add
 that without asking; it's a deliberate property, not an oversight.
 
-- **Overview** `/project/<scope>/git` — one compact status ROW per repo: name ·
+- **Overview** `/project/<scope>/code` — one compact status ROW per repo: name ·
   branch · clean/dirty · ahead/behind · its latest commit. It's a dashboard you
   scan. If you catch yourself adding a long list inside a row, it belongs in the
   detail instead — an earlier version shipped 20 commits per card and had to undo
   it, because six repos became six walls of log.
-- **Detail** `/project/<scope>/git/<folder>` — tabs, each lazy-loaded on first
+- **Detail** `/project/<scope>/code/<folder>` — tabs, each lazy-loaded on first
   open: commits (click one → its diff), changes (working tree), branches, pull
-  requests, issues & CI. (These are real paths, not `#/` — see the History-API
+  requests, issues & CI, graph. (These are real paths, not `#/` — see the History-API
   routing and the Go SPA fallback in `backend/main.go`; a deep path that 404s means that
   fallback broke.)
 
-**Repo resolution is shared with the code graph** — both go through
-`internal/repos`, so both tabs always list the same repos. They resolve a scope
+**Repo resolution is shared with the code graph** — the git handlers and
+`internal/codegraph` both go through `internal/repos`, so they can never disagree
+about which repos a scope has. That shared answer is what made merging them into
+one tab honest rather than cosmetic: the graph reads the same root the git
+sections do, taken from the `<folder>` segment, so this page no longer has a
+second repo picker of its own to drift from the URL. They resolve a scope
 LABEL (`?scope=`, the same label the board endpoints take) to the repos its
 projects are BOUND to in the registry — not to the directories its sessions ran
 in, which is what these tabs used to do and what made the project page's answer

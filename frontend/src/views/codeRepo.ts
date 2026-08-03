@@ -1,9 +1,15 @@
-// View 9b — git repo detail (route `/project/git/<folder>`): the deep read-only look at
-// one repo the scope resolved to. Reached from a card on `/project/git`. Sections load
+// View 9b — code repo detail (route `/project/code/<folder>`): the deep read-only look at
+// one repo the scope resolved to. Reached from a row on `/project/code`. Sections load
 // lazily on first open and cache for the visit; the local ones (commits →
 // per-commit diff, working-tree changes, branches) are instant, the GitHub ones
 // (pull requests, issues & CI) go over `gh` so they show a loading state. wyac
 // only reads — nothing here commits, pushes, merges, or checks anything out.
+//
+// The `graph` tab is the exception to the caching above: every other tab is an
+// HTML string this view builds and stashes in bodyCache, while the graph is a
+// whole view module with its own cytoscape instance and cleanup. It is mounted
+// fresh on open and disposed on the way out, so it never leaks a canvas behind a
+// tab you have left.
 
 import {
   getGit,
@@ -17,14 +23,16 @@ import {
 import type { GitBranch, GitCommit, GitCommitDetail, GitFileChange, GitPR, GitRepo } from "../api";
 import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
 import { getScope } from "../scope";
+import { renderCodegraphView } from "./codegraph";
 
-type TabKey = "commits" | "changes" | "branches" | "prs" | "activity";
+type TabKey = "commits" | "changes" | "branches" | "prs" | "activity" | "graph";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "commits", label: "commits" },
   { key: "changes", label: "changes" },
   { key: "branches", label: "branches" },
   { key: "prs", label: "pull requests" },
   { key: "activity", label: "issues & CI" },
+  { key: "graph", label: "graph" },
 ];
 
 // The snapshot payload carries this many commits, so a shorter first batch means
@@ -68,8 +76,8 @@ function diffBlock(diff: string, truncated: boolean): string {
   }`;
 }
 
-/** Renders the git repo-detail view; returns a cleanup callback. */
-export function renderGitRepoView(container: HTMLElement, folder: string): () => void {
+/** Renders the code repo-detail view; returns a cleanup callback. */
+export function renderCodeRepoView(container: HTMLElement, folder: string): () => void {
   // The scope LABEL, not its Claude folders: the git and code-graph endpoints
   // resolve a scope through the project registry's repo bindings now.
   const scope = getScope();
@@ -82,6 +90,10 @@ export function renderGitRepoView(container: HTMLElement, folder: string): () =>
   // deliver). Failures aren't cached — they retry — and the branch/PR filter
   // chips refresh their entry when they re-render, so a restore stays in sync.
   const bodyCache = new Map<TabKey, string>();
+  // The graph tab's teardown, held while it is mounted. It is a view module, not
+  // an HTML string, so bodyCache cannot hold it and dropping the element is not
+  // enough to stop it.
+  let graphCleanup: (() => void) | null = null;
   const commitCache = new Map<string, GitCommitDetail>();
   let expanded: string | null = null; // open commit hash in the commits tab
   // The commits tab's own paged list: seeded from the snapshot, grown by "load
@@ -142,7 +154,7 @@ export function renderGitRepoView(container: HTMLElement, folder: string): () =>
 
   container.innerHTML = `
     <div class="page git-detail">
-      <a class="git-back" href="/project/git">← all repos</a>
+      <a class="git-back" href="/project/code">← all repos</a>
       <div id="git-detail-body"><div class="empty-state">loading…</div></div>
     </div>
   `;
@@ -428,8 +440,16 @@ export function renderGitRepoView(container: HTMLElement, folder: string): () =>
 
   // --- tab plumbing -----------------------------------------------------------
 
+  /** Tears the graph down if it is mounted. Idempotent: every path that replaces
+   *  the tab body calls it, and calling it twice must be free. */
+  function disposeGraph(): void {
+    graphCleanup?.();
+    graphCleanup = null;
+  }
+
   function paint(): void {
     if (!repo) return;
+    disposeGraph();
     bodyEl.innerHTML = `${headerHtml(repo)}${tabsHtml()}<section class="git-tab-body" id="git-tab-body"></section>`;
     renderActiveTab();
   }
@@ -437,6 +457,15 @@ export function renderGitRepoView(container: HTMLElement, folder: string): () =>
   function renderActiveTab(): void {
     const host = bodyEl.querySelector<HTMLElement>("#git-tab-body");
     if (!host || !repo) return;
+    disposeGraph();
+    if (active === "graph") {
+      // Mounted fresh every open rather than cached: the graph reads its own
+      // index and owns a cytoscape instance, so a stale copy would be both wrong
+      // and expensive to keep alive behind an unopened tab.
+      host.innerHTML = "";
+      graphCleanup = renderCodegraphView(host, repo.root);
+      return;
+    }
     if (active === "commits") {
       renderCommitsTab(host);
       void ensureAuthors();
@@ -636,7 +665,7 @@ export function renderGitRepoView(container: HTMLElement, folder: string): () =>
       if (dead) return;
       repo = (res.repos ?? []).find((r) => r.folder === folder) ?? null;
       if (!repo) {
-        bodyEl.innerHTML = `<div class="empty-state">repo “${escapeHtml(folder)}” is not in the current scope. <a href="/project/git">← back</a></div>`;
+        bodyEl.innerHTML = `<div class="empty-state">repo “${escapeHtml(folder)}” is not in the current scope. <a href="/project/code">← back</a></div>`;
         return;
       }
       // Seed the paged list from the snapshot; a short first batch is already the
@@ -653,5 +682,6 @@ export function renderGitRepoView(container: HTMLElement, folder: string): () =>
   return () => {
     dead = true;
     window.clearTimeout(searchTimer); // a pending debounce must not outlive the view
+    disposeGraph(); // nor may the graph's cytoscape instance
   };
 }
