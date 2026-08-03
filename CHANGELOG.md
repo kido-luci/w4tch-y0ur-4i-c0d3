@@ -6,6 +6,13 @@ All notable changes to this project are documented here. Versions follow
 ## Unreleased
 
 ### Changed
+- **`style.css` is split into fifteen parts.** It was 6446 lines, and the reason
+  it stayed that way was real — reordering the cascade breaks what no test here
+  renders a page to see. The split was made provably inert instead: the parts are
+  `@import`ed in the exact order they appeared, and the built CSS is
+  byte-identical to before, same content hash and same 115392 bytes.
+  `css/order.test.ts` pins it — every part imported exactly once, in prefix
+  order, and `style.css` holding nothing but imports.
 - **The view layer can be tested at all now.** vitest ran in a node environment,
   so the suite covered only the pure modules — 5 files against 57 — and every
   module that renders was on the wrong side of that line. A dead link left by

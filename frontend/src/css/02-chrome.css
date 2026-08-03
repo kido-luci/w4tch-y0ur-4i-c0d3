@@ -1,0 +1,473 @@
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--px-sp-5);
+  flex-wrap: wrap;
+  padding: var(--px-sp-3) 0 var(--px-sp-6);
+}
+
+.brand {
+  font-family: var(--mono);
+  font-size: var(--px-sans-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  flex-wrap: wrap;
+}
+
+.project-select {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  max-width: 220px;
+  box-shadow: var(--px-shadow-sm);
+}
+
+.project-select:hover {
+  border-color: var(--border-hover);
+}
+
+.project-select:focus-visible {
+  outline: 1px solid var(--border-hover);
+  outline-offset: 1px;
+}
+
+/* display:flex below would defeat the hidden attribute's UA display:none —
+   restate it, or the closed panel renders as an empty box. */
+.scope-panel[hidden] {
+  display: none;
+}
+
+/* Group-manager panel, in flow under the rail's "+ groups…" entry. */
+.scope-panel {
+  margin-top: var(--px-sp-4);
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-5);
+  background: var(--card);
+  border: var(--px-edge);
+  box-shadow: var(--px-shadow-sm);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text);
+}
+
+.scope-panel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  width: 100%;
+}
+
+.scope-panel-name {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: var(--px-sp-1) 0;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  cursor: pointer;
+}
+
+.scope-panel-name:hover {
+  text-decoration: underline;
+}
+
+.scope-panel-count,
+.scope-panel-empty,
+.scope-panel-sub {
+  color: var(--text-muted);
+}
+
+/* A hidden project stays listed in the manager (so it can be un-hidden), dimmed. */
+.scope-panel-name--off {
+  color: var(--text-muted);
+}
+
+/* Sub-heading inside the project form (e.g. "folders"). */
+.scope-panel-sub {
+  font-size: var(--px-label);
+  margin-top: var(--px-sp-1);
+}
+
+/* A locked name (renaming in place would orphan the items that carry it). */
+.scope-panel-input[readonly] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Logo controls in the project edit form. */
+.scope-panel-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+}
+
+.scope-panel-logo-box {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+}
+
+.scope-panel-logo-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border: var(--px-edge);
+  border-radius: 2px;
+  background: var(--bg);
+}
+
+.scope-panel-logo-none {
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.scope-panel-logo-pick {
+  cursor: pointer;
+}
+
+.scope-panel-del {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  cursor: pointer;
+}
+
+.scope-panel-del:hover {
+  color: var(--text);
+}
+
+.scope-panel-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-4);
+  width: 100%;
+  border-top: 1px solid var(--border);
+  padding-top: var(--px-sp-4);
+}
+
+.scope-panel-input {
+  background: var(--bg);
+  color: var(--text);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-4);
+}
+
+.scope-panel-input:focus {
+  border-color: var(--border-hover);
+  outline: none;
+}
+
+.scope-panel-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-2);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.scope-panel-check {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  cursor: pointer;
+}
+
+.scope-panel-btns {
+  display: flex;
+  gap: var(--px-sp-4);
+}
+
+.chip-group {
+  display: flex;
+  gap: var(--px-sp-2);
+}
+
+.chip {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-5);
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.chip-active {
+  background: var(--chip-active-bg);
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+/* ---------- filter bar (Claude-Code-style) ---------- */
+
+.filter-bar {
+  position: relative;
+}
+
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  background: var(--card);
+  color: var(--text);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-5);
+  cursor: pointer;
+  max-width: 320px;
+  box-shadow: var(--px-shadow-sm);
+}
+
+.filter-btn:hover {
+  border-color: var(--border-hover);
+}
+
+.filter-btn-compact {
+  padding: var(--px-sp-3) var(--px-sp-4);
+}
+
+.filter-btn-icon {
+  color: var(--text-muted);
+  font-size: var(--px-meta);
+  display: inline-flex;
+}
+
+.filter-btn-icon svg {
+  display: block;
+}
+
+.filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 280px;
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-panel);
+  padding: var(--px-sp-5) var(--px-sp-6);
+  box-shadow: var(--shadow);
+}
+
+/* Rail's compact button sits on the left edge, so its panel opens rightward. */
+.filter-panel-left {
+  right: auto;
+  left: 0;
+}
+
+.filter-section {
+  margin-bottom: var(--px-sp-4);
+}
+
+.filter-label {
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--px-sp-2);
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-sp-2);
+}
+
+.filter-chip {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-r-pill);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-2) var(--px-sp-4);
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.filter-chip-on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-div {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--px-sp-4) 0;
+}
+
+.filter-clear {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-1) 0;
+  cursor: pointer;
+}
+
+.filter-clear:hover {
+  color: var(--text);
+}
+
+/* ---------- stat cards ---------- */
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--px-sp-4);
+  margin-bottom: var(--px-sp-5);
+}
+
+@media (max-width: 720px) {
+  .stat-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stat-card {
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-5) var(--px-sp-5);
+  box-shadow: var(--px-shadow);
+}
+
+.stat-card:hover {
+  border-color: var(--border-hover);
+}
+
+.stat-label {
+  color: var(--text-muted);
+  font-family: var(--px-sans);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: var(--px-label);
+}
+
+.stat-value {
+  font-family: var(--mono);
+  font-size: var(--px-display);
+  font-weight: 600;
+  margin-top: var(--px-sp-1);
+}
+
+/* ---------- live strip ---------- */
+
+.live-strip {
+  display: flex;
+  gap: var(--px-sp-4);
+  overflow-x: auto;
+  margin-bottom: var(--px-sp-5);
+  padding-bottom: var(--px-sp-1);
+}
+
+.live-card {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-4) var(--px-sp-5);
+  text-decoration: none;
+  flex: 0 0 auto;
+  animation: live-card-pulse 2.4s ease-in-out infinite;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* The pulse animation owns border-color, so the hover cue is lift + shadow. */
+.live-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--px-shadow-sm);
+}
+
+@keyframes live-card-pulse {
+  0%,
+  100% {
+    border-color: var(--border);
+  }
+  50% {
+    border-color: rgba(74, 222, 128, 0.45);
+  }
+}
+
+.live-card-title {
+  font-size: var(--px-body);
+  font-weight: 600;
+}
+
+.live-card-meta {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--live);
+  flex: 0 0 auto;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.live-dot-inline {
+  display: inline-block;
+  margin-right: var(--px-sp-3);
+  vertical-align: baseline;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.72);
+    opacity: 0.45;
+  }
+}

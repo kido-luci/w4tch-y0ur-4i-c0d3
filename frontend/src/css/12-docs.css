@@ -1,0 +1,327 @@
+/* --- docs wiki (view 8) ------------------------------------------------------ */
+/* Flat pages, one project each — navigation lives in the shared project rail,
+   so the layout is just the main pane plus (read mode only) a sticky "on this
+   page" toc, as a grid so the toc column can come and go without reflow. */
+
+/* The docs view is ONE sheet — the mock draws index, page and toc as columns
+   of a single surface split by hairlines, not as separate panels on the
+   ground. Columns stretch so the separators run the sheet's full height;
+   that costs the index/toc their stickiness (a stretched grid item cannot
+   stick), which the mock also doesn't have. */
+.doc-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-panel);
+  box-shadow: var(--px-shadow);
+}
+
+.doc-layout.doc-layout--toc {
+  grid-template-columns: 220px 1fr 200px;
+}
+
+/* Between the phone breakpoint and roughly a laptop, four columns (rail, index,
+   page, toc) don't fit and the one that gave way was the page: at 1024px the
+   reading column fell to about 28 characters while both navigation columns held
+   their full width. That is backwards — the toc is a convenience, the prose is
+   the point. Drop the toc first and let the page have the room. */
+@media (max-width: 1200px) {
+  .doc-layout.doc-layout--toc {
+    grid-template-columns: 220px 1fr;
+  }
+
+  .doc-toc {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .doc-layout,
+  .doc-layout.doc-layout--toc {
+    grid-template-columns: 1fr;
+  }
+
+  /* One column: the index's separator rotates from a right edge to a rule
+     under the list. */
+  .doc-index {
+    border-right: none;
+    border-bottom: var(--px-edge);
+  }
+}
+
+/* The mock's new-page affordance is an underline, not a box. */
+#doc-new {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--px-line-strong);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#doc-new::placeholder {
+  font-style: italic;
+}
+
+/* Page index — the flat, scope-filtered list of pages, the docs view's own
+   navigation now that the rail is pure project scope. A column of the sheet:
+   no box of its own, a hairline to its right. */
+.doc-index {
+  border-right: var(--px-edge);
+  padding: var(--px-sp-6) var(--px-sp-5);
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-index-item {
+  display: block;
+  width: 100%;
+  flex: 0 0 auto;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: var(--px-edge-inner);
+  color: var(--text-muted);
+  font-family: var(--px-sans);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-1);
+  cursor: pointer;
+  /* Wrap to a second line instead of ellipsing. These titles share long
+     prefixes — "luci-studio.com — Blog…", "api.luci-studio.com — B…",
+     "admin.luci-studio.com —…", "tools.luci-studio.com —…" — so a single
+     clipped line cut off exactly the part that tells them apart, and nine
+     entries read as near-duplicates. Two lines of a 12px mono cost less than
+     an index you cannot use. */
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.doc-index-item:hover {
+  color: var(--text);
+}
+
+/* Active is a weight, not a box — the mock's list marks the open page by
+   setting it in ink. */
+.doc-index-item--active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.doc-index-empty {
+  padding: var(--px-sp-3) var(--px-sp-4);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.doc-toc {
+  border-left: var(--px-edge);
+  padding: var(--px-sp-6) var(--px-sp-5);
+}
+
+.doc-main {
+  padding: var(--px-sp-7) var(--px-sp-8) var(--px-sp-8);
+  min-height: 300px;
+  min-width: 0;
+}
+
+/* -- read mode -- */
+
+.doc-breadcrumbs {
+  font-family: var(--px-sans);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  margin-bottom: var(--px-sp-4);
+}
+
+/* The group segment carries the weight; the title segment stays quiet. */
+.doc-crumb {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.doc-crumb:hover {
+  color: var(--text);
+}
+
+.doc-crumb-current {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.doc-crumb-sep {
+  margin: 0 var(--px-sp-3);
+  color: var(--border-hover);
+}
+
+.doc-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--px-sp-5);
+  margin-bottom: var(--px-sp-4);
+}
+
+.doc-title {
+  font-family: var(--px-serif);
+  font-size: var(--px-head);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.doc-actions {
+  display: flex;
+  gap: var(--px-sp-4);
+  flex-shrink: 0;
+  padding-top: var(--px-sp-2);
+}
+
+/* Long-form prose reads in the secondary grey; headings re-ink themselves. */
+.doc-main .md {
+  color: var(--px-sub);
+}
+
+/* -- edit mode: title / parent / split editor -- */
+
+.doc-edit-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--px-sp-4);
+}
+
+.doc-title-input {
+  flex: 1;
+  min-width: 160px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--px-r-card);
+  font-family: var(--sans);
+  font-size: var(--px-display);
+  font-weight: 650;
+  padding: var(--px-sp-3) var(--px-sp-4);
+  margin: 0 -var(--px-sp-4);
+}
+
+.doc-title-input:hover {
+  border-color: var(--border);
+}
+
+.doc-title-input:focus {
+  border-color: var(--border-hover);
+  background: var(--bg);
+  outline: none;
+}
+
+
+.doc-group-input {
+  background: var(--card);
+  color: var(--text);
+  border: var(--px-edge);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  max-width: 160px;
+  box-shadow: var(--px-shadow-sm);
+}
+
+.doc-group-input:hover,
+.doc-group-input:focus {
+  border-color: var(--border-hover);
+  outline: none;
+}
+
+.doc-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--px-sp-5);
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .doc-editor {
+    grid-template-columns: 1fr;
+  }
+}
+
+.doc-editor-input {
+  width: 100%;
+  height: calc(100vh - 300px);
+  min-height: 320px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--sans);
+  font-size: var(--px-word);
+  line-height: 1.5;
+  padding: var(--px-sp-5) var(--px-sp-5);
+  resize: vertical;
+}
+
+.doc-editor-input:focus {
+  border-color: var(--border-hover);
+  outline: none;
+}
+
+.doc-editor-preview {
+  height: calc(100vh - 300px);
+  min-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  padding: var(--px-sp-5) var(--px-sp-5);
+}
+
+/* -- table of contents (read mode only) -- */
+
+.doc-toc-label {
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--px-sp-3);
+}
+
+.doc-toc-link {
+  display: block;
+  background: none;
+  border: none;
+  text-align: left;
+  width: 100%;
+  color: var(--text-muted);
+  font-family: var(--px-sans);
+  font-size: var(--px-body);
+  line-height: 1.4;
+  padding: var(--px-sp-2) 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-toc-link:hover {
+  color: var(--text);
+}
+
+/* The section you're reading speaks purple — set by the scroll spy. */
+.doc-toc-link--active {
+  color: var(--px-purple-text);
+  font-weight: 600;
+}
+
+.doc-toc-link--h2 {
+  padding-left: var(--px-sp-5);
+}
+
+.doc-toc-link--h3 {
+  padding-left: var(--px-sp-7);
+}

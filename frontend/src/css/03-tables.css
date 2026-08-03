@@ -1,0 +1,276 @@
+/* ---------- tables ---------- */
+
+.retry-btn {
+  margin-left: var(--px-sp-3);
+  padding: var(--px-sp-2) var(--px-sp-5);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  border-color: var(--border-hover);
+}
+
+/* What a panel's numbers actually cover. The sessions page runs three different
+   scopings at once — stat cards on every filter, the heatmap on scope alone,
+   the token chart on nothing at all — and every one of them was correct and
+   unlabelled, which is how "opus 100%" and "opus 66%" ended up one scroll
+   apart. Sits under the heading, quieter than the body. */
+.panel-scope {
+  margin: -var(--px-sp-1) 0 var(--px-sp-4);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+/* "You are looking at X" for the five views that filter by scope without
+   carrying the rail. Reads as a label, not a control — the scope is not changed
+   here — so it stays quiet next to the filter chips it sits beside. */
+.scope-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--px-sp-3);
+  padding: var(--px-sp-2) var(--px-sp-4);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.scope-chip:hover {
+  border-color: var(--border-hover);
+}
+
+.scope-chip-key {
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  color: var(--text-muted);
+}
+
+/* The claude family's chip is a switcher, not a link: its scopes are derived,
+   so there is no manager page to send you to. It wears the chip's own border
+   and the select inside is stripped bare, so the control reads as one object
+   rather than a chip with a form control loose inside it. */
+.scope-chip--select {
+  cursor: pointer;
+  align-items: center;
+  gap: var(--px-sp-2);
+}
+/* The caret rides the label, not the select: appearance:none takes the native
+   one away, and without something in its place the control reads as text. */
+.scope-chip--select::after {
+  content: "▾";
+  font-size: var(--px-label);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.scope-chip--select select {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text);
+  cursor: pointer;
+  /* Wide enough for the longest real label plus its session count — a repo
+     name cut mid-word ("w4tch-y0ur-4i-c0d3 (1") reads as a rendering bug. */
+  max-width: 32ch;
+  text-overflow: ellipsis;
+}
+.scope-chip--select select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A wide table has to scroll inside its own box, or it scrolls the page — and a
+   page that scrolls sideways takes the fixed header off the left edge with it.
+   This is the chrome-less half of .sessions-table-wrap below, for the tables
+   that already sit inside a .card and only need the containment. */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.sessions-table-wrap {
+  background: var(--card);
+  border: var(--px-edge);
+  border-radius: var(--px-r-panel);
+  overflow-x: auto;
+  box-shadow: var(--px-shadow);
+}
+
+.sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--px-body);
+}
+
+.sessions-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-family: var(--px-sans);
+  font-size: var(--px-label);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: var(--px-sp-4) var(--px-sp-5);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.sessions-table td {
+  padding: var(--px-sp-4) var(--px-sp-5);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--px-body);
+}
+
+.sessions-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sessions-table tbody tr[data-session-id] {
+  cursor: pointer;
+}
+
+.sessions-table tbody tr[data-session-id]:hover {
+  background: var(--row-hover);
+}
+
+.cell-title {
+  font-family: var(--sans);
+  font-weight: 500;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* .sessions-table td forces --mono on every cell (0,1,1); the title holds
+   prose, so it out-specifies that with td.class (0,2,1) rather than the old
+   !important. The base rule above still styles .cell-title in the other tables
+   that reuse it (insights, web, ledger), none of which force a cell font. */
+.sessions-table td.cell-title {
+  font-family: var(--sans);
+}
+
+/* Archived rows read as dimmed; a small tag marks them explicitly. */
+.sessions-table tbody tr.row-archived td {
+  color: var(--text-muted);
+}
+
+/* Fill, not frame. This sits inside a card that sits inside a surface, and a
+   frame at --px-line made it the third level of the same ink. --px-edge-inner
+   is not the answer for a tag with no background — at 1.18:1 it would erase
+   the box rather than soften it — so the fill takes over the shape work and
+   the border goes. Padding absorbs the 1px the border used to occupy, which
+   keeps the outer size identical. */
+.arch-tag {
+  display: inline-block;
+  margin-left: var(--px-sp-3);
+  padding: var(--px-sp-1) var(--px-sp-3);
+  background: var(--px-rule-soft);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: var(--px-label-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--px-muted-on-fill);
+  vertical-align: middle;
+}
+
+/* Group-by header rows. */
+.sessions-table tbody tr.group-row td {
+  padding: var(--px-sp-5) var(--px-sp-5) var(--px-sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.sessions-table tbody tr.group-row:hover {
+  background: none;
+}
+
+/* Group rows exist only in the sessions table, so scope the whole rule to
+   out-specify .sessions-table td (0,1,1 → 0,2,1) — that lets font-size beat the
+   td default without !important. */
+.sessions-table td.group-cell {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.group-count {
+  margin-left: var(--px-sp-4);
+  color: var(--border-hover);
+}
+
+/* Only in the agents table, which forces no cell font, so the bare class wins
+   with nothing to override — no !important needed. */
+.cell-desc {
+  font-family: var(--sans);
+  color: var(--text-muted);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-models {
+  display: flex;
+  gap: var(--px-sp-2);
+  align-items: center;
+}
+
+/* ---------- model badges ---------- */
+
+.model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-sp-2);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  line-height: 1;
+  color: var(--model-color, #9ca3af);
+  background: color-mix(in srgb, var(--model-color, #9ca3af) 15%, transparent);
+  border-radius: var(--px-r-pill);
+  padding: var(--px-sp-2) var(--px-sp-4);
+  white-space: nowrap;
+}
+
+/* The model hues are fixed data colours (format.ts) picked to stay recognisable
+   in a chart, where they sit on the ground as areas. As a WORD on a 15% tint of
+   themselves they are far weaker than they look: sonnet lands at 1.68:1 on
+   cream, haiku at 1.92:1. Pulling the hue toward the theme's ink keeps the
+   badge unmistakably that model's colour — the dot beside it stays pure — while
+   the label itself clears 4.5:1. The two percentages are the loosest mixes that
+   do so for all five hues; sonnet binds in light, opus in dark. */
+.model-badge {
+  color: color-mix(in srgb, var(--model-color, #9ca3af) 50%, var(--px-ink));
+}
+
+:root[data-theme="dark"] .model-badge {
+  color: color-mix(in srgb, var(--model-color, #9ca3af) 78%, var(--px-ink));
+}
+
+.model-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--model-color, #9ca3af);
+}
+
+/* ---------- empty state ---------- */
+
+.empty-state {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  text-align: center;
+  padding: var(--px-sp-8) var(--px-sp-6);
+}

@@ -1,0 +1,407 @@
+/* --- board depth: toolbar, card fields, columns, table, timeline ----------
+   Added with data.db v12 (custom columns, hierarchy, cycles, saved views). */
+
+.board-toolbar {
+  margin-bottom: var(--px-sp-5);
+}
+
+.board-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  flex-wrap: wrap;
+}
+
+.board-toolbar-spacer {
+  flex: 1;
+}
+
+.board-filter-note {
+  margin-top: var(--px-sp-3);
+  font-size: var(--px-meta);
+  font-family: var(--mono);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+}
+
+.board-cycle-filter,
+.board-view-picker {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-2) var(--px-sp-3);
+}
+
+.board-col-name {
+  cursor: text;
+}
+
+.board-wip {
+  font-size: var(--px-label-xs);
+  color: var(--text-muted);
+}
+
+.board-wip.over {
+  color: var(--danger, #e5534b);
+}
+
+.board-col-head .board-col-delete {
+  margin-left: auto;
+  opacity: 0;
+}
+
+.board-col-head:hover .board-col-delete {
+  opacity: 1;
+}
+
+.board-col-add {
+  min-height: 0;
+  background: transparent;
+  border: 1px dashed var(--px-line-strong);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-5);
+  box-shadow: none;
+}
+
+.board-add-col {
+  background: transparent;
+  color: var(--text-muted);
+  border: 0;
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-3);
+  cursor: pointer;
+}
+
+.board-add-col:hover {
+  color: var(--text);
+}
+
+/* --- card fields --- */
+
+.todo-kind {
+  margin-right: var(--px-sp-2);
+  color: var(--text-muted);
+}
+
+.todo-kind-epic {
+  color: var(--accent-text);
+}
+
+.todo-kind-bug {
+  color: var(--danger, #e5534b);
+}
+
+.todo-prio {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--px-sp-2);
+  vertical-align: middle;
+  background: var(--text-muted);
+}
+
+.todo-prio-3 {
+  background: #d98a2b;
+}
+
+.todo-prio-4 {
+  background: var(--danger, #e5534b);
+}
+
+/* Was --px-edge-inner with no background, i.e. a 1.18:1 frame and nothing
+   else — these three badges were effectively invisible. Same fix as the other
+   tags: the fill carries the shape, and the text moves to the on-fill muted so
+   it still clears 4.5:1. */
+.todo-est,
+.todo-cycle,
+.todo-parent {
+  background: var(--px-rule-soft);
+  padding: 1px var(--px-sp-3);
+  font-size: var(--px-label-xs);
+  color: var(--px-muted-on-fill);
+}
+
+.todo-child {
+  margin-left: var(--px-sp-5);
+  border-left-width: 4px;
+}
+
+.todo-rollup {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  margin: var(--px-sp-2) 0 var(--px-sp-1);
+}
+
+.todo-rollup-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+}
+
+.todo-rollup-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.todo-rollup-text {
+  font-size: var(--px-label-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* --- panel --- */
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--px-sp-4);
+}
+
+.panel-kind,
+.panel-priority,
+.panel-cycle,
+.panel-parent,
+.panel-estimate {
+  width: 100%;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-3);
+}
+
+.panel-hint {
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.panel-children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-2);
+  margin-top: var(--px-sp-3);
+}
+
+.panel-child {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-2) var(--px-sp-3);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.panel-child:hover {
+  border-color: var(--border-hover);
+}
+
+/* --- table view --- */
+
+.board-island {
+  width: 100%;
+}
+
+.board-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--px-body);
+}
+
+.board-table th {
+  text-align: left;
+  font-family: var(--px-sans);
+  font-weight: 600;
+  font-size: var(--px-label-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: var(--px-sp-3) var(--px-sp-4);
+  border-bottom: var(--px-edge);
+}
+
+.board-table td {
+  padding: var(--px-sp-3) var(--px-sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.bt-row {
+  cursor: pointer;
+}
+
+.bt-row:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.bt-row.selected {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.bt-row.bt-overlay {
+  background: var(--card);
+  border: 1px solid var(--accent);
+}
+
+.bt-grip {
+  cursor: grab;
+  color: var(--text-muted);
+  width: 1.5em;
+}
+
+.bt-seq,
+.bt-pts {
+  font-family: var(--mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.bt-rollup {
+  margin-left: var(--px-sp-4);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.bt-status,
+.bt-cycle,
+.bt-repo,
+.bt-prio {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* --- timeline view --- */
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-4);
+}
+
+.tl-row {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: var(--px-sp-5);
+  align-items: start;
+  border: var(--px-edge);
+  background: var(--card);
+  padding: var(--px-sp-5);
+  box-shadow: var(--px-shadow);
+}
+
+.tl-name {
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-title);
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+}
+
+.tl-closed {
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  text-transform: none;
+  color: var(--px-muted-on-fill);
+  background: var(--px-rule-soft);
+  padding: 1px var(--px-sp-3);
+}
+
+.tl-dates {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  margin-top: var(--px-sp-2);
+}
+
+.tl-progress {
+  margin-top: var(--px-sp-3);
+  height: 4px;
+  background: var(--border);
+}
+
+.tl-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.tl-track {
+  position: relative;
+  min-height: 28px;
+}
+
+.tl-today {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--live, var(--accent));
+  opacity: 0.6;
+}
+
+.tl-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-sp-3);
+}
+
+.tl-card {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-sp-3);
+  max-width: 260px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  padding: var(--px-sp-2) var(--px-sp-4);
+  font-size: var(--px-meta);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tl-card:hover {
+  border-color: var(--border-hover);
+}
+
+.tl-card.done {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.tl-card-seq,
+.tl-card-pts {
+  font-family: var(--mono);
+  color: var(--text-muted);
+}
+
+.tl-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .tl-row {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+}

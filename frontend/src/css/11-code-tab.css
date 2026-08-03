@@ -1,0 +1,618 @@
+/* --- git dashboard (view 9) -------------------------------------------------- */
+/* One card per repo the scope resolves to: a header row (name / branch / state
+   badge / ahead-behind / status counts) over the recent-commits list. Cards
+   stack; each commit row is a fixed 4-column grid so hashes and times line up. */
+
+.git-meta {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text-muted);
+}
+
+.git-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-3);
+}
+
+/* One compact status row per repo — the whole row links into the detail view.
+   A grid, not a flex row: as flex, every field started wherever the repo name
+   happened to end, so the branch chip began at x=370 on one row and x=479 on
+   the next and nothing scanned down a column. Fixed tracks (not minmax) are the
+   point — they have to agree between rows, so a long name ellipses inside its
+   track rather than pushing the rest of the row along. */
+.git-row {
+  display: grid;
+  grid-template-columns:
+    14rem                /* name */
+    11rem                /* branch */
+    6rem                 /* clean / N dirty */
+    3.5rem               /* ahead / behind */
+    minmax(0, 1fr)       /* latest commit — takes the slack */
+    5.5rem;              /* when */
+  align-items: baseline;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-4) var(--px-sp-6);
+  border: var(--px-edge);
+  background: var(--card);
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Each cell holds at most one chip and must not stretch it to the track. */
+.git-cell {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.git-cell--when {
+  justify-content: flex-end;
+}
+
+.git-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-cell .git-branch {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Below the shell's stacking breakpoint the six tracks don't fit. Fall back to
+   the old wrapping row: alignment across rows is worth nothing on a screen that
+   shows one row at a time anyway. */
+@media (max-width: 800px) {
+  .git-row {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  /* Its own line. Sharing one with the name and chips left it `flex: 1 1 0%`
+     against no remaining space — it collapsed to a 1px sliver that cut the
+     commit hash mid-character. Parent in the selector for the same reason as
+     the rail above: the `.git-row-commit { flex: 1 }` shorthand further down
+     the file would otherwise reset this basis back to 0%. */
+  .git-row > .git-row-commit {
+    flex-basis: 100%;
+  }
+
+  .git-cell--when {
+    margin-left: auto;
+  }
+}
+.git-row:hover {
+  border-color: var(--border-hover);
+  background: var(--row-hover);
+}
+.git-row--norepo {
+  color: var(--text-muted);
+}
+
+.git-row-name {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* The latest commit takes the slack and truncates; the time sits at the far right. */
+.git-row-commit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--px-sp-4);
+  overflow: hidden;
+}
+.git-row-commit .git-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.git-row-commit--empty {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+}
+
+.git-repo-name {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.git-branch {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-1) var(--px-sp-4);
+  background: var(--px-rule-soft);
+  color: var(--px-muted-on-fill);
+}
+
+.git-branch--detached {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.git-badge {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  font-weight: 600;
+  padding: 1px var(--px-sp-4);
+  border: 1px solid;
+}
+
+.git-badge--clean {
+  color: var(--px-green);
+  border-color: var(--px-green);
+  background: color-mix(in srgb, var(--px-green) 12%, transparent);
+}
+
+.git-badge--dirty {
+  color: var(--accent-text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.git-badge--none {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.git-track {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  font-weight: 600;
+}
+
+.git-track--ahead {
+  color: var(--px-green);
+}
+
+.git-track--behind {
+  color: var(--danger);
+}
+
+.git-track--even {
+  color: var(--text-muted);
+}
+
+.git-commits {
+  list-style: none;
+  margin: 0;
+  padding: var(--px-sp-2) 0;
+}
+
+.git-commits-empty {
+  padding: var(--px-sp-5) var(--px-sp-6);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text-muted);
+}
+
+.git-commit {
+  display: grid;
+  grid-template-columns: 68px 1fr auto auto;
+  align-items: baseline;
+  gap: var(--px-sp-5);
+  padding: var(--px-sp-2) var(--px-sp-6);
+  font-size: var(--px-body);
+}
+
+.git-commit:hover {
+  background: var(--row-hover);
+}
+
+.git-hash {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--px-teal-text);
+}
+
+.git-subject {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-author {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.git-when {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  text-align: right;
+  min-width: 48px;
+}
+
+/* --- git repo detail (view 9b) ---------------------------------------------- */
+/* One repo, deep: a header (branch/state/track over the path), a tab row, and a
+   lazy-loaded body — commits (each expands to its diff), working-tree changes,
+   branches, pull requests, issues & CI. Diffs render line-by-line, +/- coloured. */
+
+.git-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-5);
+}
+
+.git-back {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text-muted);
+  text-decoration: none;
+  align-self: flex-start;
+}
+.git-back:hover {
+  color: var(--accent-text);
+}
+
+.git-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-2);
+  padding-bottom: var(--px-sp-4);
+  border-bottom: var(--px-edge);
+}
+.git-detail-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--px-sp-4);
+}
+.git-detail-title .git-repo-name {
+  font-size: var(--px-title);
+}
+.git-detail-path {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.git-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-sp-2);
+}
+.git-tab {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-5);
+  border: var(--px-edge);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.git-tab:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+.git-tab--on {
+  color: var(--accent-text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.git-tab-body {
+  border: var(--px-edge);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  padding: var(--px-sp-2) 0;
+  overflow-x: auto;
+}
+
+.git-sub {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: var(--px-sp-5) var(--px-sp-6) var(--px-sp-2);
+}
+
+/* commits → expandable */
+.git-commits--rich .git-commit--click {
+  display: grid;
+  grid-template-columns: 68px 1fr auto auto;
+  align-items: baseline;
+  gap: var(--px-sp-5);
+  padding: var(--px-sp-2) var(--px-sp-6);
+  cursor: pointer;
+}
+.git-commits--rich .git-commit--click:hover {
+  background: var(--row-hover);
+}
+.git-commit-item--open > .git-commit--click {
+  background: var(--row-hover);
+}
+/* Filter chrome inside a detail tab: a chip row, and for commits a chip row plus
+   the author picker and search box on one line. */
+.git-filters {
+  padding: var(--px-sp-5) var(--px-sp-6) var(--px-sp-3);
+}
+
+.git-cfilter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-5) var(--px-sp-6) var(--px-sp-3);
+  border-bottom: 1px dashed var(--border);
+}
+.git-cfilter .git-filters {
+  padding: 0;
+}
+.git-cfilter .search-input {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* Says plainly that a filter — not an empty repo — is why rows are missing. */
+.git-filter-note {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  padding: 0 var(--px-sp-6) var(--px-sp-2);
+}
+
+/* "load more" footer under the commits list. */
+.git-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: var(--px-sp-4) var(--px-sp-6) var(--px-sp-5);
+}
+.git-more {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-2) var(--px-sp-6);
+  border: var(--px-edge);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.git-more:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.git-more:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.git-more-done {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.git-commit-detail {
+  padding: var(--px-sp-4) var(--px-sp-6) var(--px-sp-5);
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+}
+.git-commit-body {
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: var(--px-sp-4);
+}
+
+/* changed-file list */
+.git-files {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--px-sp-6) var(--px-sp-4);
+}
+.git-file {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--px-sp-5);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: 1px 0;
+}
+.git-fpath {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-fstat {
+  white-space: nowrap;
+}
+.git-add {
+  color: var(--px-green);
+}
+.git-del {
+  color: var(--danger);
+}
+.git-fstat--bin {
+  color: var(--text-muted);
+}
+
+/* diff viewer */
+.git-diff {
+  margin: var(--px-sp-2) var(--px-sp-5) var(--px-sp-4);
+  padding: var(--px-sp-4) var(--px-sp-5);
+  background: var(--bg);
+  border: var(--px-edge-inner);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.git-dl {
+  display: block;
+  white-space: pre;
+}
+.git-dl--add {
+  color: var(--px-green);
+  background: color-mix(in srgb, var(--px-green) 10%, transparent);
+}
+.git-dl--del {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.git-dl--hunk {
+  color: var(--px-teal-text);
+}
+.git-dl--meta {
+  color: var(--text-muted);
+}
+.git-diff-trunc,
+.git-diff-empty {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  padding: 0 var(--px-sp-6) var(--px-sp-4);
+}
+
+/* branches */
+.git-branch-list,
+.git-pr-list,
+.git-issue-list,
+.git-run-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--px-sp-2) 0;
+}
+.git-branch-row,
+.git-pr-row,
+.git-issue-row,
+.git-run-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-2) var(--px-sp-6);
+  font-size: var(--px-body);
+}
+.git-branch-row:hover,
+.git-pr-row:hover,
+.git-issue-row:hover,
+.git-run-row:hover {
+  background: var(--row-hover);
+}
+.git-bname {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.git-bsubject,
+.git-pr-branch,
+.git-run-wf {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-bsubject {
+  flex: 1;
+}
+.git-btag {
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  padding: 1px var(--px-sp-4);
+  background: var(--px-rule-soft);
+  color: var(--px-muted-on-fill);
+  white-space: nowrap;
+}
+.git-btag--cur {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.git-btag--merged {
+  color: var(--px-green);
+  border-color: var(--px-green);
+}
+
+/* pull requests + issues + runs */
+.git-pr-title {
+  flex: 1;
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-pr-title:hover {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+.git-pr-num {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.git-pr-branch,
+.git-run-wf {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  max-width: 180px;
+}
+.git-pr-state {
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  font-weight: 600;
+  padding: 0 var(--px-sp-3);
+  border: 1px solid;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.git-pr-state--open {
+  color: var(--px-green);
+  border-color: var(--px-green);
+}
+.git-pr-state--merged {
+  color: var(--px-purple);
+  border-color: var(--px-purple);
+}
+.git-pr-state--closed {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.git-pr-state--draft {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.git-review {
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.git-review--approved {
+  color: var(--px-green);
+}
+.git-review--changes_requested {
+  color: var(--danger);
+}
+
+/* a check/run status dot */
+.git-check {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  align-self: center;
+}
+.git-check--success {
+  background: var(--px-green);
+}
+.git-check--failure {
+  background: var(--danger);
+}
+.git-check--pending {
+  background: var(--px-muted, var(--text-muted));
+}

@@ -1,0 +1,70 @@
+/* --- ships (view 7) --------------------------------------------------------- */
+/* Colour comes from pixel.css tokens only — --px-green/--px-red for the gate
+   badges, everything else through the aliased vocabulary. */
+
+.ships-card {
+  padding: var(--px-sp-6);
+}
+
+.ships-meta {
+  font-size: var(--px-body);
+  color: var(--muted);
+  margin-bottom: var(--px-sp-4);
+}
+
+.ship-row {
+  cursor: pointer;
+}
+
+.ship-kind {
+  text-transform: uppercase;
+  font-size: var(--px-meta);
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.ship-sess {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.ship-sess:hover {
+  text-decoration: underline;
+}
+
+.ship-exit {
+  display: inline-block;
+  padding: 1px var(--px-sp-4);
+  border: 1px solid;
+  font-size: var(--px-meta);
+  font-weight: 600;
+}
+
+.ship-exit--ok {
+  color: var(--px-green);
+  border-color: var(--px-green);
+  background: color-mix(in srgb, var(--px-green) 12%, transparent);
+}
+
+.ship-exit--fail {
+  color: var(--px-red);
+  border-color: var(--px-red);
+  background: color-mix(in srgb, var(--px-red) 12%, transparent);
+}
+
+.ship-log td {
+  padding: 0;
+}
+
+.ship-log pre {
+  margin: 0;
+  padding: var(--px-sp-5) var(--px-sp-6);
+  max-height: 320px;
+  overflow: auto;
+  font-size: var(--px-meta);
+  line-height: 1.5;
+  background: var(--bg);
+  border-top: 1px dashed var(--border);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

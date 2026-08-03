@@ -112,12 +112,21 @@ test rendered that view, and the suite stayed green. `app/links.test.ts` now
 asserts every internal link in the source names a tab that still exists, by
 running it through `parseLocation` rather than a second copy of the tab sets.
 
-Two files are deliberately still large: `views/board.ts` (~1.5k lines) and
-`style.css` (~6.2k). `renderBoardView` is one closure over 19 mutable variables
-and that closure IS the per-mount state isolation, so splitting it means
-redesigning state on the busiest screen, untested. Splitting `style.css`
-reorders the cascade with no visual regression test. Both were left on purpose;
-don't "fix" either in passing.
+`views/board.ts` (~1.5k lines) is deliberately still large: `renderBoardView` is
+one closure over 19 mutable variables and that closure IS the per-mount state
+isolation, so splitting it means redesigning state on the busiest screen,
+untested. Left on purpose; don't "fix" it in passing.
+
+`style.css` was in that same paragraph until it wasn't. It is now `src/style.css`
+— an index of `@import`s — plus fifteen numbered parts under `src/css/`. The
+objection to splitting it was never taste, it was that reordering the cascade
+breaks things nothing here renders a page to notice. What made the split safe was
+proving it inert rather than promising it: the parts are imported in the exact
+order they appeared, Vite inlines them in that order, and the built CSS came out
+byte-identical — same content hash, same 115392 bytes. `css/order.test.ts` keeps
+it that way. **The import order IS the cascade**; reordering those lines is a
+silent restyle, and adding a rule to `style.css` itself puts it after every
+import where it beats all of them.
 
 ## Three jobs, three ways to run it — don't collapse them
 

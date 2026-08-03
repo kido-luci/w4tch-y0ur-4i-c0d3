@@ -1,0 +1,357 @@
+/* --- cycles view (/project/<scope>/cycles) --------------------------------
+   Sprint list + burndown. The chart is hand-rolled SVG like the app's others. */
+
+.cy-toolbar {
+  margin: var(--px-sp-4) 0 var(--px-sp-5);
+}
+
+.cy-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--px-sp-4);
+}
+
+.cy-form input[type="text"],
+.cy-form input:not([type]),
+.cy-f-name,
+.cy-f-goal {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-4);
+  min-width: 180px;
+}
+
+.cy-form label {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--px-sp-2);
+}
+
+.cy-form input[type="date"] {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  padding: var(--px-sp-2) var(--px-sp-3);
+}
+
+.cy-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-sp-4);
+}
+
+/* An open editorial list: a heavy rule on top, hairlines between rows, no
+   boxes — the mock's cycles page. */
+.cy-list {
+  border-top: var(--px-rule-heavy);
+}
+
+.cy-row {
+  background: transparent;
+  border-bottom: var(--px-edge-inner);
+  padding: var(--px-sp-6) var(--px-sp-2);
+  cursor: pointer;
+}
+
+.cy-row:hover {
+  background: var(--row-hover);
+}
+
+/* Selected is a blue bar in the margin, not a frame. */
+.cy-row.selected {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.cy-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-4);
+  flex-wrap: wrap;
+}
+
+.cy-name {
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-title);
+}
+
+.cy-badge {
+  background: var(--px-rule-soft);
+  border: 1px solid transparent;
+  border-radius: var(--px-r-pill);
+  padding: 1px var(--px-sp-4);
+  font-family: var(--px-sans);
+  font-weight: 700;
+  font-size: var(--px-label-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--px-muted-on-fill);
+}
+
+/* The mock's CURRENT pill: green words in a soft green frame, no fill. */
+.cy-badge-current {
+  background: transparent;
+  border-color: var(--px-green);
+  color: var(--px-green-text);
+}
+
+.cy-badge-late {
+  background: transparent;
+  color: #d98a2b;
+  border-color: #d98a2b;
+}
+
+.cy-dates {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.cy-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: var(--px-sp-3);
+  opacity: 0;
+}
+
+.cy-row:hover .cy-actions,
+.cy-row.selected .cy-actions {
+  opacity: 1;
+}
+
+.cy-goal {
+  margin-top: var(--px-sp-2);
+  font-size: var(--px-body);
+  color: var(--text-muted);
+}
+
+.cy-stats {
+  display: flex;
+  gap: var(--px-sp-5);
+  margin-top: var(--px-sp-3);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+.cy-stats b {
+  color: var(--text);
+}
+
+.cy-warn {
+  color: #d98a2b;
+}
+
+.cy-bar {
+  margin-top: var(--px-sp-3);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--px-rule-soft);
+  overflow: hidden;
+}
+
+/* Progress is green while the cycle runs and grey once it's history. */
+.cy-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--px-green);
+}
+
+.cy-bar--past i {
+  background: var(--px-line-strong);
+}
+
+.cy-detail {
+  margin-top: var(--px-sp-5);
+  padding: var(--px-sp-5);
+}
+
+.cy-chart {
+  width: 100%;
+  height: 160px;
+  margin-top: var(--px-sp-4);
+  overflow: visible;
+}
+
+/* vector-effect keeps the stroke 1px wide despite the non-uniform viewBox
+   stretch — without it a wide card draws a fat line and a tall one a hairline. */
+.cy-chart path {
+  fill: none;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.cy-remaining {
+  stroke: var(--accent);
+}
+
+.cy-ideal {
+  stroke: var(--text-muted);
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+
+.cy-dot {
+  fill: var(--accent);
+  vector-effect: non-scaling-stroke;
+}
+
+.cy-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--px-sp-2);
+  font-family: var(--mono);
+  font-size: var(--px-label);
+  color: var(--text-muted);
+}
+
+.cy-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--px-sp-5);
+  margin-top: var(--px-sp-4);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.cy-key::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin-right: var(--px-sp-2);
+  vertical-align: middle;
+}
+
+.cy-key-remaining::before {
+  background: var(--accent);
+}
+
+.cy-key-ideal::before {
+  background: var(--text-muted);
+}
+
+.cy-pool {
+  margin-top: var(--px-sp-5);
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+}
+
+/* --- board history rows (card journey + the cycles tab's activity feed) ---- */
+
+.ev-move {
+  font-family: var(--mono);
+}
+
+.cy-activity {
+  margin-top: var(--px-sp-5);
+  padding: var(--px-sp-5);
+}
+
+.ev-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--px-sp-4);
+  padding: var(--px-sp-2) 0;
+  font-size: var(--px-body);
+  border-bottom: 1px solid var(--border);
+}
+
+.ev-row:last-child {
+  border-bottom: 0;
+}
+
+.ev-when {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  min-width: 8em;
+}
+
+.ev-card {
+  font-family: var(--mono);
+  font-size: var(--px-meta);
+  color: var(--text-muted);
+  text-decoration: none;
+  min-width: 3em;
+}
+
+.ev-card:hover {
+  color: var(--accent-text);
+}
+
+.ev-what {
+  color: var(--text);
+}
+
+/* --- inline editors that replaced prompt() -------------------------------- */
+
+.col-form,
+.view-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--px-sp-3);
+  align-items: center;
+}
+
+.col-form {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.col-form-row {
+  display: flex;
+  gap: var(--px-sp-3);
+}
+
+.col-f-name,
+.col-f-wip,
+.col-f-cat,
+.view-f-name,
+.board-col-rename {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--px-r-card);
+  font-family: var(--mono);
+  font-size: var(--px-body);
+  padding: var(--px-sp-2) var(--px-sp-3);
+  width: 100%;
+}
+
+.view-f-name {
+  width: auto;
+  min-width: 160px;
+}
+
+.board-col-rename {
+  width: auto;
+  min-width: 0;
+  flex: 1;
+  font-family: var(--px-serif);
+  font-weight: 600;
+  font-size: var(--px-sans-sm);
+}
+
+.col-f-name:focus,
+.col-f-wip:focus,
+.view-f-name:focus,
+.board-col-rename:focus {
+  outline: none;
+  border-color: var(--accent);
+}
