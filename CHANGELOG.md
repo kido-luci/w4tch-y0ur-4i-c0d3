@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Versions follow
 
 ## Unreleased
 
+### Fixed
+- **`make release-dry` replaced the production binary.** It depends on
+  `check-run`, whose build wrote `-o ../watch-your-ai-code` — the file the
+  launchd agent runs — so the one target that "tags nothing, pushes nothing,
+  publishes nothing" was swapping the running binary underneath a live process.
+  `check-run` takes a `CHECK_BIN` path now, still defaulting to the everyday
+  binary (that delivery is deliberate); `release-dry-run` points it at `.dev/`.
+
 ### Changed
 - **`style.css` is split into fifteen parts.** It was 6446 lines, and the reason
   it stayed that way was real — reordering the cascade breaks what no test here

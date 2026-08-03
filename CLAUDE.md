@@ -185,15 +185,23 @@ Need the real board to test against? That's a *data* question, not a port
 question: copy `data.db` (with its `-wal`/`-shm` siblings) into the throwaway
 config dir.
 
-**A throwaway port and config dir are two axes; the OUTPUT PATH is the third,
-and `make` doesn't give it to you.** `make build` and `make check` both end in
-`go build -o ../watch-your-ai-code` — the exact file the launchd agent runs. So
-running either one IS a delivery to the everyday instance: it puts whichever
-branch is checked out on 4777, with no merge, tag or release anywhere in sight.
-The restart below is not a way to avoid that, it's the *other* consequence of
-the same overwrite. Never reach for `make build`/`make check` to try a branch
-out; shipping to the everyday instance is a decision to ask for, not a step
-inside a verification.
+**A throwaway port and config dir are two axes; the OUTPUT PATH is the third.**
+`make build` and `make check` both end in `go build -o ../watch-your-ai-code` —
+the exact file the launchd agent runs. So running either one IS a delivery to
+the everyday instance: it puts whichever branch is checked out on 4777, with no
+merge, tag or release anywhere in sight. The restart below is not a way to avoid
+that, it's the *other* consequence of the same overwrite. Never reach for `make
+build`/`make check` to try a branch out; shipping to the everyday instance is a
+decision to ask for, not a step inside a verification.
+
+`check-run` takes `CHECK_BIN` for that third axis, defaulting to the everyday
+binary — the delivery above is deliberate, not an accident to be patched out.
+`release-dry-run` overrides it to `.dev/dry/` through a target-specific variable,
+which is how a target that "tags nothing, pushes nothing, publishes nothing" also
+stopped replacing the running production binary. It used to: release-dry depends
+on check-run, so the one command whose purpose was to change nothing swapped the
+binary underneath an 18-hour-old process. Verified by fingerprint — a full
+release-dry now leaves `watch-your-ai-code` at the same mtime and md5.
 
 Build somewhere else instead — the port and the config dir were never the part
 at risk:
