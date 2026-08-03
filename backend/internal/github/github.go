@@ -16,6 +16,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"os"
 	"os/exec"
@@ -354,7 +355,7 @@ func ghActivityFor(slug string) (ghActivity, bool) {
 // validates ?repo against the scope's resolved roots, derives the github slug
 // from its origin, and returns {supported:false} for a non-GitHub repo so the UI
 // shows an honest "no GitHub remote" state instead of an error.
-func Register(mux *http.ServeMux, rr *repos.Resolver) {
+func Register(router chi.Router, rr *repos.Resolver) {
 	prCache := newGHCache(60 * time.Second)
 	actCache := newGHCache(60 * time.Second)
 
@@ -368,7 +369,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 		return slug, ok, true
 	}
 
-	mux.HandleFunc("GET /api/git/prs", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/git/prs", func(w http.ResponseWriter, r *http.Request) {
 		slug, isGH, valid := slugFor(w, r)
 		if !valid {
 			return
@@ -391,7 +392,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 		}{Supported: true, PRs: v.([]ghPR)})
 	})
 
-	mux.HandleFunc("GET /api/git/activity", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/git/activity", func(w http.ResponseWriter, r *http.Request) {
 		slug, isGH, valid := slugFor(w, r)
 		if !valid {
 			return

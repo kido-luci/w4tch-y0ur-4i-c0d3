@@ -44,7 +44,19 @@ what breaks, silently, at build time.
 - `board` — the nine stores plus `data.db`'s schema and migrations, plus scope
   resolution. They share one database, so they share one package.
 - `httpapi` / `mcpserver` — the two transports, siblings. Neither imports the
-  other; `main` mounts both. `httpx`, `sse`, `cowork`, `summarize` are leaves.
+  other; `main` mounts both. Routing is **go-chi**: `main` builds one
+  `chi.NewRouter()` and every package that owns a slice of the API takes a
+  `chi.Router` — `httpapi.Register`, and through it `codegraph`, `figfiles`,
+  `git`, `github`. Path params are `chi.URLParam(r, "name")`, not `r.PathValue`.
+
+  One thing chi does that `http.ServeMux` did not, and it bit on the way in: a
+  known path with an unregistered method is answered by chi's OWN 405 handler,
+  which never reaches the SPA fallback. Under ServeMux the bare `"/"` pattern
+  caught that case and returned the JSON error. `GET /api/projects/<name>` is
+  exactly it. So `main` wires the fallback to **`MethodNotAllowed` as well as
+  `NotFound`** — the invariant being protected is that `/api/*` answers JSON,
+  never a web page and never a bare status.
+- `httpx`, `sse`, `cowork`, `summarize` — leaves.
 
 Packages take **narrow interfaces, not the whole index** — `Snapshot()`,
 `SessionRef(id)`, `Session(id)`. That is what lets git, ships and search live

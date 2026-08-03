@@ -15,6 +15,7 @@ package figfiles
 import (
 	"errors"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"io/fs"
 	"log"
 	"net/http"
@@ -143,14 +144,14 @@ func Open(rs []repos.Repo, path string) error {
 	return fmt.Errorf("could not launch OpenPencil: %w", err)
 }
 
-func Register(mux *http.ServeMux, rr *repos.Resolver) {
-	mux.HandleFunc("GET /api/design-files", func(w http.ResponseWriter, r *http.Request) {
+func Register(router chi.Router, rr *repos.Resolver) {
+	router.Get("/api/design-files", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, struct {
 			Files []File `json:"files"`
 		}{Files: List(rr.Bound(r.URL.Query().Get("scope")))})
 	})
 
-	mux.HandleFunc("POST /api/design-files/open", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/design-files/open", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Query().Get("path")
 		switch err := Open(rr.Bound(r.URL.Query().Get("scope")), path); {
 		case errors.Is(err, ErrUnknownFile):

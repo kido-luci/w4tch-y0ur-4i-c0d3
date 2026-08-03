@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"io"
 	"net/http"
 	"sort"
@@ -134,7 +135,7 @@ type Deps struct {
 	PublicFolders func() map[string]bool
 }
 
-func Register(mux *http.ServeMux, d Deps) {
+func Register(router chi.Router, d Deps) {
 	// Bound to the names the handlers below already use. The struct is the
 	// wiring contract at the boundary, not an indirection to thread through
 	// sixty handler bodies.
@@ -194,13 +195,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		return out
 	})
 
-	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 		httpx.WriteJSON(w, ix.Sessions(days, r.URL.Query().Get("project"), r.URL.Query().Get("status")))
 	})
 
-	mux.HandleFunc("GET /api/sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
-		s := ix.Session(r.PathValue("id"))
+	router.Get("/api/sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
+		s := ix.Session(chi.URLParam(r, "id"))
 		if s == nil {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
@@ -211,8 +212,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Cached milestone-group summaries. `fresh` is false when the session has
 	// grown past the cached hash (or nothing is cached yet) — the UI then shows
 	// the summarize button; stale summaries still render, prefix-aligned.
-	mux.HandleFunc("GET /api/sessions/{id}/summaries", func(w http.ResponseWriter, r *http.Request) {
-		s := ix.Session(r.PathValue("id"))
+	router.Get("/api/sessions/{id}/summaries", func(w http.ResponseWriter, r *http.Request) {
+		s := ix.Session(chi.URLParam(r, "id"))
 		if s == nil {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
@@ -224,8 +225,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Generate summaries for the session's milestone groups — the one endpoint
 	// that leaves the machine (via the user's own `claude` CLI). Idempotent: a
 	// fresh cache is returned without a new claude call.
-	mux.HandleFunc("POST /api/sessions/{id}/summarize", func(w http.ResponseWriter, r *http.Request) {
-		s := ix.Session(r.PathValue("id"))
+	router.Post("/api/sessions/{id}/summarize", func(w http.ResponseWriter, r *http.Request) {
+		s := ix.Session(chi.URLParam(r, "id"))
 		if s == nil {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
@@ -250,7 +251,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// board.ResolveScope, in another language, agreeing only by inspection. Two copies
 	// of one rule drift the moment someone edits one, and the last time this rule
 	// was wrong a workflow column vanished from a member project.
-	mux.HandleFunc("GET /api/scopes", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/scopes", func(w http.ResponseWriter, r *http.Request) {
 		// Presentation mode subtracts private projects from every label's
 		// coverage. The client filters its lists by these sets, so trimming
 		// them here hides private cards/pages/drawings in every label-based
@@ -281,18 +282,18 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, out)
 	})
 
-	mux.HandleFunc("GET /api/projects", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/projects", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, ix.Projects())
 	})
 
 	// --- todo board (local todos.json; the server is the single writer). Every
 	// mutation broadcasts the fresh column-ordered list so other tabs stay in sync.
 
-	mux.HandleFunc("GET /api/todos", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/todos", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, todos.List())
 	})
 
-	mux.HandleFunc("POST /api/todos", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/todos", func(w http.ResponseWriter, r *http.Request) {
 		var in board.TodoCreate
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
@@ -307,7 +308,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, todo)
 	})
 
-	mux.HandleFunc("PATCH /api/todos/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Patch("/api/todos/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var p board.TodoPatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
@@ -327,7 +328,7 @@ func Register(mux *http.ServeMux, d Deps) {
 				return
 			}
 		}
-		todo, err := todos.Update(r.PathValue("id"), p)
+		todo, err := todos.Update(chi.URLParam(r, "id"), p)
 		if errors.Is(err, board.ErrTodoNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -343,8 +344,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, todo)
 	})
 
-	mux.HandleFunc("DELETE /api/todos/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+	router.Delete("/api/todos/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 		if err := todos.Delete(id); err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -357,8 +358,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	})
 
 	// One card's activity feed, oldest first.
-	mux.HandleFunc("GET /api/todos/{id}/events", func(w http.ResponseWriter, r *http.Request) {
-		evs, err := events.ForTodo(r.PathValue("id"))
+	router.Get("/api/todos/{id}/events", func(w http.ResponseWriter, r *http.Request) {
+		evs, err := events.ForTodo(chi.URLParam(r, "id"))
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -367,7 +368,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	})
 
 	// The board-wide feed, newest first. `?limit=` caps at 500.
-	mux.HandleFunc("GET /api/board/events", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/board/events", func(w http.ResponseWriter, r *http.Request) {
 		n, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		evs, err := events.Recent(n)
 		if err != nil {
@@ -380,11 +381,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// --- workflow columns (states.go). `?repo=` narrows to what one scope
 	// sees: the shared columns plus that project's own.
 
-	mux.HandleFunc("GET /api/board/states", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/board/states", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, states.ListForScope(scopeOf(r)))
 	})
 
-	mux.HandleFunc("POST /api/board/states", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/board/states", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name     string `json:"name"`
 			Category string `json:"category"`
@@ -404,13 +405,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, st)
 	})
 
-	mux.HandleFunc("PATCH /api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Patch("/api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var p board.StatePatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		st, err := states.Update(r.PathValue("id"), p)
+		st, err := states.Update(chi.URLParam(r, "id"), p)
 		if errors.Is(err, board.ErrStateNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -429,8 +430,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Deleting a column that still holds cards would strand them in a status
 	// nothing renders, so the count is checked here — the side that can see
 	// the cards — rather than inside the state store.
-	mux.HandleFunc("DELETE /api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+	router.Delete("/api/board/states/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 		// Builtin first: "this column can never be deleted" is the real reason,
 		// and reporting "move the cards out" instead sends the user off to do
 		// work that changes nothing.
@@ -465,11 +466,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// --- cycles (cycles.go): the sprints cards are planned into, plus the two
 	// reports that make the bookkeeping pay for itself.
 
-	mux.HandleFunc("GET /api/cycles", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/cycles", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, cycles.ListForScope(scopeOf(r)))
 	})
 
-	mux.HandleFunc("POST /api/cycles", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/cycles", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name     string    `json:"name"`
 			Repo     string    `json:"repo"`
@@ -490,13 +491,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, c)
 	})
 
-	mux.HandleFunc("PATCH /api/cycles/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Patch("/api/cycles/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var p board.CyclePatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		c, err := cycles.Update(r.PathValue("id"), p)
+		c, err := cycles.Update(chi.URLParam(r, "id"), p)
 		if errors.Is(err, board.ErrCycleNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -511,8 +512,8 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Deleting a cycle keeps its cards — they fall back out of any cycle, the
 	// way a deleted drawing is unlinked rather than taking the card with it.
-	mux.HandleFunc("DELETE /api/cycles/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+	router.Delete("/api/cycles/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 		if err := cycles.Delete(id); err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -524,8 +525,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("GET /api/cycles/{id}/burndown", func(w http.ResponseWriter, r *http.Request) {
-		c, ok := cycles.Get(r.PathValue("id"))
+	router.Get("/api/cycles/{id}/burndown", func(w http.ResponseWriter, r *http.Request) {
+		c, ok := cycles.Get(chi.URLParam(r, "id"))
 		in := scopeOf(r)
 		// A drill-down validates its target against the resolved scope, the way
 		// the git tab's endpoints validate ?repo: without it this charted a
@@ -543,18 +544,18 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, bd)
 	})
 
-	mux.HandleFunc("GET /api/cycles/velocity", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/cycles/velocity", func(w http.ResponseWriter, r *http.Request) {
 		in := scopeOf(r)
 		httpx.WriteJSON(w, board.Velocity(cycles.ListForScope(in), todos, in))
 	})
 
 	// --- saved views (boardviews.go): a named filter plus the shape it draws.
 
-	mux.HandleFunc("GET /api/board/views", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/board/views", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, views.ListForScope(scopeOf(r)))
 	})
 
-	mux.HandleFunc("POST /api/board/views", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/board/views", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name  string          `json:"name"`
 			Repo  string          `json:"repo"`
@@ -574,13 +575,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, v)
 	})
 
-	mux.HandleFunc("PATCH /api/board/views/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Patch("/api/board/views/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var p board.ViewPatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		v, err := views.Update(r.PathValue("id"), p)
+		v, err := views.Update(chi.URLParam(r, "id"), p)
 		if errors.Is(err, board.ErrViewNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -593,8 +594,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, v)
 	})
 
-	mux.HandleFunc("DELETE /api/board/views/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if err := views.Delete(r.PathValue("id")); err != nil {
+	router.Delete("/api/board/views/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := views.Delete(chi.URLParam(r, "id")); err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -612,11 +613,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// routes use it — keep the surface local to them.
 	publisher := cowork.NewPublisherFromEnv()
 
-	mux.HandleFunc("GET /api/drawings", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/drawings", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, drawings.List())
 	})
 
-	mux.HandleFunc("POST /api/drawings", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/drawings", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Name, Group string }
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
@@ -631,8 +632,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("GET /api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
-		content, err := drawings.Content(r.PathValue("id"))
+	router.Get("/api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
+		content, err := drawings.Content(chi.URLParam(r, "id"))
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -647,7 +648,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// X-Base-Updated-At (the updatedAt the client last saw, RFC3339Nano) makes
 	// the write conditional: a stale base gets 409 instead of clobbering a
 	// save that happened elsewhere (another tab, an MCP client).
-	mux.HandleFunc("PUT /api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Put("/api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
 		content, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 20<<20))
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusRequestEntityTooLarge, "scene too large (20MB max)")
@@ -660,7 +661,7 @@ func Register(mux *http.ServeMux, d Deps) {
 				return
 			}
 		}
-		d, err := drawings.SetContent(r.PathValue("id"), content, base)
+		d, err := drawings.SetContent(chi.URLParam(r, "id"), content, base)
 		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -677,8 +678,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("PATCH /api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+	router.Patch("/api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 		// Pointers so a metadata edit can carry any field: name renames,
 		// group moves the drawing to a tab, topics replaces its tag set (and
 		// ""/[] are real values — back to Ungrouped / untagged — distinct
@@ -727,8 +728,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("POST /api/drawings/{id}/duplicate", func(w http.ResponseWriter, r *http.Request) {
-		d, err := drawings.Duplicate(r.PathValue("id"))
+	router.Post("/api/drawings/{id}/duplicate", func(w http.ResponseWriter, r *http.Request) {
+		d, err := drawings.Duplicate(chi.URLParam(r, "id"))
 		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -744,8 +745,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Publish is an explicit user action: push the current scene to the review
 	// backend, then stamp PublishedAt with the version that was sent (the
 	// ThumbUpdatedAt freshness idiom — edits after publish show as stale).
-	mux.HandleFunc("POST /api/drawings/{id}/publish", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+	router.Post("/api/drawings/{id}/publish", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 		d, err := drawings.Get(id)
 		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
@@ -782,8 +783,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Excalidraw renderer exists) and cached here. A GET misses (404) until a
 	// thumbnail rendered from the CURRENT scene version has been uploaded —
 	// the grid regenerates on miss, so MCP writes self-heal on the next view.
-	mux.HandleFunc("GET /api/drawings/{id}/thumbnail", func(w http.ResponseWriter, r *http.Request) {
-		b, err := drawings.Thumbnail(r.PathValue("id"))
+	router.Get("/api/drawings/{id}/thumbnail", func(w http.ResponseWriter, r *http.Request) {
+		b, err := drawings.Thumbnail(chi.URLParam(r, "id"))
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -793,7 +794,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		w.Write(b)
 	})
 
-	mux.HandleFunc("PUT /api/drawings/{id}/thumbnail", func(w http.ResponseWriter, r *http.Request) {
+	router.Put("/api/drawings/{id}/thumbnail", func(w http.ResponseWriter, r *http.Request) {
 		base, err := time.Parse(time.RFC3339Nano, r.Header.Get("X-Base-Updated-At"))
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "X-Base-Updated-At is required (the scene updatedAt the thumbnail was rendered from)")
@@ -804,7 +805,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusRequestEntityTooLarge, "thumbnail too large (4MB max)")
 			return
 		}
-		d, err := drawings.SetThumbnail(r.PathValue("id"), data, base)
+		d, err := drawings.SetThumbnail(chi.URLParam(r, "id"), data, base)
 		if errors.Is(err, board.ErrDrawingNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -817,8 +818,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("DELETE /api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+	router.Delete("/api/drawings/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 		if err := drawings.Delete(id); err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -836,11 +837,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// page body is fetched per page and is last-writer-wins with optimistic
 	// concurrency, exactly like the design library's scenes.
 
-	mux.HandleFunc("GET /api/docs", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/docs", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, docs.List())
 	})
 
-	mux.HandleFunc("POST /api/docs", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/docs", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Title, ParentID, Group string }
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
@@ -855,8 +856,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("GET /api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		d, err := docs.Get(r.PathValue("id"))
+	router.Get("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		d, err := docs.Get(chi.URLParam(r, "id"))
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -868,7 +869,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Body saves. X-Base-Updated-At (the updatedAt the client last saw,
 	// RFC3339Nano) makes the write conditional: a stale base gets 409 instead
 	// of clobbering a save that happened elsewhere (another tab, an MCP client).
-	mux.HandleFunc("PUT /api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Put("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<20))
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusRequestEntityTooLarge, "body too large (4MB max)")
@@ -881,7 +882,7 @@ func Register(mux *http.ServeMux, d Deps) {
 				return
 			}
 		}
-		d, err := docs.SetContent(r.PathValue("id"), string(body), base)
+		d, err := docs.SetContent(chi.URLParam(r, "id"), string(body), base)
 		if errors.Is(err, board.ErrDocNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -898,13 +899,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("PATCH /api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Patch("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var p board.DocPatch
 		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		d, err := docs.Update(r.PathValue("id"), p)
+		d, err := docs.Update(chi.URLParam(r, "id"), p)
 		if errors.Is(err, board.ErrDocNotFound) {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -921,8 +922,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, d)
 	})
 
-	mux.HandleFunc("DELETE /api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
+	router.Delete("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
 		if err := docs.Delete(id); err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
@@ -938,11 +939,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Project groups: named sets of project names for the nav's global scope.
 	// Mutations broadcast groups-updated like the other stores, so a second
 	// tab's switcher (or one watching an MCP writer) stays in sync.
-	mux.HandleFunc("GET /api/groups", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/groups", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, groups.List())
 	})
 
-	mux.HandleFunc("PUT /api/groups/{name}", func(w http.ResponseWriter, r *http.Request) {
+	router.Put("/api/groups/{name}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Projects []string `json:"projects"`
 		}
@@ -950,7 +951,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		g, err := groups.Upsert(r.PathValue("name"), in.Projects)
+		g, err := groups.Upsert(chi.URLParam(r, "name"), in.Projects)
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return
@@ -959,8 +960,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, g)
 	})
 
-	mux.HandleFunc("DELETE /api/groups/{name}", func(w http.ResponseWriter, r *http.Request) {
-		if err := groups.Delete(r.PathValue("name")); err != nil {
+	router.Delete("/api/groups/{name}", func(w http.ResponseWriter, r *http.Request) {
+		if err := groups.Delete(chi.URLParam(r, "name")); err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -972,13 +973,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// scan. Each owns the Claude folders (session cwd-basenames) it stands for;
 	// mutations broadcast projects-updated like the other stores. (The plain
 	// GET /api/projects still returns the raw index names — datalist fodder.)
-	mux.HandleFunc("GET /api/projects/registry", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/projects/registry", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, projects.List())
 	})
 
 	// Claude folders the index reports that no registry entry owns yet —
 	// offered in the manager so they can be claimed or merged.
-	mux.HandleFunc("GET /api/projects/unmapped", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/projects/unmapped", func(w http.ResponseWriter, r *http.Request) {
 		owned := map[string]bool{}
 		for _, p := range projects.List() {
 			for _, f := range p.Folders {
@@ -995,7 +996,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, out)
 	})
 
-	mux.HandleFunc("PUT /api/projects/{name}", func(w http.ResponseWriter, r *http.Request) {
+	router.Put("/api/projects/{name}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Folders []string `json:"folders"`
 			Hidden  bool     `json:"hidden"`
@@ -1013,7 +1014,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "bad JSON body")
 			return
 		}
-		p, err := projects.Upsert(r.PathValue("name"), in.Folders, in.Hidden, in.Ord, in.Parent)
+		p, err := projects.Upsert(chi.URLParam(r, "name"), in.Folders, in.Hidden, in.Ord, in.Parent)
 		if err != nil {
 			httpx.WriteJSONError(w, http.StatusBadRequest, err.Error())
 			return
@@ -1174,7 +1175,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		})
 		return out
 	}
-	mux.HandleFunc("GET /api/claude/scopes", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/claude/scopes", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, claudeScopes())
 	})
 
@@ -1184,7 +1185,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// binding you choose, and a repo that has never seen a session can still be
 	// bound by path — so reading the session index here creates no dependency
 	// the project page has to keep.
-	mux.HandleFunc("GET /api/repos", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/repos", func(w http.ResponseWriter, r *http.Request) {
 		type known struct {
 			Root    string `json:"root"`
 			Name    string `json:"name"`
@@ -1229,8 +1230,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, out)
 	})
 
-	mux.HandleFunc("DELETE /api/projects/{name}", func(w http.ResponseWriter, r *http.Request) {
-		if err := projects.Delete(r.PathValue("name")); err != nil {
+	router.Delete("/api/projects/{name}", func(w http.ResponseWriter, r *http.Request) {
+		if err := projects.Delete(chi.URLParam(r, "name")); err != nil {
 			httpx.WriteJSONError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -1242,10 +1243,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// (rail, scope resolution, session endpoints, MCP) while you demo or
 	// screenshot. Server-side state so every tab and consumer flips together;
 	// the broadcast is what makes open tabs re-render.
-	mux.HandleFunc("GET /api/presentation", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/presentation", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, map[string]bool{"hidden": settings != nil && settings.PresentationHidden()})
 	})
-	mux.HandleFunc("PUT /api/presentation", func(w http.ResponseWriter, r *http.Request) {
+	router.Put("/api/presentation", func(w http.ResponseWriter, r *http.Request) {
 		if settings == nil {
 			httpx.WriteJSONError(w, http.StatusServiceUnavailable, "settings store unavailable")
 			return
@@ -1269,8 +1270,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// the old one — cards, pages, drawings and group members. The name is the
 	// label those items store, so an in-place rename without this cascade would
 	// orphan them. A user-data change: the client confirms before calling.
-	mux.HandleFunc("POST /api/projects/{name}/rename", func(w http.ResponseWriter, r *http.Request) {
-		old := r.PathValue("name")
+	router.Post("/api/projects/{name}/rename", func(w http.ResponseWriter, r *http.Request) {
+		old := chi.URLParam(r, "name")
 		var in struct {
 			To string `json:"to"`
 		}
@@ -1323,7 +1324,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// its Content-Type; GET serves it (cache-busted by the ?v= the client adds
 	// from logoVersion); DELETE clears it. PUT/DELETE broadcast so the rail's
 	// logo version refreshes everywhere.
-	mux.HandleFunc("PUT /api/projects/{name}/logo", func(w http.ResponseWriter, r *http.Request) {
+	router.Put("/api/projects/{name}/logo", func(w http.ResponseWriter, r *http.Request) {
 		ct := r.Header.Get("Content-Type")
 		if !strings.HasPrefix(ct, "image/") {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "an image body is required")
@@ -1338,7 +1339,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			httpx.WriteJSONError(w, http.StatusBadRequest, "empty logo body")
 			return
 		}
-		if err := projects.SetLogo(r.PathValue("name"), data, ct, time.Now().UnixMilli()); err != nil {
+		if err := projects.SetLogo(chi.URLParam(r, "name"), data, ct, time.Now().UnixMilli()); err != nil {
 			code := http.StatusBadRequest
 			if errors.Is(err, board.ErrProjectNotFound) {
 				code = http.StatusNotFound
@@ -1350,8 +1351,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("GET /api/projects/{name}/logo", func(w http.ResponseWriter, r *http.Request) {
-		data, ct, err := projects.Logo(r.PathValue("name"))
+	router.Get("/api/projects/{name}/logo", func(w http.ResponseWriter, r *http.Request) {
+		data, ct, err := projects.Logo(chi.URLParam(r, "name"))
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -1363,8 +1364,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		w.Write(data)
 	})
 
-	mux.HandleFunc("DELETE /api/projects/{name}/logo", func(w http.ResponseWriter, r *http.Request) {
-		if err := projects.DeleteLogo(r.PathValue("name")); err != nil {
+	router.Delete("/api/projects/{name}/logo", func(w http.ResponseWriter, r *http.Request) {
+		if err := projects.DeleteLogo(chi.URLParam(r, "name")); err != nil {
 			code := http.StatusBadRequest
 			if errors.Is(err, board.ErrProjectNotFound) {
 				code = http.StatusNotFound
@@ -1376,15 +1377,15 @@ func Register(mux *http.ServeMux, d Deps) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	codegraph.Register(mux, rr)
-	figfiles.Register(mux, rr)
-	git.Register(mux, rr)
-	github.Register(mux, rr)
+	codegraph.Register(router, rr)
+	figfiles.Register(router, rr)
+	git.Register(router, rr)
+	github.Register(router, rr)
 
 	// Per-day activity buckets for the last `weeks` weeks (default 26), bucketed
 	// by the local calendar day of each session's start. Powers the heatmap; its
 	// window is independent of the sessions list's day filter.
-	mux.HandleFunc("GET /api/activity", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/activity", func(w http.ResponseWriter, r *http.Request) {
 		weeks, _ := strconv.Atoi(r.URL.Query().Get("weeks"))
 		if weeks <= 0 {
 			weeks = 26
@@ -1427,7 +1428,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// files only one session ever touched — one edit isn't rework — and `limit`
 	// (default 50) bounds the payload; the response's totalFiles says how many
 	// passed min, so the UI never implies it showed everything.
-	mux.HandleFunc("GET /api/churn", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/churn", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		days, _ := strconv.Atoi(q.Get("days"))
 		min := 2
@@ -1446,7 +1447,7 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Friction: the sessions you kept stopping. `limit` (default 20) bounds the
 	// list; totalSessions says how many had friction at all.
-	mux.HandleFunc("GET /api/friction", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/friction", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		days, _ := strconv.Atoi(q.Get("days"))
 		limit := 20
@@ -1461,7 +1462,7 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Work sizing: the sessions that outgrew their context. `limit` (default 20)
 	// bounds the list; totalSessions says how many compacted at all.
-	mux.HandleFunc("GET /api/sizing", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/sizing", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		days, _ := strconv.Atoi(q.Get("days"))
 		limit := 20
@@ -1476,7 +1477,7 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Cost per outcome, week by week. No limit: a window holds a handful of
 	// weeks, and dropping any would break the trend the block exists to show.
-	mux.HandleFunc("GET /api/ledger", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/ledger", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 		httpx.WriteJSON(w, ix.Ledger(days, r.URL.Query().Get("project")))
 	})
@@ -1484,7 +1485,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Ship history: recorded make check / make release runs from the drop dir
 	// (see internal/ships). Distinct from /api/ledger, the cost-per-outcome insights.
 	// `log=1` includes each run's captured log tail.
-	mux.HandleFunc("GET /api/ships", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/ships", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		days, _ := strconv.Atoi(q.Get("days"))
 		limit := 100
@@ -1513,7 +1514,7 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Transcript search over the FTS5 index (see internal/search). `limit` (default
 	// 100) bounds the response; `matched` reports what the cap left out.
-	mux.HandleFunc("GET /api/search", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/search", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		days, _ := strconv.Atoi(q.Get("days"))
 		limit := 100
@@ -1526,7 +1527,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		httpx.WriteJSON(w, searchIdx.Search(q.Get("q"), days, q.Get("project"), limit))
 	})
 
-	mux.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 		var st statsResponse
 		for _, s := range ix.Sessions(days, r.URL.Query().Get("project"), r.URL.Query().Get("status")) {
@@ -1553,7 +1554,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			hub.Broadcast("session-updated", ix.WithStatus(s, time.Now()))
 		}
 	})
-	mux.HandleFunc("POST /api/hook", func(w http.ResponseWriter, r *http.Request) {
+	router.Post("/api/hook", func(w http.ResponseWriter, r *http.Request) {
 		var ev struct {
 			TranscriptPath string `json:"transcript_path"`
 			SessionID      string `json:"session_id"`
@@ -1591,7 +1592,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("GET /api/events", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/events", func(w http.ResponseWriter, r *http.Request) {
 		fl, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "streaming unsupported", http.StatusInternalServerError)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"io/fs"
 	"log"
 	"net/http"
@@ -179,7 +180,10 @@ func main() {
 		return out
 	}
 
-	mux := http.NewServeMux()
+	// chi rather than http.ServeMux: every package that owns a slice of the API
+	// registers onto this one router (httpapi, and through it codegraph, figfiles,
+	// git, github), and chi's Router is the interface they all take.
+	mux := chi.NewRouter()
 	httpapi.Register(mux, httpapi.Deps{
 		Index:         ix,
 		Hub:           hub,
@@ -290,7 +294,17 @@ func main() {
 		log.Fatal(err)
 	}
 	files := http.FileServerFS(dist)
-	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// chi matches patterns, not prefixes, so the SPA fallback is an explicit
+	// catch-all rather than the bare "/" that ServeMux treated as one.
+	//
+	// It is wired to MethodNotAllowed as well as NotFound, and that is not
+	// tidiness. chi answers a known path with an unregistered method from its own
+	// 405 handler, which would return an empty body with no content-type — while
+	// ServeMux, having "/" registered, fell through to this handler and answered
+	// the JSON error. GET /api/projects/<name> is exactly that case. Sending both
+	// here keeps the invariant this handler exists for: /api/* always answers
+	// JSON, never a web page and never a bare status.
+	fallback := func(w http.ResponseWriter, r *http.Request) {
 		// SPA fallback: the client routes on real paths (History API), so a clean
 		// route like /project/<scope>/git is not a file. Serve the embedded file
 		// when it exists; otherwise hand back index.html and let the client router
@@ -326,7 +340,9 @@ func main() {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
 		files.ServeHTTP(w, r)
-	}))
+	}
+	mux.NotFound(fallback)
+	mux.MethodNotAllowed(fallback)
 
 	log.Printf("watch-your-ai-code on http://%s (root: %s, config: %s)", *addr, *root, cfgDir)
 	// hostGuard wraps EVERYTHING (API, MCP, static): loopback alone doesn't

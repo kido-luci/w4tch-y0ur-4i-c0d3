@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versions follow
 
 ## Unreleased
 
+### Changed
+- **Routing moved from `http.ServeMux` to go-chi.** All 79 routes and 33 path
+  params were converted; every package that owns a slice of the API now takes a
+  `chi.Router` instead of a `*http.ServeMux`. No route, method or status changed
+  — the SPA fallback is wired to chi's `MethodNotAllowed` as well as `NotFound`,
+  because chi answers a known path with an unregistered method from its own 405
+  handler, which would have returned an empty body where `/api/*` has always
+  answered JSON.
+
 ### Added
 - **A project can be bound to several local checkouts of its repo.** A second
   clone kept on another branch, a copy made to try something — each gets its own

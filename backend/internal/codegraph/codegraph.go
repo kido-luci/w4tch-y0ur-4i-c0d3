@@ -15,6 +15,7 @@ package codegraph
 import (
 	"context"
 	"database/sql"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"os/exec"
 	"path"
@@ -277,7 +278,7 @@ ORDER BY n.file_path, n.start_line LIMIT 50`, id)
 }
 
 // Register wires the three code-graph read endpoints.
-func Register(mux *http.ServeMux, rr *repos.Resolver) {
+func Register(router chi.Router, rr *repos.Resolver) {
 	// openScoped validates ?repo against the scope's resolved roots and opens
 	// its DB; nil means the response was already written.
 	openScoped := func(w http.ResponseWriter, r *http.Request) *sql.DB {
@@ -303,7 +304,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 
 	// The page load: the scope's repos with their summaries, plus the file
 	// graph of ?repo (or the first indexed repo when unset).
-	mux.HandleFunc("GET /api/codegraph", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/codegraph", func(w http.ResponseWriter, r *http.Request) {
 		repoList := rr.Bound(r.URL.Query().Get("scope"))
 		for i := range repoList {
 			if repoList[i].HasIndex {
@@ -336,7 +337,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	})
 
 	// One file's symbols (the click-a-node drill-down).
-	mux.HandleFunc("GET /api/codegraph/file", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/codegraph/file", func(w http.ResponseWriter, r *http.Request) {
 		db := openScoped(w, r)
 		if db == nil {
 			return
@@ -351,7 +352,7 @@ func Register(mux *http.ServeMux, rr *repos.Resolver) {
 	})
 
 	// Symbol lookup: ?id= → detail with callers/callees, else ?q= → FTS hits.
-	mux.HandleFunc("GET /api/codegraph/symbols", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/codegraph/symbols", func(w http.ResponseWriter, r *http.Request) {
 		db := openScoped(w, r)
 		if db == nil {
 			return
