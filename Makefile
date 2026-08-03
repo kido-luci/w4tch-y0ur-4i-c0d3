@@ -24,14 +24,27 @@ run: build
 check:
 	@scripts/wyac-ship watch-your-ai-code check - $(MAKE) check-run
 
+# Where check-run's build lands. Absolute, so the recipe can name it both from
+# backend/ (where go build runs) and from the repo root (where the embed gate
+# greps it) without two spellings of one path drifting apart.
+#
+# The default IS the everyday binary — the file the launchd agent runs — because
+# `make check` and `make build` are how this project delivers, and that is
+# documented rather than accidental. release-dry-run overrides it: a target whose
+# whole purpose is "tags nothing, pushes nothing, publishes nothing" was silently
+# replacing the running production binary, which is the one thing it should never
+# touch. That is not a hypothetical; it is why this variable exists.
+CHECK_BIN ?= $(CURDIR)/watch-your-ai-code
+
 check-run:
 	cd frontend && npm ci && npm run build && npm test
 	@unformatted=$$(cd backend && gofmt -l .); if [ -n "$$unformatted" ]; then \
 		echo "not gofmt-formatted:"; echo "$$unformatted"; exit 1; fi
 	cd backend && go vet ./...
 	cd backend && go test ./...
-	cd backend && go build -o ../watch-your-ai-code .
-	@served=$$(grep -a -oE 'assets/index-[A-Za-z0-9_-]+\.js' watch-your-ai-code | head -1); \
+	@mkdir -p "$$(dirname "$(CHECK_BIN)")"
+	cd backend && go build -o "$(CHECK_BIN)" .
+	@served=$$(grep -a -oE 'assets/index-[A-Za-z0-9_-]+\.js' "$(CHECK_BIN)" | head -1); \
 	disk=$$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' backend/internal/web/dist/index.html | head -1); \
 	if [ -z "$$disk" ] || [ "$$served" != "$$disk" ]; then \
 		echo "embed gate FAILED: binary embeds '$$served', the built bundle has '$$disk'"; \
@@ -123,6 +136,9 @@ release-dry-guards:
 		echo "release-dry: something already holds 127.0.0.1:$(DRY_PORT) — stop it, or pass DRY_PORT=<free port>"; \
 		exit 1; fi
 
+# Target-specific, so it reaches check-run through the prerequisite chain: a dry
+# run builds its check binary under .dev/ and leaves the everyday one alone.
+release-dry-run: CHECK_BIN = $(CURDIR)/.dev/dry/watch-your-ai-code
 release-dry-run: release-dry-guards release-guards check-run release-build
 	@set -e; \
 	host="watch-your-ai-code_$(VERSION)_$$(go env GOOS)_$$(go env GOARCH)"; \
