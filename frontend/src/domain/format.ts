@@ -165,3 +165,17 @@ export function formatToolStats(stats: {
   if (stats.otherToolCount) parts.push(`${stats.otherToolCount}O`);
   return parts.length ? parts.join(" ") : "—";
 }
+
+/** Names one CHECKOUT in the code tab — its route segment and its row label.
+ *
+ *  A project may be bound to several checkouts of the same repo, and `folder`
+ *  (the Claude folder that led to a root) is the same string for all of them, so
+ *  keying on it makes two clones indistinguishable: the list prints one name
+ *  twice and the detail link resolves to whichever came first. The last two path
+ *  segments separate them and still fit a row, and because both the list and the
+ *  detail derive the key from `root` with THIS function, they cannot disagree
+ *  about which checkout a URL means. */
+export function checkoutKey(root: string, folder = ""): string {
+  const segs = root.split("/").filter(Boolean);
+  return segs.length > 1 ? segs.slice(-2).join("/") : folder || root;
+}

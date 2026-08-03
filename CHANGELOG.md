@@ -5,6 +5,23 @@ All notable changes to this project are documented here. Versions follow
 
 ## Unreleased
 
+### Added
+- **A project can be bound to several local checkouts of its repo.** A second
+  clone kept on another branch, a copy made to try something — each gets its own
+  row in the code tab, with its own branch and dirty count, and its own detail.
+  The manager takes one path per line; the first line is the one anything needing
+  a single root uses (the slug, the code graph, design files).
+  - They must all be the **same repo** — the server compares remotes and refuses
+    the save otherwise, naming the path that disagreed. A project's slug, GitHub
+    sections and visibility are single values derived from the binding, and two
+    remotes under one project would make each of them a coin toss.
+  - A git **worktree is not a separate checkout**: it canonicalises to the repo
+    it belongs to, so listing one alongside its parent collapses to a single row.
+  - Rows are labelled by the last two path segments rather than the Claude
+    folder, which is the same string for every clone of one repo.
+- Schema v15 adds `project_repos`; existing bindings are copied into it and
+  `projects.repo_root` stays as the first root.
+
 ### Changed
 - **The `git` and `codegraph` tabs are now one tab, `code`.** The overview is
   unchanged — one status row per repo in the scope — and the repo detail gained

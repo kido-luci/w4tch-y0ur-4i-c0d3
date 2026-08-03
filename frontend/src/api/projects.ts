@@ -15,6 +15,10 @@ export interface Project {
   // "missing" = bound to a path that is gone, "local" = a repo with no GitHub
   // remote, "linked" = repoSlug (owner/name) is filled and visibility known.
   repoRoot?: string;
+  // repoRoots is every local checkout of that one repo. repoRoot above is the
+  // first of them; the server keeps the two in step, so a caller that only needs
+  // "a" root can keep reading repoRoot.
+  repoRoots?: string[];
   repoSlug?: string;
   linkKind: "" | "none" | "missing" | "local" | "linked";
   ord: number;
@@ -44,7 +48,7 @@ export function getUnmappedFolders(): Promise<string[]> {
     and rail order. Claimed folders are stripped from other projects server-side. */
 export function putProject(
   name: string,
-  body: { folders: string[]; hidden: boolean; ord: number; parent: string; repoRoot?: string },
+  body: { folders: string[]; hidden: boolean; ord: number; parent: string; repoRoots?: string[] },
 ): Promise<Project> {
   return sendJSON<Project>(`/api/projects/${encodeURIComponent(name)}`, "PUT", body);
 }

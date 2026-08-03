@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-const dataSchemaVersion = 14
+const dataSchemaVersion = 15
 
 // OpenDB opens (creating if needed) <cfgDir>/data.db and migrates its
 // schema forward. Unlike the index cache, an error here is fatal to the
@@ -463,6 +463,33 @@ PRAGMA user_version = 13;`); err != nil {
 			}
 		}
 		if _, err := db.Exec(`PRAGMA user_version = 14`); err != nil {
+			return err
+		}
+	}
+	if v < 15 {
+		// One project, several checkouts of the SAME repo. A worktree, a second
+		// clone kept on another branch, a copy made to try something — they are
+		// one project's code in more than one place, and v14's single repo_root
+		// could only name one of them.
+		//
+		// projects.repo_root survives as the FIRST root, rewritten whenever the
+		// list changes. That is a projection, not a second answer: every root
+		// here is required to be the same repo (the API compares remotes), so
+		// anything that needs only "a" root — slug derivation, figfiles, the
+		// code graph's default — reads the column and stays correct.
+		//
+		// ord keeps the user's order stable, so the first root does not shuffle
+		// under them when one is added or removed.
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS project_repos(
+	project TEXT NOT NULL,
+	root    TEXT NOT NULL,
+	ord     INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY(project, root)
+);
+INSERT OR IGNORE INTO project_repos(project, root, ord)
+	SELECT name, repo_root, 0 FROM projects WHERE repo_root <> '';
+PRAGMA user_version = 15;`); err != nil {
 			return err
 		}
 	}

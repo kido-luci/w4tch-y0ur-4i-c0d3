@@ -8,7 +8,7 @@
 
 import { getGit } from "../api";
 import type { GitRepo } from "../api";
-import { chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
+import { checkoutKey, chipAttrs, escapeHtml, formatRelativeTime } from "../domain/format";
 import { showError } from "../app/live";
 import { getScope } from "../scope";
 
@@ -110,7 +110,7 @@ export function renderCodeView(container: HTMLElement): () => void {
     // repo with no upstream shifts its commit under the next repo's branch,
     // which is the ragged column this layout exists to fix.
     const inner =
-      `<span class="git-row-name" title="${escapeHtml(r.folder || r.root)}">${escapeHtml(r.folder || r.root)}</span>` +
+      `<span class="git-row-name" title="${escapeHtml(r.root)}">${escapeHtml(checkoutKey(r.root, r.folder))}</span>` +
       `<span class="git-cell">${branch}</span>` +
       `<span class="git-cell">${stateBadge(r)}</span>` +
       `<span class="git-cell git-cell--track">${trackBits(r)}</span>` +
@@ -118,8 +118,8 @@ export function renderCodeView(container: HTMLElement): () => void {
       `<span class="git-cell git-cell--when">${when}</span>`;
     // The whole row is the entry point into the detail view; a resolved-but-not-a
     // -repo root isn't clickable (there's nothing to drill into).
-    return r.isRepo && r.folder
-      ? `<a class="git-row" href="/project/code/${encodeURIComponent(r.folder)}" title="mở chi tiết — ${escapeHtml(r.root)}">${inner}</a>`
+    return r.isRepo && r.root
+      ? `<a class="git-row" href="/project/code/${encodeURIComponent(checkoutKey(r.root, r.folder))}" title="mở chi tiết — ${escapeHtml(r.root)}">${inner}</a>`
       : `<div class="git-row git-row--norepo" title="${escapeHtml(r.root)}">${inner}</div>`;
   }
 
