@@ -110,7 +110,9 @@ export function renderCodeView(container: HTMLElement): () => void {
     // repo with no upstream shifts its commit under the next repo's branch,
     // which is the ragged column this layout exists to fix.
     const inner =
-      `<span class="git-row-name" title="${escapeHtml(r.root)}">${escapeHtml(checkoutKey(r.root, r.folder))}</span>` +
+      // <bdi> so the rtl trick that ellipsises the front (see the stylesheet)
+      // cannot reorder the path inside it.
+      `<span class="git-row-name" title="${escapeHtml(r.root)}"><bdi>${escapeHtml(checkoutKey(r.root, r.folder))}</bdi></span>` +
       `<span class="git-cell">${branch}</span>` +
       `<span class="git-cell">${stateBadge(r)}</span>` +
       `<span class="git-cell git-cell--track">${trackBits(r)}</span>` +
